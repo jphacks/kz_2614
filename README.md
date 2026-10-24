@@ -75,6 +75,8 @@ APIや音声形式の変更は双方の担当で確認します。詳細は [担
 ## 起動・開発
 
 - [統合仕様書](docs/requirements/system.md) / [仕様書・処理フロー図の一覧](docs/README.md)
+
+- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（独立したUIプロトタイプ）
 - [Git管理・除外方針](docs/development/gitignore.md)
 
 - [Windows・Ubuntuのセットアップ](docs/setup/server.md)

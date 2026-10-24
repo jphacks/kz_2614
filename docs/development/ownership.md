@@ -5,7 +5,7 @@
 | 担当 | 主な責務 | 主なソース | 対応する検証 |
 | --- | --- | --- | --- |
 | kameyama | STT・LLM・TTS、VAD、会話状態、MCP、HTTP/TCP受付 | server/ai、server/api | tests/test_*.py |
-| HOSSy | Web UI、設定操作、マイク送信、音声出力 | apps/web | tests/web、test_dashboard*.py |
+| HOSSy | Web UI、設定操作、マイク送信、音声出力、独立した製品UI | apps/web、apps/hossy-web | tests/web、test_dashboard*.py、Astroビルド |
 | EMORI | Reader/Follower、SG90、機器側HTTP仕様・実機 | firmware/esp32、docs/esp32 | Arduinoでのビルド、機器の停止・動作確認 |
 | 未指定 | Androidの録音・出力・TCP接続 | apps/android | Gradleビルド、Android実機 |
 | AI・機器担当の共同 | ESP32音声TCP部品の機器IOへの組込み | firmware/esp32/voice_tcp、server/ai/voice | PC TCP試験とESP-IDF・端末実機 |

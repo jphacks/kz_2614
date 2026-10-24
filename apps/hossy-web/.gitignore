@@ -1,0 +1,4 @@
+# Server-specific Compose settings
+.env
+.env.*
+!.env.example

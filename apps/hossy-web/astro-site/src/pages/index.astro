@@ -1,0 +1,202 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.4 15.7A8.8 8.8 0 0 1 8.3 3.6a8.9 8.9 0 1 0 12.1 12.1Z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3.5 10 8.5-7 8.5 7v9.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V10Z"/><path d="M9 20.5v-7h6v7"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><path d="M9 9.5 20 7"/><ellipse cx="6" cy="18.2" rx="3" ry="2"/><ellipse cx="17" cy="16.2" rx="3" ry="2"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.7 8.4c0 4.3-8.7 10.8-8.7 10.8S3.3 12.7 3.3 8.4a4.3 4.3 0 0 1 8.7-1 4.3 4.3 0 0 1 8.7 1Z"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c.5-4 3.1-6 7.5-6s7 2 7.5 6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-2.5 7-2.5 9h17C20.5 16 18 16 18 9Z"/><path d="M10 21h4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5V12l3.8 2.5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M8 14h2M14 14h2M8 18h2"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4L12 2Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.2 4.8 4.8L19.5 6.8"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6a8 8 0 0 1 0 12"/></symbol>
+    <symbol id="i-waves" viewBox="0 0 24 24"><path d="M2 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 15c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h11a4 4 0 0 0 .2-8 6.2 6.2 0 0 0-11.8-1.5A4.8 4.8 0 0 0 7 18Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <header class="app-header">
+      <button class="round-icon header-profile" type="button" data-go="about" aria-label="ねんぎつねについて">
+        <svg><use href="#i-user"></use></svg>
+      </button>
+      <div class="header-center">
+        <span class="header-mark"><svg><use href="#i-moon"></use></svg></span>
+        <span class="header-wordmark">ねんぎつね</span>
+      </div>
+      <button class="round-icon header-bell" type="button" id="notification-button" aria-label="お知らせ">
+        <svg><use href="#i-bell"></use></svg>
+      </button>
+    </header>
+
+    <main id="main-content">
+      <section class="screen" id="screen-home" data-screen="home" aria-label="ホーム">
+        <div class="device-selector"><span class="selector-dot"></span> ねんぎつねといっしょ <svg><use href="#i-chevron"></use></svg></div>
+        <div class="home-heading">
+          <span class="eyebrow">A LITTLE REST, A LOT OF LOVE</span>
+          <h1>おかえりなさい<span class="heading-star">✳</span></h1>
+          <p>今日の終わりも、やさしく過ごそう。</p>
+        </div>
+
+        <div class="hero-card">
+          <span class="hero-star star-one">✦</span><span class="hero-star star-two">✳</span><span class="hero-star star-three">✦</span>
+          <span class="hero-cloud cloud-one"></span><span class="hero-cloud cloud-two"></span>
+          <div class="hero-copy">
+            <span class="hero-kicker"><svg><use href="#i-moon"></use></svg> TONIGHT WITH NENGITSUNE</span>
+            <h2>そばにいるよ。<br /><span>おやすみまで、ずっと。</span></h2>
+          </div>
+          <img class="hero-plush" src="/nengitsune-plush.png" alt="やさしく微笑む、横向きまくらロボットのねんぎつね" width="1536" height="1024" fetchpriority="high" />
+          <div class="hero-bottom">
+            <div class="hero-face">♥</div>
+            <div><strong>ねんぎつね</strong><span id="hero-status">いっしょに休む準備ができたよ</span></div>
+            <span class="hero-status-dot" aria-hidden="true"></span>
+          </div>
+        </div>
+
+        <div class="section-title-row"><div><span class="section-kicker">YOUR NIGHT ROUTINE</span><h2>今夜のねんぎつね</h2></div><span class="little-moon">☾</span></div>
+        <button class="sleep-cta" type="button" data-go="routine">
+          <span class="cta-ornament cta-ornament-one" aria-hidden="true">✦</span><span class="cta-ornament cta-ornament-two" aria-hidden="true">✳</span>
+          <span class="cta-moon" aria-hidden="true"><svg><use href="#i-moon"></use></svg></span>
+          <span class="cta-copy"><span>そろそろ、ひとやすみ。</span><strong id="cta-title">ねんぎつねとおやすみしよう</strong><small id="cta-caption">やさしい時間を、ここから。</small></span>
+          <span class="cta-button" aria-hidden="true"><svg><use href="#i-chevron"></use></svg></span>
+        </button>
+
+        <div class="two-cards">
+          <button class="mini-card" type="button" data-go="sounds">
+            <span class="mini-icon music-mini"><svg><use href="#i-music"></use></svg></span>
+            <span class="mini-text"><small>おやすみサウンド</small><strong id="home-sound">みみもとささやき</strong></span>
+            <svg class="mini-chevron"><use href="#i-chevron"></use></svg>
+          </button>
+          <button class="mini-card" type="button" data-go="diary">
+            <span class="mini-icon heart-mini"><svg><use href="#i-calendar"></use></svg></span>
+            <span class="mini-text"><small>おやすみダイアリー</small><strong id="home-diary-summary">昨日のようす</strong></span>
+            <svg class="mini-chevron"><use href="#i-chevron"></use></svg>
+          </button>
+        </div>
+        <p class="end-note">きょうも、あなたのそばに。 <span>♥</span></p>
+      </section>
+
+      <section class="screen inner-screen" id="screen-diary" data-screen="diary" aria-label="おやすみダイアリー" hidden>
+        <div class="inner-heading"><span class="eyebrow">OUR SLEEP DIARY</span><h1>おやすみダイアリー <span>✦</span></h1><p>ねんぎつねと過ごした夜を、そっと振り返ろう。</p></div>
+        <div class="diary-intro"><span class="diary-intro-moon"><svg><use href="#i-moon"></use></svg></span><div><strong>夜の小さなできごと</strong><small>日付を選んで、夜のようすを見てみよう。</small></div><span class="diary-intro-stars">✳</span></div>
+
+        <div class="diary-view-tabs" role="tablist" aria-label="ダイアリーの表示">
+          <button class="active" type="button" id="diary-view-day" role="tab" aria-selected="true" aria-controls="diary-panel-day">1日の記録</button>
+          <button type="button" id="diary-view-month" role="tab" aria-selected="false" aria-controls="diary-panel-calendar">カレンダー</button>
+        </div>
+
+        <div id="diary-panel-calendar" role="tabpanel" aria-labelledby="diary-view-month" hidden>
+        <div class="diary-calendar-card">
+          <div class="calendar-toolbar">
+            <button type="button" id="calendar-prev" aria-label="前の月"><svg><use href="#i-chevron"></use></svg></button>
+            <strong id="calendar-month">—</strong>
+            <button type="button" id="calendar-next" aria-label="次の月"><svg><use href="#i-chevron"></use></svg></button>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
+          <div class="calendar-grid" id="calendar-grid" aria-label="記録の日付を選ぶ"></div>
+          <p class="calendar-legend"><span class="legend-mark"></span> 記録のある日 <span class="legend-sample">✦ サンプルの記録を含みます</span></p>
+        </div>
+        </div>
+
+        <div id="diary-panel-day" role="tabpanel" aria-labelledby="diary-view-day">
+        <div class="diary-day-switcher">
+          <button type="button" id="diary-prev-day" aria-label="前の日"><svg><use href="#i-chevron"></use></svg></button>
+          <div><small>SELECTED NIGHT</small><strong id="diary-date">—</strong></div>
+          <button type="button" id="diary-next-day" aria-label="次の日"><svg><use href="#i-chevron"></use></svg></button>
+        </div>
+
+        <div class="diary-summary-card" id="diary-summary-card">
+          <span class="diary-source" id="diary-source">サンプル記録</span>
+          <div class="diary-summary-title"><div><span>ねんぎつねと過ごした夜</span><strong id="diary-headline">—</strong></div><svg><use href="#i-moon"></use></svg></div>
+          <div class="diary-metrics">
+            <div><small id="diary-metric-label-1">いっしょの時間</small><strong id="diary-metric-1">—</strong></div>
+            <div><small id="diary-metric-label-2">寝返り</small><strong id="diary-metric-2">—</strong></div>
+            <div><small id="diary-metric-label-3">おだやか時間</small><strong id="diary-metric-3">—</strong></div>
+          </div>
+        </div>
+
+        <div class="panel-heading diary-quality-heading"><h2>眠りのようす</h2><span id="diary-quality-source">サンプル表示</span></div>
+        <div class="diary-quality-card">
+          <p class="diary-quality-lead">まんなかの線から、夜の眠りをふりかえろう。</p>
+          <div class="diary-quality-legend"><span class="shallow">← 眠りが浅い</span><span class="restful">よく眠れた →</span></div>
+          <div class="diary-quality-rows" id="diary-quality-rows" role="list" aria-label="時間ごとの眠りのようす"></div>
+          <p class="diary-quality-note" id="diary-quality-note">グラフは画面イメージ用のサンプルです。</p>
+        </div>
+
+        <div class="panel-heading diary-timeline-heading"><h2>夜のタイムライン</h2><span id="diary-event-count">—</span></div>
+        <div class="diary-timeline" id="diary-timeline"></div>
+        <p class="diary-disclaimer" id="diary-disclaimer">サンプルの睡眠イベントです。実際の睡眠状態は測定していません。</p>
+        </div>
+      </section>
+
+      <section class="screen inner-screen" id="screen-routine" data-screen="routine" aria-label="ねんぎつね" hidden>
+        <div class="inner-heading"><span class="eyebrow">A GENTLE GOOD NIGHT</span><h1>ねんぎつねのじゅんび <span>☾</span></h1><p>あなたにぴったりの、おやすみ時間を。</p></div>
+        <div class="routine-banner"><div><span>TONIGHT'S COMPANION</span><strong>ねんぎつねと、ひとやすみ。</strong><small>横向きの夜も、ふんわりそばに。</small></div><img src="/nengitsune-plush.png" alt="ねんぎつね" width="1536" height="1024" loading="lazy" /></div>
+        <div class="panel-heading"><h2>おやすみプラン</h2><span>01 / 02</span></div>
+        <div class="settings-card">
+          <label class="setting-line" for="bedtime"><span class="setting-symbol lavender"><svg><use href="#i-clock"></use></svg></span><span class="setting-label"><strong>寝る時間</strong><small>ベッドに入る時間</small></span><input id="bedtime" type="time" value="22:30" /></label>
+          <div class="setting-line duration-line"><span class="setting-symbol peach"><svg><use href="#i-moon"></use></svg></span><span class="setting-label"><strong>ねんぎつねと話す時間</strong><small>いっしょに過ごす長さ</small></span><strong class="duration-value"><span id="duration-value">30</span>分</strong></div>
+          <input class="duration-range" id="duration" type="range" min="15" max="90" step="15" value="30" aria-label="ねんぎつねと話す時間の長さ" />
+          <div class="range-labels"><span>15分</span><span>90分</span></div>
+          <label class="setting-line wake-line" for="wake-time"><span class="setting-symbol sunrise"><svg><use href="#i-sun"></use></svg></span><span class="setting-label"><strong>起きる時間</strong><small>朝の目安を決めよう</small></span><input id="wake-time" type="time" value="07:00" /></label>
+        </div>
+        <div class="panel-heading sound-heading"><h2>おやすみサウンド</h2><button type="button" data-go="sounds">変更する <svg><use href="#i-chevron"></use></svg></button></div>
+        <div class="chosen-sound"><span class="setting-symbol lilac"><svg><use href="#i-music"></use></svg></span><div><strong id="routine-sound">みみもとささやき</strong><small>やさしい声で、ゆっくりと</small></div><svg class="chosen-star"><use href="#i-star"></use></svg></div>
+        <button class="primary-button" id="sleep-button" type="button"><svg><use href="#i-moon"></use></svg><span>ねんぎつねとおやすみ</span><svg><use href="#i-chevron"></use></svg></button>
+        <p class="routine-footnote" id="session-note">時刻は目安です。会話・アラームは準備中。タイマーで時間を記録します。</p>
+      </section>
+
+      <section class="screen inner-screen" id="screen-sounds" data-screen="sounds" aria-label="サウンド" hidden>
+        <div class="inner-heading"><span class="eyebrow">SOUNDS FOR SWEET DREAMS</span><h1>おやすみサウンド <span>♪</span></h1><p>心地よい夜に、好きな音をひとつ。</p></div>
+        <div class="sound-hero"><span class="sound-hero-stars">✦ &nbsp; ✳ &nbsp; ✦</span><span class="sound-disc"><svg><use href="#i-music"></use></svg></span><strong>今日は、どんな音とねむる？</strong><small>選んだ音が、今夜のプランに表示されます。</small></div>
+        <div class="panel-heading"><h2>サウンドをえらぶ</h2><span>4 SOUNDS</span></div>
+        <div class="sound-list">
+          <button class="sound-option selected" type="button" data-sound="みみもとささやき" aria-pressed="true"><span class="sound-option-icon rose"><svg><use href="#i-heart"></use></svg></span><span><strong>みみもとささやき</strong><small>「今日もおつかれさま」を、そっと。</small></span><span class="sound-check"><svg><use href="#i-check"></use></svg></span></button>
+          <button class="sound-option" type="button" data-sound="やさしい雨音" aria-pressed="false"><span class="sound-option-icon blue"><svg><use href="#i-waves"></use></svg></span><span><strong>やさしい雨音</strong><small>窓の向こうの、静かな雨。</small></span><span class="sound-check"><svg><use href="#i-check"></use></svg></span></button>
+          <button class="sound-option" type="button" data-sound="ふわふわの雲" aria-pressed="false"><span class="sound-option-icon cream"><svg><use href="#i-cloud"></use></svg></span><span><strong>ふわふわの雲</strong><small>夢の入口の、やわらかな気配。</small></span><span class="sound-check"><svg><use href="#i-check"></use></svg></span></button>
+          <button class="sound-option" type="button" data-sound="しずかな波音" aria-pressed="false"><span class="sound-option-icon purple"><svg><use href="#i-volume"></use></svg></span><span><strong>しずかな波音</strong><small>ゆっくり寄せる、夜の波。</small></span><span class="sound-check"><svg><use href="#i-check"></use></svg></span></button>
+        </div>
+        <p class="soft-note"><svg><use href="#i-star"></use></svg> 音の再生は、ねんぎつね本体との連携時に使える予定です。</p>
+      </section>
+
+      <section class="screen inner-screen" id="screen-about" data-screen="about" aria-label="ねんぎつねについて" hidden>
+        <div class="inner-heading"><span class="eyebrow">HELLO, I'M NENGITSUNE</span><h1>ねんぎつねのこと <span>♥</span></h1><p>あなたのそばで眠る、やさしいまくらロボット。</p></div>
+        <div class="about-hero"><span class="about-spark">✦</span><img src="/nengitsune-plush.png" alt="まくらロボットのねんぎつね" width="1536" height="1024" loading="lazy" /><div><strong>ねんぎつね</strong><span>そばで眠ってくれる、やさしい友だち。</span></div></div>
+        <div class="panel-heading"><h2>4つのやさしさ</h2><span>ABOUT NENGITSUNE</span></div>
+        <div class="feature-list">
+          <div><span class="feature-icon f1">☾</span><span><strong>横向きまくら</strong><small>頭と首をやさしく支えて、横向き寝をサポート。</small></span></div>
+          <div><span class="feature-icon f2"><svg><use href="#i-music"></use></svg></span><span><strong>みみもとささやき</strong><small>小さなスピーカーから、やさしい声を。</small></span></div>
+          <div><span class="feature-icon f3"><svg><use href="#i-heart"></use></svg></span><span><strong>やさしいトントン</strong><small>ふわふわのアームで、安心できるリズム。</small></span></div>
+          <div><span class="feature-icon f4"><svg><use href="#i-cloud"></use></svg></span><span><strong>ふわふわ素材</strong><small>ずっと触れていたくなる、やわらかな肌ざわり。</small></span></div>
+        </div>
+        <div class="about-footer"><svg><use href="#i-moon"></use></svg><p>きょうも、がんばったね。<br />ねんぎつねがそばにいるよ。</p></div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="メインメニュー">
+      <button class="nav-item active" type="button" data-go="home" aria-current="page"><span class="nav-icon"><svg><use href="#i-home"></use></svg></span><span>ホーム</span></button>
+      <button class="nav-item" type="button" data-go="diary"><span class="nav-icon"><svg><use href="#i-calendar"></use></svg></span><span>ダイアリー</span></button>
+      <button class="nav-item" type="button" data-go="routine"><span class="nav-icon"><svg><use href="#i-moon"></use></svg></span><span>ねんぎつね</span></button>
+      <button class="nav-item" type="button" data-go="sounds"><span class="nav-icon"><svg><use href="#i-music"></use></svg></span><span>サウンド</span></button>
+    </nav>
+    <aside class="install-banner" id="install-banner" aria-label="ホーム画面への追加" hidden>
+      <img src="/icons/nengitsune-192.png" alt="" width="46" height="46" />
+      <div class="install-banner-copy">
+        <strong>ねんぎつねをホーム画面に</strong>
+        <p id="install-message">アプリのように、いつでもすぐ開けます。</p>
+        <button type="button" id="install-action">ホーム画面に追加</button>
+        <p class="install-guide" id="install-guide" hidden></p>
+      </div>
+      <button class="install-close" type="button" id="install-close" aria-label="案内を閉じる">×</button>
+    </aside>
+    <div class="toast" role="status" aria-live="polite" hidden></div>
+  </div>
+  <script src="/app.js?v=20261024-1" defer></script>
+</Layout>

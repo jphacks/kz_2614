@@ -865,3 +865,12 @@ Programs/
 - 保持確認: mainとの差分はMarkdownだけで、Reader/Follower、音声通信部品、サーバー、アプリ、テスト、設定テンプレートを含む非Markdownの差分は0。前回のESP32仕様書更新と履歴を保持した。
 - 検証: Markdown相対リンク233件の存在確認で切れ0、Mermaidブロック12個を保持、git diff --check成功。図の本文変更はなく、前回の12図描画結果を保持する。プログラムテスト、機器への要求・書き込み、サービス再起動、マイク操作は行っていない。
 - 作業場所はこのGitチェックアウト。上位のESP32-Reader/ESP32-Follower/codex-memoは元の実機作業用ファイルとして保持し、自動移動・上書きは行わない。
+
+## 2026-10-25 — HOSSY＿WEBへAstro製品UIを追加
+
+- 依頼: C:\〇Codex-JPHACK2026apをHOSSY＿WEBとしてアップロード。指定末尾apは存在せず、利用者がC:\〇Codex-JPHACK2026appを対象として確認した。
+- 基点: origin/mainの9036cce。別worktree・HOSSY＿WEBブランチ（全角＿）を作成し、apps/hossy-web/へ元プロジェクトを独立して追加。既存apps/web、server、firmware、tests、元のWebプロジェクトは変更しない。
+- 内容: 元のb300ac8の追跡49ファイル、計4,591,660 bytes。Astroソース、PWA画像とService Worker、lockfile、Dockerfile、compose.yaml、DEPLOY、開発メモを取り込んだ。バイト単位のコピー後とビルド後に全ファイルのSHA-256一致を確認。node_modules、dist、.astro、npmキャッシュ、.env、元.gitは追加しない。
+- 案内: apps/hossy-web/README.mdを追加し、ルートREADME・配置表・担当表から参照。元DEPLOYは独立OneDev構成の記録として保持し、共有GitHubでの作業ディレクトリを新READMEに記載。静的UI・localStorageの範囲と、会話API・ESP32未統合を明示した。
+- 検証: Node v24.14.1 / npm 11.11.0、npm ciで191パッケージ、Astro 7.4.1の本番ビルド成功。public/app.jsとsw.jsのNode構文、生成物の一時localhost HTTP配信とPWA資産、文書相対リンク、git diff --checkを確認した。
+- 実施しない範囲: Docker実行、公開サイトへのデプロイ、ブラウザー操作・PWAインストール、サーバー再起動、モデル・マイク・ESP32操作。mainやemori-ESP32への統合は行わず、指定ブランチへ公開する。
