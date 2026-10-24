@@ -22,6 +22,8 @@ JPHACKS 2026 / チーム `kz_2614`
 
 ## 現在のデモと確認状況
 
+製品Webの公開先は [ねんぎつね 製品Web](https://hiroron-jphacks2026.hiroron.net/)、ダイアリー入口は [#diary](https://hiroron-jphacks2026.hiroron.net/#diary) です。2026-10-25の未ログイン確認ではhiroron Passportのログイン画面で保護されており、ログイン後の製品UI・音声接続は未確認です。PCローカル8765番の音声・設定Webとは別の入口です。[公開環境の結合テスト表](docs/demo.md#公開製品webの結合テスト準備) に確認順序をまとめています。
+
 | 機能 | 状態 |
 | --- | --- |
 | HOSSyの製品Web・PWA | ホーム・ダイアリー・タイマー等のUI。音声API・実機は未接続 |
@@ -80,7 +82,8 @@ APIや音声形式の変更は双方の担当で確認します。詳細は [担
 
 - [統合仕様書](docs/requirements/system.md) / [仕様書・処理フロー図の一覧](docs/README.md)
 
-- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（独立したUIプロトタイプ）
+- [製品Webの使い方](docs/web/usage.md)（タイマー・日記・保存・PWA）
+- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（公開製品Webのソース。音声API接続は未実装）
 - [Git管理・除外方針](docs/development/gitignore.md)
 
 - [Windows・Ubuntuのセットアップ](docs/setup/server.md)

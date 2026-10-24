@@ -2,6 +2,12 @@
 
 対象は [apps/hossy-web](../../apps/hossy-web/README.md)。既存の音声管理Web（8765番）とは別です。画面機能と未実装範囲は [製品Web仕様](../requirements/web-product.md) を確認してください。
 
+## 公開先と音声APIの経路確認
+
+実際の製品Webは [公開ホーム](https://hiroron-jphacks2026.hiroron.net/) / [ダイアリー（#diary）](https://hiroron-jphacks2026.hiroron.net/#diary) です。2026-10-25の未ログイン確認ではhiroron Passportのログイン画面で保護されており、ログイン後の本文・公開版のリビジョン・音声接続は未確認です。下記ローカル起動はソース確認用で、公開環境の確認とは区別します。
+
+音声統合前に、Web担当者と既存のHTTPS終端・認証後の配信先・API転送先・PCまでの到達経路を確認してください。このソースのComposeは静的Nginx配信であり、公開側のPassport設定やPC音声APIへの転送設定は確認できません。公開HTTPSから `http://127.0.0.1:8765/` やPCのLAN HTTPへ直接接続する手順にはしません。端末のlocalhostはその端末自身であり、mixed content・CORS・マイク権限・認証境界も満たす経路が必要です。接続先を推測してサービスを公開・設定変更せず、[結合テスト表](../demo.md#公開製品webの結合テスト準備) に確認結果を残します。
+
 ## ローカル確認
 
 Node.js 22.22.0以上、npmを用意し、リポジトリのルートから実行します。
