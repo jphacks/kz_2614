@@ -13,7 +13,7 @@ AndroidアプリはサーバーのWeb画面を開くWebViewラッパーです。
 
 ## 実装範囲
 
-- `MainActivity.java`: URL入力、WebView表示、最後に開いたURLの保存、同一オリジンの音声許可。
+- `MainActivity.java`: URL入力、WebView表示、最後に開いたURLの保存、同一オリジンの音声許可、参照WAVを選ぶAndroidファイルピッカー。
 - `AndroidManifest.xml`: インターネットと録音の権限、起動Activityを宣言。
 - アプリの最小対応OSはAndroid 10（API 29）です。
 - `ServerSide/dashboard/web/voice_call.js`: MediaRecorderで1発話を録音し、VOICE_API.mdで許可されたMIME形式とBearer認証でサーバーへ送信。返答音声をWebView内で再生し、録音形式が合わない場合は送信前に案内する。画面が非表示になると端末音声を停止し、サーバーへセッション終了を要求する。

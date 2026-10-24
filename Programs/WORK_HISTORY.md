@@ -344,6 +344,13 @@ Programs/
 - 更新: `Programs/ServerSide/dashboard/README.md`、`Programs/ServerSide/REQUIREMENTS.md`、`Agent.md` に現段階のHTTP開発方針とAndroid音声確認時のTLS要件を反映。
 - 確認範囲: AndroidのHTTPS限定・証明書拒否、同一オリジンAPI、Bearer認証、各サービスURLをコードと資料から静的に追跡。接続テスト、TLS証明書、リバースプロキシ、ポート疎通、実機確認は未実施。
 
+### ServerSideのインストール・起動準備状況を確認（2026-10-24）
+
+- 依頼: 現時点で依存関係のインストールからサーバー起動までできているか確認する。
+- 確認: Windows・Ubuntuのセットアップスクリプト、共通requirements、ダッシュボードの起動コマンドがある。現在の作業環境ではPython 3.13.13が利用可能だが、`Programs/ServerSide/.venv/` と `.env` は存在せず、セットアップ・起動は未実行。LM StudioとIrodori-TTSの起動・接続も未確認。
+- 状態: 起動手順とコードは用意されているが、インストール済み・サーバー稼働中とは扱わない。HTTPダッシュボード単体の起動と、CUDA・外部モデルを含む音声往復は別々に確認する必要がある。
+- 作業リスト: `Agent.md` のサーバーAPI項目にセットアップスクリプト未実行と `.venv` 未作成を記録。状態は進行中。
+
 ### ServerSideのWindows・Ubuntuセットアップスクリプト（2026-10-24）
 
 - 依頼: `STTLLMTTS/third_party/` にWindows・Ubuntu用のGit導入とPython依存関係セットアップ用スクリプトを追加する。
@@ -365,3 +372,36 @@ Programs/
 - 対応: ServerSideの構成変更・Windows/Ubuntuセットアップ、Android設定・資料、要件・README・作業履歴を含む全変更を一括で記録する。
 - 確認: push前の追跡先は一致。`git diff --check` とステージ済み差分チェックは成功。設定例に実キーはなく、`.env` 本体はコミット対象外。テストと実機確認は未実施。
 - 作業リスト: 既存の受け入れ・実機確認タスクは未完了のまま維持する。
+
+### 相づちとPi 4連携のサーバー責務を明確化（2026-10-24）
+
+- 依頼: 相づちとPi 4連携はサーバー側で処理する方針を要件へ反映する。
+- 更新: サーバーが相づちの選択・生成準備・発話／停止世代管理・配信判断・取消を担い、Androidは音声再生と結果通知を担うよう要件を明確化。Pi 4への認証済み接続、許可判定、MCP呼出し、機器状態確認はサーバー側へ集約し、Androidはユーザー要求・設定の送信と状態表示だけを行う。
+- 更新ファイル: `Agent.md`、`Programs/README.md`、`Programs/ClientSide/REQUIREMENTS.md`、`Programs/ServerSide/REQUIREMENTS.md`、`Programs/ServerSide/VOICE_API.md`、`Programs/ServerSide/README.md`、本履歴。
+- 確認: 既存の相づち・MCP・Pi 4 API仕様と作業リストの責務境界を静的に照合。実装・テスト・Pi 4接続確認は行っていない。
+- 作業リスト: 相づちAPI配信・Pi 4 MCP連携・実機受け入れは未完了のまま維持。
+
+### ServerSideのWindows・Ubuntu起動スクリプト（2026-10-24）
+
+- 依頼: ServerSideプログラム起動用のWindows・Ubuntuシェルを作成する。
+- 対応: ServerSide直下にPowerShell・Bashの起動スクリプトを追加。共通 `.venv/` からWebアプリ用HTTPサーバーを起動し、待受先・ポートの指定、loopback既定値、`.env` と仮想環境の不足案内を用意した。READMEとAgent.mdに起動方法と未実行状態を記録した。
+- 変更ファイル: `Programs/ServerSide/start_server_windows.ps1`、`Programs/ServerSide/start_server_ubuntu.sh`、ServerSide README、本履歴、`Agent.md`。
+- 確認: 起動スクリプトの実行先・仮想環境パス・サーバー引数を実装と静的に照合。スクリプト実行、セットアップ、pip install、サーバー起動、テストは未実施。
+- 作業リスト: セットアップと起動は未実行のため、サーバーAPI項目を進行中のまま維持。
+
+### ServerSideプログラムの利用マニュアル（2026-10-24）
+
+- 依頼: ServerSideのプログラムを使うための説明書を作成する。
+- 対応: Windows・Ubuntuの初回セットアップ、環境設定、外部モデルサービスの準備、HTTPサーバー起動、ブラウザー画面と音声会話の操作、LAN・HTTPS・保存先・トラブル対応をまとめた日本語マニュアルを追加。未確認の外部接続や実機機能を未確認と明記し、既存READMEから参照できるようにした。
+- 変更ファイル: `Programs/ServerSide/USAGE.md`、`Programs/ServerSide/README.md`、`Programs/README.md`、`Agent.md`、本履歴。
+- 確認: 記載した起動・設定手順、ブラウザー項目、保存先と制限を既存スクリプト・画面・設定・要件と静的に照合。セットアップ、サーバー起動、モデル接続、実機確認、テストは未実施。
+- 作業リスト: サーバー起動・モデル接続・受け入れ確認が未完了のため、関連項目は進行中のまま維持。
+
+### Androidの利用フローを確認（2026-10-24）
+
+- 依頼: Androidアプリの利用手順を想定し、フロー上の不具合がないか確認する。
+- 確認・修正: WebView設定画面の参照WAV入力にAndroid側ファイル選択処理がなかったため、同一オリジンからのファイル選択を受け、選択結果／キャンセルをWebViewへ返す処理を追加。管理トークンは同一タブのページ再読み込み後も復元し、トークン入力確定後に設定を再取得するよう修正。
+- 変更ファイル: `Programs/ClientSide/androidVer/app/src/main/java/com/example/jphackskz2614androidver/MainActivity.java`、`Programs/ServerSide/dashboard/web/dashboard.js`、Android README、クライアント要件、`Agent.md`、本履歴。
+- 確認: `gradlew.bat assembleDebug` 成功、`voice_call.js` と `dashboard.js` の `node --check` 成功、対象差分の `git diff --check` 成功。WebViewの実機ファイル選択、HTTPS接続、権限許可、音声往復はサーバー環境がないため未確認。
+- UI改善: 管理トークン欄を音声操作の直前に移動し、初回認証が必要な構成でも入力場所を見つけやすくした。
+- 作業リスト: Androidのファイル選択・トークン導線をコードで補ったが、実機での確認を残す。音声・Pi 4連携は既存の未完了状態を維持。

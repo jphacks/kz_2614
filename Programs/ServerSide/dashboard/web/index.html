@@ -54,6 +54,11 @@
           <button id="reload-button" class="button button-quiet" type="button">再読み込み</button>
         </section>
 
+        <section id="server-access" class="access-card" aria-labelledby="server-access-title">
+          <div><p class="eyebrow">SERVER ACCESS</p><h2 id="server-access-title">管理アクセス</h2><p>ネットワーク越しに開く場合は、サーバー起動時に設定した管理トークンを入力します。音声会話と設定の通信に使います。</p></div>
+          <label class="field token-field"><span class="field-label">管理トークン <small>必要な場合のみ</small></span><input id="dashboard-token" type="password" autocomplete="current-password" placeholder="トークンはこのタブ内だけに保存"></label>
+        </section>
+
         <section id="voice-call" class="voice-call-card" aria-labelledby="voice-call-title">
           <div class="voice-call-heading">
             <div class="section-title-row">
@@ -210,11 +215,6 @@
                   <div><strong>しっぽの安全設定</strong><span>この画面から動作許可は変更できません。明確なトントン要求が必要です。</span></div>
                 </div>
               </div>
-            </section>
-
-            <section class="access-card">
-              <div><p class="eyebrow">SERVER ACCESS</p><h2>管理アクセス</h2><p>ネットワーク越しに開く場合、サーバー起動時に設定した管理トークンを入力します。</p></div>
-              <label class="field token-field"><span class="field-label">管理トークン <small>必要な場合のみ</small></span><input id="dashboard-token" type="password" autocomplete="current-password" placeholder="トークンはこのタブ内だけに保存"></label>
             </section>
 
             <div class="form-actions">

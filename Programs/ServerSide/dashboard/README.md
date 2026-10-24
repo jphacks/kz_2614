@@ -4,13 +4,31 @@
 
 ## Web画面サーバーの起動
 
-依存関係を [`../requirements.txt`](../requirements.txt) からインストールし、リポジトリルートで起動します。
+依存関係をまだ準備していない場合は、リポジトリルートでOSに合うセットアップスクリプトを実行します。
 
 ```powershell
-python -m Programs.ServerSide.dashboard.server
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Programs\ServerSide\STTLLMTTS\third_party\setup_windows.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Programs\ServerSide\start_server_windows.ps1
 ```
 
-既定では `127.0.0.1:8765` のみにbindします。現在のサーバー開発と同じPC上のLM Studio・Irodori-TTS接続にTLSは不要です。サーバー画面を別PCから一時的に使う場合は、プライベートLANに限って `--host 0.0.0.0` を使えます。その場合は `Programs/ServerSide/.env` に32文字以上の `NENGITSUNE_DASHBOARD_TOKEN` を設定し、ファイアウォールで信頼するLANだけに制限してください。HTTPではトークンと音声が暗号化されないため、信頼できる開発ネットワークに限定し、インターネットには公開しないでください。
+Ubuntuでは次のように実行します。
+
+```bash
+bash Programs/ServerSide/STTLLMTTS/third_party/setup_ubuntu.sh
+bash Programs/ServerSide/start_server_ubuntu.sh
+```
+
+起動スクリプトはServerSide直下の `.venv/` を使い、HTTPサーバーを前面で起動します。停止するには `Ctrl+C` を押します。既定の待受先は `127.0.0.1:8765` です。待受アドレスとポートはWindowsではパラメーター、Ubuntuでは位置引数で指定できます。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Programs\ServerSide\start_server_windows.ps1 -BindAddress 0.0.0.0 -Port 8765
+```
+
+```bash
+bash Programs/ServerSide/start_server_ubuntu.sh 0.0.0.0 8765
+```
+
+既定では `127.0.0.1:8765` のみにbindします。現在のサーバー開発と同じPC上のLM Studio・Irodori-TTS接続にTLSは不要です。サーバー画面を別PCから一時的に使う場合は、プライベートLANに限って `0.0.0.0` を指定できます。その場合は `Programs/ServerSide/.env` に32文字以上の `NENGITSUNE_DASHBOARD_TOKEN` を設定し、ファイアウォールで信頼するLANだけに制限してください。HTTPではトークンと音声が暗号化されないため、信頼できる開発ネットワークに限定し、インターネットには公開しないでください。
 
 Android WebViewの音声会話は別段階です。現在のAndroidアプリはHTTPS以外を拒否し、WebのマイクAPIもLAN上のHTTPでは使えません。Android実機で音声往復を確認する際に、TLS終端を用意してください。
 

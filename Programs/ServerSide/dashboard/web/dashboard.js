@@ -29,6 +29,8 @@ const DEFAULTS = {
 
 const form = document.getElementById("settings-form");
 const tokenInput = document.getElementById("dashboard-token");
+const rememberedToken = sessionStorage.getItem(TOKEN_KEY);
+if (rememberedToken) tokenInput.value = rememberedToken;
 const saveButton = document.getElementById("save-button");
 const reloadButton = document.getElementById("reload-button");
 const resetButton = document.getElementById("reset-button");
@@ -45,6 +47,7 @@ function clone(value) {
 
 let currentDefaults = clone(DEFAULTS);
 let loading = false;
+let reloadAfterLoad = false;
 let referenceFile = null;
 
 function setConnection(state, label) {
@@ -60,10 +63,9 @@ function setMessage(message, kind = "") {
 }
 
 function requestHeaders(extra = {}) {
-  const token = tokenInput.value.trim();
-  if (token) sessionStorage.setItem(TOKEN_KEY, token);
-  else sessionStorage.removeItem(TOKEN_KEY);
-  const savedToken = token || sessionStorage.getItem(TOKEN_KEY) || "";
+  const typedToken = tokenInput.value.trim();
+  if (typedToken) sessionStorage.setItem(TOKEN_KEY, typedToken);
+  const savedToken = typedToken || sessionStorage.getItem(TOKEN_KEY) || "";
   const headers = { ...extra };
   if (savedToken) headers.Authorization = `Bearer ${savedToken}`;
   return headers;
@@ -228,7 +230,10 @@ async function deleteReferenceAudio() {
 }
 
 async function loadSettings() {
-  if (loading) return;
+  if (loading) {
+    reloadAfterLoad = true;
+    return;
+  }
   loading = true;
   reloadButton.disabled = true;
   stateTitle.textContent = "サーバー設定を読み込みます";
@@ -256,6 +261,10 @@ async function loadSettings() {
   } finally {
     loading = false;
     reloadButton.disabled = false;
+    if (reloadAfterLoad) {
+      reloadAfterLoad = false;
+      void loadSettings();
+    }
   }
 }
 
@@ -321,6 +330,7 @@ tokenInput.addEventListener("input", () => {
   if (token) sessionStorage.setItem(TOKEN_KEY, token);
   else sessionStorage.removeItem(TOKEN_KEY);
 });
+tokenInput.addEventListener("change", () => void loadSettings());
 form.elements.namedItem("behavior.custom_instruction").addEventListener("input", updateInstructionCount);
 for (const field of form.elements) {
   if (field !== tokenInput) {

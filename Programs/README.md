@@ -83,7 +83,7 @@
 - MCPサーバーからRaspberry Pi 4への固定動作指示（HTTPS/JSON API）
 - 失敗・切断・タイムアウト時の停止処理
 
-サーバーコードは `ServerSide/STTLLMTTS/` とWebアプリ層の `ServerSide/dashboard/` に分けています。ダッシュボードはブラウザー画面を指し、`dashboard/server.py` はその配信とHTTP受付を行います。`STTLLMTTS/voice/pipeline.py` がモデル接続をつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[STTLLMTTS](ServerSide/STTLLMTTS/README.md)、[Web画面](ServerSide/dashboard/README.md) を参照してください。
+サーバーコードは `ServerSide/STTLLMTTS/` とWebアプリ層の `ServerSide/dashboard/` に分けています。ダッシュボードはブラウザー画面を指し、`dashboard/server.py` はその配信とHTTP受付を行います。`STTLLMTTS/voice/pipeline.py` がモデル接続をつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSide利用マニュアル](ServerSide/USAGE.md)、[ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[STTLLMTTS](ServerSide/STTLLMTTS/README.md)、[Web画面](ServerSide/dashboard/README.md) を参照してください。
 
 モデル名は引き続きコードの初期設定・候補値です。ユーザー方針としてGPU搭載PC上でWhisperとLM Studioをローカル利用し、TTSにIrodori-TTSを使います。モデルの実配置、GPUデバイス設定、接続先、起動、応答速度は未確認です。
 
@@ -111,8 +111,8 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 
 1. ユーザーがAndroid画面で開始し、マイク権限とサーバー接続を確認する。
 2. Androidの録音をサーバーへ送り、STT・LLM・TTSで短い返答を作る。
-3. 返答の生成に時間がかかる場合は、相づちを短く一度だけ再生する。
-4. Androidのスピーカーで返答を再生し、明示的なトントン要求があればPi 4のしっぽを優しく動かす。
+3. 返答の生成に時間がかかる場合は、サーバーが相づちを選択・準備してAndroidへ配信し、Androidが短く一度だけ再生する。
+4. Androidのスピーカーで返答を再生する。明示的なトントン要求はサーバー側の会話制御で検証し、サーバー側MCPプロセスからPi 4のしっぽを動かす。Androidはサーバー向け要求と結果表示を行い、Pi 4へ直接接続しない。
 5. 「おやすみ」は最後の短い返事で終了する。停止ボタンは即時に端末音声と会話セッションを止め、しっぽ停止は独立した制御要求として扱う。
 6. 通信断、異常、またはタイムアウト時は、しっぽを停止できる状態にする。
 
@@ -128,7 +128,7 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 - 夜間に大きな音で驚かせないよう、相づちも設定音量に従う。停止・おやすみ操作後は再生しない。
 - AI_Secretaryにある相づち音声の事前生成・キャッシュと、最初のLLM文節が届くまでの待ち時間を埋める処理を再利用候補とする。
 
-相づちの候補音声を事前生成する処理と、LLM待ちが設定時間を超えた場合の通知コールバックは実装済みです。Android Web APIへの相づち配信・再生調停、停止時の破棄は未実装です。
+相づちの選択・候補音声の事前生成・LLM待ち時間の判定はサーバー側の責務です。現在は候補音声の事前生成と通知コールバックまで実装し、Android Web APIへの配信・再生結果通知・停止時の破棄は未実装です。Androidはサーバーから届いた音声を再生し、再生結果を返します。
 
 受け入れ条件は、返答待ちが設定時間を超えた際に1往復につき最大1回だけ再生すること、ユーザーの発話や本返答に重ならないこと、停止操作で再生中・待機中の相づちを停止できることです。本返答が先に準備できた場合は相づちを省略します。
 
@@ -137,7 +137,7 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 1. GPU搭載ローカルPCでWhisper・LM Studio・Irodori-TTSを準備し、STT → LLM → TTSの音声1往復と返答時間を確認する。
 2. Android WebViewからLocalNET上のServerSide URLへ接続し、HTTPSで録音・送信・音声再生を確認する。
 3. 初期音声MVPとして、相づち、停止、無音・破損音声、切断・再接続を実機で確認する。
-4. 初期音声MVPの後にPi 4のデバイスサービスとしっぽAPIを実装し、MCP Inspectorからタップ・停止・状態取得を確認する。
+4. 初期音声MVPの後にサーバー側でPi 4デバイスサービス・しっぽAPIとの接続を実装し、MCP Inspectorからタップ・停止・状態取得を確認する。Androidはサーバー向け要求と状態表示だけを担当する。
 5. LM StudioへMCPサーバーを登録し、明示的な「トントンして」でだけツールを呼ぶことを確認する。
 6. 音声会話とPi 4のしっぽ制御を統合し、停止・再起動・通信切断からの復帰を確認してから、2台連携を検討する。
 
@@ -167,10 +167,13 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 Programs/
 ├── ClientSide/   # Android Webクライアントの要件
 ├── ServerSide/
+│   ├── USAGE.md               # Windows・Ubuntuの利用マニュアル
 │   ├── STTLLMTTS/         # STT・LLM・TTS・音声パイプライン・セッション
 │   │   ├── tail_mcp_server.py
 │   │   ├── mcp.json.example
 │   │   └── third_party/
+│   ├── start_server_windows.ps1
+│   ├── start_server_ubuntu.sh
 │   ├── dashboard/         # Web画面とWebアプリ用HTTPサーバー
 │   │   ├── server.py
 │   │   ├── settings_store.py

@@ -20,6 +20,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ValueCallback;
 import android.net.http.SslError;
 import android.widget.Button;
 import android.widget.EditText;
@@ -33,6 +34,7 @@ public class MainActivity extends Activity {
     private static final String PREFS_NAME = "nen_gitsune_android";
     private static final String PREF_SERVER_URL = "server_url";
     private static final int REQUEST_RECORD_AUDIO = 3101;
+    private static final int REQUEST_FILE_CHOOSER = 3102;
 
     private EditText addressField;
     private TextView hintView;
@@ -40,6 +42,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private Uri trustedServerUri;
     private PermissionRequest pendingAudioRequest;
+    private ValueCallback<Uri[]> pendingFileChooser;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -185,6 +188,34 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
+            public boolean onShowFileChooser(
+                    WebView view,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams) {
+                if (pendingFileChooser != null) {
+                    pendingFileChooser.onReceiveValue(null);
+                    pendingFileChooser = null;
+                }
+                if (!sameOrigin(Uri.parse(view.getUrl()), trustedServerUri)
+                        || (fileChooserParams.getMode() != FileChooserParams.MODE_OPEN
+                        && fileChooserParams.getMode() != FileChooserParams.MODE_OPEN_MULTIPLE)) {
+                    filePathCallback.onReceiveValue(null);
+                    return true;
+                }
+
+                pendingFileChooser = filePathCallback;
+                try {
+                    startActivityForResult(fileChooserParams.createIntent(), REQUEST_FILE_CHOOSER);
+                    return true;
+                } catch (Exception exception) {
+                    pendingFileChooser = null;
+                    filePathCallback.onReceiveValue(null);
+                    Toast.makeText(MainActivity.this, "ファイル選択を開けません。", Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+            }
+
+            @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> requestAudioPermission(request));
             }
@@ -194,6 +225,19 @@ public class MainActivity extends Activity {
                 if (pendingAudioRequest == request) pendingAudioRequest = null;
             }
         });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_FILE_CHOOSER) return;
+
+        ValueCallback<Uri[]> callback = pendingFileChooser;
+        pendingFileChooser = null;
+        if (callback == null) return;
+        callback.onReceiveValue(resultCode == RESULT_OK
+                ? WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+                : null);
     }
 
     private boolean handleTopLevelNavigation(Uri destination) {
@@ -326,6 +370,10 @@ public class MainActivity extends Activity {
         if (pendingAudioRequest != null) {
             pendingAudioRequest.deny();
             pendingAudioRequest = null;
+        }
+        if (pendingFileChooser != null) {
+            pendingFileChooser.onReceiveValue(null);
+            pendingFileChooser = null;
         }
         if (webView != null) {
             webView.stopLoading();
