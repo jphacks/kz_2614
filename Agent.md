@@ -2,6 +2,13 @@
 
 このファイルは、このリポジトリで作業するエージェント向けの指示と、引き継ぐ作業リストです。新しい作業を始めるときは、依頼内容に加えてこのファイル、関連する `docs/repository-layout.md`・要件定義・`docs/development/work-history.md` を確認してください。
 
+## 公開全ブランチのmain統合準備（2026-10-25）
+
+- 専用cloneの `docs/main-integration` で、公開main `9273748` に `HOSSY＿WEB` `33bbb7c` と `namikawa_3Dprint` `7c3e9e9` を通常mergeした。`emori-ESP32` `61bf53d` と `feature/web-voice-integration` `9273748` は基点mainに既に含まれる。取得した公開5ブランチのSHAと扱いは [ブランチ一覧](docs/development/branches.md) を正本とする。
+- `3Dprint/` のSTL 8点を元の内容で保持し、[部品一覧](3Dprint/README.md) を追加。担当者名は未指定で、取り込み元を `namikawa_3Dprint` として記録する。用途は名称から分かる範囲に限定し、寸法・材料・印刷条件・実機との嵌合・印刷実績は未確認。
+- 状態: ローカルでの履歴統合・文書整理。公開mainへの反映と統合PRのmerge確認は残作業であり、公開完了とは扱わない。後続で公開結果を本節と作業履歴へ追記する。
+- 製品Webの音声API、会話MCPからESP32実機への接続は未完了のまま。稼働チェックアウト・サービス・音声・設定・実機を操作しない。下の日付付き記録にある過去のローカルブランチ名・公開状態は、現在の一覧を上書きしない。
+
 ## 製品Webの使い方・ソース仕様確認（2026-10-25）
 
 - docs/web/usage.mdを操作ガイドとして追加し、docs/requirements/web-product.mdに実際の遷移・タイマー・記録上限100件・サンプル・保存・SWを具体化した。寝る/起きる時刻は目安だけで、話す時間はタイマーの長さ。音声会話・音源再生・ESP32は未接続のまま。
