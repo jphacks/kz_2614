@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f5f0">
+    <title>ねんぎつね | 音声・会話ダッシュボード</title>
+    <link rel="stylesheet" href="/dashboard.css">
+  </head>
+  <body>
+    <div class="dashboard-shell">
+      <aside class="sidebar" aria-label="メインメニュー">
+        <a class="brand" href="#top" aria-label="ねんぎつね ダッシュボード">
+          <span class="brand-mark" aria-hidden="true">狐</span>
+          <span><strong>ねんぎつね</strong><small>VOICE DASHBOARD</small></span>
+        </a>
+        <nav class="side-nav">
+          <a class="nav-link active" href="#overview"><span class="nav-dot"></span>ダッシュボード</a>
+          <a class="nav-link" href="#voice-call"><span class="nav-dot"></span>音声で話す</a>
+          <a class="nav-link" href="#runtime"><span class="nav-dot"></span>稼働状態</a>
+          <a class="nav-link" href="#vad"><span class="nav-dot"></span>発話の検出</a>
+          <a class="nav-link" href="#stt"><span class="nav-dot"></span>音声認識 STT</a>
+          <a class="nav-link" href="#llm"><span class="nav-dot"></span>返答生成 LLM</a>
+          <a class="nav-link" href="#tts"><span class="nav-dot"></span>音声合成 TTS</a>
+          <a class="nav-link" href="#behavior"><span class="nav-dot"></span>会話のふるまい</a>
+        </nav>
+        <div class="sidebar-note">
+          <span class="note-icon" aria-hidden="true">i</span>
+          <p>音声モデルと会話の設定を、このサーバーに保存します。</p>
+        </div>
+        <div class="sidebar-footer">MVP · Android Web 対応</div>
+      </aside>
+
+      <main id="top" class="main-content">
+        <header class="topbar">
+          <div class="breadcrumbs">ねんぎつね <span>/</span> 設定</div>
+          <div id="connection-status" class="connection-status pending" role="status" aria-live="polite">
+            <span class="status-dot"></span><span id="connection-label">サーバーを確認中</span>
+          </div>
+        </header>
+
+        <section id="overview" class="welcome-row">
+          <div>
+            <p class="eyebrow">VOICE & BEHAVIOR</p>
+            <h1>音声と会話の設定</h1>
+            <p class="welcome-copy">ねんぎつねの声や、話しかけられたときのふるまいを整えます。</p>
+          </div>
+          <div class="fox-orb" aria-hidden="true"><span>✦</span></div>
+        </section>
+
+        <section class="status-card" aria-label="設定の反映状態">
+          <div class="status-card-icon" aria-hidden="true">✓</div>
+          <div class="status-card-copy">
+            <strong id="settings-state-title">サーバー設定を読み込みます</strong>
+            <span id="settings-state-copy">保存した設定は、新しく開始する会話に反映されます。</span>
+          </div>
+          <button id="reload-button" class="button button-quiet" type="button">再読み込み</button>
+        </section>
+
+        <section id="voice-call" class="voice-call-card" aria-labelledby="voice-call-title">
+          <div class="voice-call-heading">
+            <div class="section-title-row">
+              <div class="section-icon voice-icon" aria-hidden="true">話</div>
+              <div><p class="eyebrow">AUTO VOICE</p><h2 id="voice-call-title">音声で話す</h2></div>
+            </div>
+            <span id="voice-mode-tag" class="voice-mode-tag">リアルタイム文字起こし</span>
+          </div>
+          <p class="section-description">入力マイクを選んで「会話を始める」を押してください。音声をサーバーへ送り、話している途中の文字を表示します。発話の区切りと返答のタイミングはサーバーが判断します。</p>
+          <div class="voice-device-settings">
+            <label class="field">
+              <span class="field-label">入力マイク</span>
+              <select id="voice-microphone-select" aria-describedby="voice-microphone-help">
+                <option value="default">システムの既定マイク</option>
+              </select>
+              <span id="voice-microphone-help" class="field-hint">口元のヘッドセットマイクを選ぶと、周囲の音を抑えられます。</span>
+            </label>
+            <div class="field voice-gain-control">
+              <div class="voice-gain-label">
+                <label class="field-label" for="voice-input-gain">入力音量</label>
+                <output id="voice-input-gain-value" for="voice-input-gain" aria-live="polite">100%</output>
+              </div>
+              <input id="voice-input-gain" type="range" min="25" max="200" step="5" value="100" aria-describedby="voice-input-gain-help">
+              <div class="voice-gain-presets" role="group" aria-label="入力音量のおすすめ設定">
+                <button id="voice-input-gain-noisy" class="button button-quiet" type="button" aria-pressed="false">周囲がうるさい</button>
+                <button id="voice-input-gain-normal" class="button button-quiet" type="button" aria-pressed="true">標準</button>
+                <button id="voice-input-gain-quiet" class="button button-quiet" type="button" aria-pressed="false">静か・小さい声</button>
+              </div>
+              <span id="voice-input-gain-help" class="field-hint">会話中も変更できます。周囲がうるさいときは小さく、小さい声は大きく調整してください。</span>
+            </div>
+          </div>
+          <div class="field">
+            <label><input id="voice-heartbeat-enabled" type="checkbox"> 心音をOnにする</label>
+            <label for="voice-heartbeat-volume">心音の音量</label>
+            <input id="voice-heartbeat-volume" type="range" min="0" max="100" value="20" aria-label="心音の音量">
+            <span id="voice-heartbeat-status" role="status" aria-live="polite">心音はOffです。</span>
+            <audio id="voice-heartbeat-audio" src="/sounds/heartbeat.ogg" loop preload="none" hidden></audio>
+            <span class="field-hint">Onの間は会話中の待ち受け・返答に心音を重ねます。</span>
+            <small>心音: <a href="https://commons.wikimedia.org/wiki/File:Heartbeat.ogg" target="_blank" rel="noopener">Heartbeat / HerbertBoland</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>（音量調整・繰り返し再生）</small>
+          </div>
+          <div class="voice-call-actions">
+            <button id="voice-start-button" class="button button-primary" type="button">会話を始める</button>
+            <button id="voice-stop-button" class="button button-quiet" type="button" disabled>すぐに停止</button>
+          </div>
+          <p id="voice-call-status" class="voice-call-status" role="status" aria-live="polite">「会話を始める」を押すと、マイクで自動的に聞き取りを始めます。</p>
+          <div class="voice-input-status">
+            <label for="voice-input-level">マイクの入力</label>
+            <meter id="voice-input-level" min="0" max="1" value="0" aria-label="マイクの音量"></meter>
+            <span id="voice-microphone-status">マイクは停止しています。</span>
+          </div>
+          <div class="voice-turn" aria-live="polite">
+            <div><span class="field-label">聞き取った内容</span><p id="voice-transcript" class="voice-turn-text">話した内容がここに表示されます。途中の文字は聞き取りに合わせて更新されます。</p></div>
+            <div><span class="field-label">返事</span><p id="voice-response" class="voice-turn-text">会話を始めると、ここに返事が表示されます。</p></div>
+            <audio id="voice-audio" controls preload="none" hidden></audio>
+          </div>
+          <p class="voice-privacy-note">会話中は無音を含む音声をサーバーへ送信します。音声は処理中だけ扱い、終了後に破棄します。マイクの使用を許可してください。別の端末から接続する場合はHTTPSが必要です。</p>
+        </section>
+
+        <section id="runtime" class="runtime-card" aria-labelledby="runtime-title">
+          <div class="runtime-heading">
+            <div><p class="eyebrow">RUNTIME</p><h2 id="runtime-title">実際の稼働状態</h2></div>
+            <button id="runtime-refresh" class="button button-quiet" type="button">状態を更新</button>
+          </div>
+          <p class="section-description">次の会話に使う設定と、稼働中の会話で確認できた状態を表示します。最後の成功はその時点の記録です。状態の更新で会話は停止しません。</p>
+          <p id="runtime-state-summary" class="runtime-summary" role="status" aria-live="polite">稼働状態を取得しています…</p>
+          <div class="runtime-grid">
+            <article class="runtime-component"><div class="runtime-component-heading"><h3>STT · 音声認識</h3><span id="runtime-stt-state" class="runtime-badge">未確認</span></div><p id="runtime-stt-configured" class="runtime-configured">次の会話の設定: 取得前</p><p id="runtime-stt-active" class="runtime-active">稼働中の会話: 観測前</p><p id="runtime-stt-detail" class="field-hint"></p></article>
+            <article class="runtime-component"><div class="runtime-component-heading"><h3>LLM · 返答生成</h3><span id="runtime-llm-state" class="runtime-badge">未確認</span></div><p id="runtime-llm-configured" class="runtime-configured">次の会話の設定: 取得前</p><p id="runtime-llm-active" class="runtime-active">稼働中の会話: 観測前</p><p id="runtime-llm-detail" class="field-hint"></p></article>
+            <article class="runtime-component"><div class="runtime-component-heading"><h3>TTS · 音声合成</h3><span id="runtime-tts-state" class="runtime-badge">未確認</span></div><p id="runtime-tts-configured" class="runtime-configured">次の会話の設定: 取得前</p><p id="runtime-tts-active" class="runtime-active">稼働中の会話: 観測前</p><p id="runtime-tts-detail" class="field-hint"></p></article>
+          </div>
+          <p id="runtime-vad" class="runtime-vad">発話検出: 取得前</p>
+          <p id="runtime-last-updated" class="field-hint">表示中は約10秒ごとに更新します。</p>
+        </section>
+
+        <div class="settings-layout">
+          <form id="settings-form" class="settings-form" autocomplete="off">
+            <section id="vad" class="settings-card">
+              <div class="section-title-row"><div class="section-icon stt-icon" aria-hidden="true">検</div><div><p class="eyebrow">SERVER · VAD</p><h2>発話の検出と区切り</h2></div></div>
+              <p class="section-description">サーバーが声と物音を見分け、話し終わりを判断する設定です。保存後に始める新しい会話から反映されます。</p>
+              <div class="field-grid">
+                <label class="field"><span class="field-label">声を拾う感度</span><select id="vad-sensitivity"><option value="low">低め · 物音を拾いにくい</option><option value="normal" selected>標準</option><option value="high">高め · 小さな声を拾いやすい</option><option value="custom">詳細設定の値</option></select><span class="field-hint">物音を拾いすぎるときは低め、小声が途切れるときは高めにします。</span></label>
+                <label class="field"><span class="field-label">話し終わりまで待つ無音時間（ms）</span><input name="vad.silence_ms" type="number" min="320" max="2000" step="1" required value="896"><span class="field-hint">長くすると途中の間で切れにくく、短くすると返答が早く始まります。1000ms = 1秒。</span></label>
+                <label class="field"><span class="field-label">声と判定する最短の長さ（ms）</span><input name="vad.min_speech_ms" type="number" min="128" max="1000" step="1" required value="384"><span class="field-hint">長くすると短い物音を除外しやすくなります。</span></label>
+                <label class="field"><span class="field-label">1回の発話の上限（秒）</span><input name="vad.max_speech_seconds" type="number" min="1" max="30" step="any" required value="20"><span class="field-hint">この長さに達すると、発話を区切って処理します。</span></label>
+              </div>
+              <details id="vad-advanced" class="vad-advanced"><summary>発話検出の詳細設定</summary><div class="field-grid">
+                <label class="field"><span class="field-label">発話を始める判定値</span><input name="vad.threshold" type="number" min="0" max="1" step="any" required value="0.65"><span class="field-hint">小さい値ほど声を拾いやすくなります。</span></label>
+                <label class="field"><span class="field-label">発話が終わる判定値</span><input name="vad.end_threshold" type="number" min="0" max="1" step="any" required value="0.35"><span class="field-hint">開始の判定値より小さくしてください。</span></label>
+                <label class="field field-wide"><span class="field-label">発話の先頭を保つ時間（ms）</span><input name="vad.preroll_ms" type="number" min="256" max="2000" step="1" required value="640"><span class="field-hint">声と判定する最短の長さより128ms以上長くし、話し始めを欠けにくくします。</span></label>
+              </div></details>
+              <p id="vad-validation-message" class="vad-validation" role="status" aria-live="polite"></p>
+            </section>
+            <section id="stt" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon stt-icon" aria-hidden="true">聞</div>
+                <div><p class="eyebrow">INPUT · STT</p><h2>音声認識</h2></div>
+                <span class="section-number">01</span>
+              </div>
+              <p class="section-description">スマートフォンから届く音声を、どのモデルと言語で文字にするかを設定します。</p>
+
+              <div class="field-grid">
+                <label class="field field-wide">
+                  <span class="field-label">認識モデル</span>
+                  <input name="stt.model_id" type="text" maxlength="200" required value="Systran/faster-whisper-small" autocomplete="off">
+                  <span class="field-hint">モデルを変更すると、サーバー側で初回ロードや取得が発生する場合があります。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">認識する言語</span>
+                  <select name="stt.language">
+                    <option value="ja">日本語</option>
+                    <option value="auto">自動判定</option>
+                    <option value="en">英語</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">実行デバイス</span>
+                  <select name="stt.device">
+                    <option value="cpu">CPU</option>
+                    <option value="cuda">CUDA GPU</option>
+                  </select>
+                  <span class="field-hint">CUDAにはNVIDIA GPUと対応するCUDAランタイムが必要です。利用できない場合はCPUを選択してください。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">計算形式</span>
+                  <select name="stt.compute_type">
+                    <option value="int8">int8 · CPU向け</option>
+                    <option value="int8_float16">int8 + float16</option>
+                    <option value="float16">float16 · GPU向け</option>
+                    <option value="float32">float32</option>
+                  </select>
+                </label>
+                <div class="field field-toggle">
+                  <div><span class="field-label">Whisperで無音区間を除外</span><span class="field-hint">文字起こし時の追加フィルターです。連続入力の感度と区切りは「発話の検出と区切り」で調整します。</span></div>
+                  <label class="switch"><input name="stt.vad_filter" type="checkbox"><span class="switch-track"></span><span class="sr-only">Whisperで無音区間を除外</span></label>
+                </div>
+              </div>
+            </section>
+
+            <section id="llm" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon behavior-icon" aria-hidden="true">考</div>
+                <div><p class="eyebrow">RESPONSE · LLM</p><h2>返答生成</h2></div>
+                <span class="section-number">02</span>
+              </div>
+              <p class="section-description">LM Studioで使うモデルと、返答の長さ・ばらつき・会話履歴を調整します。変更は次の会話から反映されます。</p>
+              <div class="field-grid">
+                <label class="field field-wide">
+                  <span class="field-label">モデル名</span>
+                  <input name="llm.model" type="text" maxlength="200" required value="google/gemma-4-26b-a4b-qat" autocomplete="off">
+                  <span class="field-hint">LM Studioでロードしたモデル名と一致させてください。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">返答の上限（トークン）</span>
+                  <input name="llm.max_output_tokens" type="number" min="32" max="1024" step="1" required value="160">
+                  <span class="field-hint">大きくすると長い返答を許可します。話し方の「返答の長さ」も合わせて設定してください。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">モデルの文脈長</span>
+                  <input name="llm.context_length" type="number" min="512" max="65536" step="256" required value="4096">
+                  <span class="field-hint">ロード中のLM Studioモデルが対応する値に合わせます。大きい値はメモリを多く使います。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">会話履歴（メッセージ数）</span>
+                  <input name="llm.max_history_messages" type="number" min="0" max="32" step="1" required value="8">
+                  <span class="field-hint">0にすると以前の会話を送りません。ユーザーと返答をそれぞれ1メッセージとして数えます。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">返答の変化量（temperature）</span>
+                  <input name="llm.temperature" type="number" min="0" max="1.5" step="0.05" required value="0.7">
+                  <span class="field-hint">低いほど安定し、高いほど表現に幅が出ます。安全・停止の規則は変わりません。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">LLMの応答待ち上限（秒）</span>
+                  <input name="llm.timeout_seconds" type="number" min="5" max="180" step="1" required value="45">
+                  <span class="field-hint">上限を超えるとその発話を失敗として終了します。音声ターン全体の上限は別に適用されます。</span>
+                </label>
+              </div>
+            </section>
+
+            <section id="tts" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon tts-icon" aria-hidden="true">声</div>
+                <div><p class="eyebrow">OUTPUT · TTS</p><h2>音声合成</h2></div>
+                <span class="section-number">03</span>
+              </div>
+              <p class="section-description">返事を作る音声モデル、声の雰囲気、合成後の出力音量を設定します。</p>
+
+              <div class="field-grid">
+                <label class="field field-wide">
+                  <span class="field-label">音声モデル</span>
+                  <input name="tts.checkpoint" type="text" maxlength="200" required value="Aratako/Irodori-TTS-600M-v3-VoiceDesign" autocomplete="off">
+                </label>
+                <label class="field field-wide">
+                  <span class="field-label">声の説明</span>
+                  <textarea name="tts.caption" rows="3" maxlength="500" required>落ち着いて親しみやすく、聞き取りやすい自然な日本語で話す。話者の声質を一定に保つ。</textarea>
+                  <span class="field-hint">例: やわらかく静かな声で、ゆっくり話す。声質は会話中に一貫させる。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">合成音声の出力音量（%）</span>
+                  <input name="tts.output_volume_percent" type="number" min="0" max="200" step="5" required value="100">
+                  <span class="field-hint">100%は変更なし、50%は半分、200%は2倍の振幅です。上げすぎると音が割れる場合があります。</span>
+                </label>
+              </div>
+              <div class="reference-audio-box">
+                <div class="reference-audio-heading">
+                  <div><span class="field-label">参照音声 WAV</span><span class="field-hint">Irodori-TTSの声づくりに使う音声をサーバーへ保存します。</span></div>
+                  <span id="reference-audio-state" class="file-state">未設定</span>
+                </div>
+                <div id="reference-audio-info" class="reference-audio-info" role="status" aria-live="polite">参照音声はまだ登録されていません。</div>
+                <div class="reference-audio-controls">
+                  <label class="file-picker button button-quiet" for="reference-audio-file">WAVを選択</label>
+                  <input id="reference-audio-file" type="file" accept=".wav,audio/wav,audio/x-wav">
+                  <button id="upload-reference-audio" class="button button-primary" type="button" disabled>サーバーに保存</button>
+                  <button id="delete-reference-audio" class="button button-quiet" type="button" disabled>削除</button>
+                </div>
+                <span class="field-hint">PCM WAV、16-bit、モノラル／ステレオ、16〜48kHz、1秒〜5分、最大100MB。保存音声は次の会話から使い、声質抽出には先頭の短い区間（既定5秒）を使用します。</span>
+              </div>
+              <div class="inline-note"><span aria-hidden="true">♪</span> 参照音声はサーバーに保存され、TTS生成時にIrodori-TTSへ送信されます。不要になったら削除してください。</div>
+            </section>
+
+            <section id="behavior" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon behavior-icon" aria-hidden="true">心</div>
+                <div><p class="eyebrow">PERSONALITY</p><h2>会話のふるまい</h2></div>
+                <span class="section-number">04</span>
+              </div>
+              <p class="section-description">話し方や返答の長さを選びます。安全や停止の決まりは、これらの好み設定より優先されます。</p>
+
+              <div class="field-grid">
+                <label class="field">
+                  <span class="field-label">基本の話し方</span>
+                  <select name="behavior.persona">
+                    <option value="gentle">やさしく寄り添う</option>
+                    <option value="quiet">静かで控えめ</option>
+                    <option value="cheerful">親しみやすく明るめ</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">返答の長さ</span>
+                  <select name="behavior.response_length">
+                    <option value="short">短め · 1〜2文</option>
+                    <option value="medium">少し詳しく · 3〜4文</option>
+                  </select>
+                </label>
+                <label class="field field-wide">
+                  <span class="field-label">質問の頻度</span>
+                  <select name="behavior.question_frequency">
+                    <option value="rarely">必要なときだけ聞く</option>
+                    <option value="sometimes">自然な流れでときどき聞く</option>
+                  </select>
+                </label>
+                <label class="field field-wide">
+                  <span class="field-label">追加の話し方の希望 <small>任意</small></span>
+                  <textarea name="behavior.custom_instruction" rows="3" maxlength="400" placeholder="例: まず気持ちを受け止めてから、短く返事をする"></textarea>
+                  <span class="field-hint"><span id="instruction-count">0</span>/400文字。停止・安全・しっぽ制御の設定は変更できません。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">相づちまで待つ時間（秒）</span>
+                  <input name="behavior.ack_delay_seconds" type="number" min="0" max="10" step="0.1" required value="0.9">
+                  <span class="field-hint">返事の音声ができる前にこの時間を超えると、相づちを最大1回送ります。</span>
+                </label>
+              </div>
+
+              <div class="behavior-rules">
+                <div class="rule-row">
+                  <span class="rule-check" aria-hidden="true">✓</span>
+                  <div><strong>相づちを使う</strong><span>MVPの必須機能です。返答と重ねず、最大1回にします。</span></div>
+                  <span class="required-tag">必須</span>
+                </div>
+                <div class="rule-row">
+                  <span class="rule-shield" aria-hidden="true">◇</span>
+                  <div><strong>しっぽの安全設定</strong><span>この画面から動作許可は変更できません。明確なトントン要求が必要です。</span></div>
+                </div>
+              </div>
+            </section>
+
+            <div class="form-actions">
+              <span id="save-message" role="status" aria-live="polite">設定はまだ保存されていません。</span>
+              <div class="action-buttons">
+                <button id="reset-button" class="button button-quiet" type="button">既定値に戻す</button>
+                <button id="save-button" class="button button-primary" type="submit"><span aria-hidden="true">✓</span> サーバーに保存</button>
+              </div>
+            </div>
+          </form>
+
+          <aside class="side-summary">
+            <div class="summary-card">
+              <p class="eyebrow">QUICK GUIDE</p>
+              <h3>設定の反映について</h3>
+              <ol>
+                <li><span>1</span><p>VAD・STT・LLM・TTSと話し方を調整します。</p></li>
+                <li><span>2</span><p>「サーバーに保存」を押します。</p></li>
+                <li><span>3</span><p>新しい会話から設定が使われます。</p></li>
+              </ol>
+              <div class="summary-divider"></div>
+              <p class="summary-footnote">モデルやGPUの変更は、環境に合わないと読み込みに失敗することがあります。</p>
+            </div>
+            <div class="privacy-card">
+              <span class="privacy-icon" aria-hidden="true">⌑</span>
+              <div><strong>音声は保存しません</strong><p>この設定画面は録音音声やAPIキーを保存しません。設定値はサーバー内に保存されます。</p></div>
+            </div>
+          </aside>
+        </div>
+
+        <footer class="page-footer">ねんぎつね · 音声会話の設定 <span>Settings are stored on this server</span></footer>
+      </main>
+    </div>
+    <script src="/dashboard.js" defer></script>
+    <script src="/voice_call.js" defer></script>
+  </body>
+</html>

@@ -1,4 +1,0 @@
-httpx>=0.25,<1
-mcp[cli]>=2,<3
-python-dotenv>=1.0,<2
-faster-whisper>=1.0,<2

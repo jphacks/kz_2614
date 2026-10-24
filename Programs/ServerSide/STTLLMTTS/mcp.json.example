@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "nen-gitsune-tail": {
+      "command": "C:\\Users\\ryuuz\\Desktop\\金沢工業大学\\JPHACKS\\Programs\\ServerSide\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\ryuuz\\Desktop\\金沢工業大学\\JPHACKS\\Programs\\ServerSide\\STTLLMTTS\\tail_mcp_server.py"
+      ]
+    }
+  }
+}

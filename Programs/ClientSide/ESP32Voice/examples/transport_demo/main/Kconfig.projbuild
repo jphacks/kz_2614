@@ -1,0 +1,15 @@
+menu "Voice communication demo"
+config VOICE_WIFI_SSID
+    string "Wi-Fi SSID"
+    default ""
+config VOICE_WIFI_PASSWORD
+    string "Wi-Fi password (do not commit sdkconfig)"
+    default ""
+config VOICE_SERVER_IP
+    string "Server IPv4 address"
+    default "192.168.137.201"
+config VOICE_SERVER_PORT
+    int "Server TCP port"
+    range 1 65535
+    default 8766
+endmenu

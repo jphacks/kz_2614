@@ -1,0 +1,28 @@
+"use strict";
+const { browser, settle, assert } = require("./dashboard_browser_harness");
+(async () => {
+  const app = browser();
+  const toggle = app.element("voice-heartbeat-enabled"), sound = app.element("voice-heartbeat-audio");
+  assert.equal(sound.paused, true);
+  toggle.checked = true; toggle.dispatch("change"); await settle();
+  assert.equal(sound.paused, true, "Do not play before conversation begins");
+  await app.begin();
+  assert.equal(sound.paused, false); assert.equal(sound.loop, true);
+  app.element("voice-heartbeat-volume").value = "35";
+  app.element("voice-heartbeat-volume").dispatch("input");
+  assert.equal(sound.volume, 0.35);
+  app.emit(1234); await settle();
+  assert.equal(sound.paused, false, "Heartbeat continues during microphone streaming");
+  toggle.checked = false; toggle.dispatch("change"); await settle();
+  assert.equal(sound.paused, true); assert.equal(sound.currentTime, 0);
+  assert.equal(app.streams[0].stopped, false, "Heartbeat toggle must preserve microphone");
+  toggle.checked = true; toggle.dispatch("change"); await settle(); assert.equal(sound.paused, false);
+  app.visibility("hidden"); await settle(); assert.equal(sound.paused, true);
+  sound.play(); await settle(); assert.equal(sound.paused, true, "Late manual playback after stop is rejected");
+  const denied = browser({ autoplayReject: true });
+  denied.element("voice-heartbeat-enabled").checked = true; await denied.begin();
+  assert.equal(denied.element("voice-heartbeat-audio").hidden, false);
+  assert.match(denied.element("voice-heartbeat-status").textContent, /再生できません/);
+  assert.equal(denied.streams[0].stopped, false);
+  console.log("Heartbeat: loop, volume, toggle, capture continuity, stop/visibility, late play and autoplay recovery passed");
+})().catch((error) => { console.error(error); process.exitCode = 1; });
