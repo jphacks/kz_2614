@@ -340,8 +340,8 @@ Programs/
 
 - 依頼: Android・ダッシュボード・STT/LLM/TTS間の通信経路を確認する。
 - 確認: Android WebViewはHTTPSと信頼済み証明書を要求し、同一オリジンAPIへBearerトークンを付ける。サーバーは既定 `127.0.0.1:8765` でHTTP待受。LM StudioとIrodori-TTSの既定先は同じPCの `127.0.0.1:1234`、`:7861`。リポジトリ内にリバースプロキシ設定はなく、実URL・DNS・証明書・ファイアウォールの実環境設定も確認できない。
-- 判断: サービスが同じPCにある前提では通信設計は成立する。LANで使う場合はAndroid HTTPS:443 → HTTPSリバースプロキシ → loopback HTTP:8765を構成し、loopbackをプロキシ経由で公開する場合も32文字以上のBearerトークンを必ず設定する。8765・1234・7861をインターネットへ直接公開しない。
-- 更新: `Programs/ServerSide/dashboard/README.md`、`Programs/ServerSide/REQUIREMENTS.md`、`Agent.md` に推奨経路と実環境未確認点を反映。
+- 判断: サービスが同じPCにある前提で、現在のサーバー開発はloopback HTTPで進める。ユーザー方針によりTLS構築は後段へ延期。プライベートLANから一時利用する場合は32文字以上のBearerトークンとファイアウォール制限を使い、HTTPでは音声・トークンが暗号化されないためインターネットへ公開しない。AndroidアプリはHTTPSを強制し、LAN上HTTPではブラウザーのマイクAPIも使えないため、Android実機の音声往復時にTLSを用意する。
+- 更新: `Programs/ServerSide/dashboard/README.md`、`Programs/ServerSide/REQUIREMENTS.md`、`Agent.md` に現段階のHTTP開発方針とAndroid音声確認時のTLS要件を反映。
 - 確認範囲: AndroidのHTTPS限定・証明書拒否、同一オリジンAPI、Bearer認証、各サービスURLをコードと資料から静的に追跡。接続テスト、TLS証明書、リバースプロキシ、ポート疎通、実機確認は未実施。
 
 ### ServerSideのWindows・Ubuntuセットアップスクリプト（2026-10-24）

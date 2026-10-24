@@ -10,9 +10,9 @@
 python -m Programs.ServerSide.dashboard.server
 ```
 
-既定では `127.0.0.1:8765` のみにbindします。LANから使う場合は `Programs/ServerSide/.env` に32文字以上の `NENGITSUNE_DASHBOARD_TOKEN` を設定し、HTTPSリバースプロキシから同じPCの `http://127.0.0.1:8765` へ転送してください。バックエンドは既定のloopback待受のままにして、8765番ポートをLANへ直接公開しない構成を推奨します。プロキシが別PCの場合だけ、バックエンドをプライベートIPで待ち受け、ファイアウォールでプロキシからの接続だけを許可してください。管理トークンのないloopback外の起動は拒否されますが、loopback待受をプロキシ経由で外部公開する場合もトークンを設定してください。
+既定では `127.0.0.1:8765` のみにbindします。現在のサーバー開発と同じPC上のLM Studio・Irodori-TTS接続にTLSは不要です。サーバー画面を別PCから一時的に使う場合は、プライベートLANに限って `--host 0.0.0.0` を使えます。その場合は `Programs/ServerSide/.env` に32文字以上の `NENGITSUNE_DASHBOARD_TOKEN` を設定し、ファイアウォールで信頼するLANだけに制限してください。HTTPではトークンと音声が暗号化されないため、信頼できる開発ネットワークに限定し、インターネットには公開しないでください。
 
-推奨経路は `Android WebView --HTTPS:443--> reverse proxy --HTTP loopback:8765--> dashboard API` です。AndroidアプリはHTTPS以外と証明書エラーを拒否します。端末で信頼される証明書と、DNS名またはそのIPアドレスを含む証明書を用意してください。
+Android WebViewの音声会話は別段階です。現在のAndroidアプリはHTTPS以外を拒否し、WebのマイクAPIもLAN上のHTTPでは使えません。Android実機で音声往復を確認する際に、TLS終端を用意してください。
 
 ## Web APIと保存先
 
