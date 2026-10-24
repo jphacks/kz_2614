@@ -4,6 +4,8 @@
 
 MVPの音声入力・再生はスマホが担当する方針に2026-10-24に確定しました。クライアントの必須動作は [ClientSide/REQUIREMENTS.md](ClientSide/REQUIREMENTS.md)、サーバーの必須動作と現行コードとの差分は [ServerSide/REQUIREMENTS.md](ServerSide/REQUIREMENTS.md) にまとめています。要件の記載と実装・受け入れ完了は区別します。
 
+> `emori-ESP32` ブランチの追加実装：ESP32 2台とSG90 3台によるしっぽ制御を [ClientSide/ESP32](ClientSide/ESP32/README.md) に収録しました。配線・Arduino IDEでの設定・実機記録・HTTP API・MCP提案は同フォルダを参照してください。以下に残るESP32未実装・構成未定の記述は当初の設計段階の内容です。既存のServerSideコードは今回変更していません。
+
 ## 目指す体験
 
 ユーザーがきつね型の枕に頬を乗せて近くのスマホへ話しかけると、スマホから相づち・返事があり、明確にトントンを求めると柔らかいしっぽが肩や上腕の近くで優しく動きます。会話のあと「おやすみ」を伝え、短い最後の返事で終了します。停止ボタンは最後の返事を待たず停止します。
