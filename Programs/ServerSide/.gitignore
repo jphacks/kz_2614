@@ -1,0 +1,8 @@
+app/.env
+app/.venv/
+app/__pycache__/
+app/*.py[cod]
+app/data/recorded_speech/
+models/whisper/*
+!models/whisper/.gitkeep
+!models/whisper/README.md
