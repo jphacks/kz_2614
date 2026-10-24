@@ -215,8 +215,10 @@
     };
     try {
       await audioPlayer.play();
+      if (sessionId !== expectedSession || generation !== expectedGeneration) return;
       setStatus("返答を再生中です。", "active");
     } catch (_) {
+      if (sessionId !== expectedSession || generation !== expectedGeneration) return;
       setStatus("返答を受け取りました。再生ボタンを押して聞いてください。", "active");
     }
   }
