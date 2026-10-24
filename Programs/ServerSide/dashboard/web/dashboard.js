@@ -23,9 +23,18 @@ const DEFAULTS = {
     compute_type: "float16",
     vad_filter: true,
   },
+  llm: {
+    model: "google/gemma-4-26b-a4b-qat",
+    max_output_tokens: 160,
+    context_length: 4096,
+    max_history_messages: 8,
+    temperature: 0.7,
+    timeout_seconds: 45,
+  },
   tts: {
     checkpoint: "Aratako/Irodori-TTS-600M-v3-VoiceDesign",
     caption: "落ち着いて親しみやすく、聞き取りやすい自然な日本語で話す。話者の声質を一定に保つ。",
+    output_volume_percent: 100,
   },
   behavior: {
     persona: "gentle",
@@ -33,6 +42,7 @@ const DEFAULTS = {
     question_frequency: "rarely",
     custom_instruction: "",
     backchannel_enabled: true,
+    ack_delay_seconds: 0.9,
   },
 };
 
@@ -152,9 +162,18 @@ function collectSettings() {
       compute_type: value("stt.compute_type"),
       vad_filter: checked("stt.vad_filter"),
     },
+    llm: {
+      model: value("llm.model").trim(),
+      max_output_tokens: Number(value("llm.max_output_tokens")),
+      context_length: Number(value("llm.context_length")),
+      max_history_messages: Number(value("llm.max_history_messages")),
+      temperature: Number(value("llm.temperature")),
+      timeout_seconds: Number(value("llm.timeout_seconds")),
+    },
     tts: {
       checkpoint: value("tts.checkpoint").trim(),
       caption: value("tts.caption").trim(),
+      output_volume_percent: Number(value("tts.output_volume_percent")),
     },
     behavior: {
       persona: value("behavior.persona"),
@@ -162,6 +181,7 @@ function collectSettings() {
       question_frequency: value("behavior.question_frequency"),
       custom_instruction: value("behavior.custom_instruction").trim(),
       backchannel_enabled: true,
+      ack_delay_seconds: Number(value("behavior.ack_delay_seconds")),
     },
   };
 }

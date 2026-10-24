@@ -87,12 +87,14 @@ class VoicePipeline:
         self.stt = stt or WhisperSTT()
         self.llm = llm or VoiceLLMClient()
         self.tts = tts or IrodoriTTS()
-        self.acknowledgements = acknowledgements or VoiceAcknowledgementSystem(self.tts)
         if history_messages is None:
             history_messages = self.llm.config.max_history_messages
         self.history_messages = max(0, history_messages)
         settings = get_dashboard_settings()
         behavior = settings["behavior"]
+        self.acknowledgements = acknowledgements or VoiceAcknowledgementSystem(
+            self.tts, delay_seconds=behavior["ack_delay_seconds"]
+        )
         # Capture VAD preferences with this conversation, even if its first PCM
         # packet arrives after the dashboard has saved settings for later calls.
         self.vad_settings = dict(settings["vad"])

@@ -24,7 +24,12 @@ class VoiceAcknowledgement:
 class VoiceAcknowledgementSystem:
     """同じTTS設定で相づち音声を事前生成し、会話ターンごとに交互に返す。"""
 
-    def __init__(self, tts: IrodoriTTS, phrases: tuple[str, ...] = DEFAULT_ACKNOWLEDGEMENT_PHRASES) -> None:
+    def __init__(
+        self,
+        tts: IrodoriTTS,
+        phrases: tuple[str, ...] = DEFAULT_ACKNOWLEDGEMENT_PHRASES,
+        delay_seconds: float | None = None,
+    ) -> None:
         if not phrases or any(not phrase.strip() for phrase in phrases):
             raise ValueError("At least one non-empty acknowledgement phrase is required")
         if len(set(phrases)) != len(phrases):
@@ -32,7 +37,9 @@ class VoiceAcknowledgementSystem:
 
         self.tts = tts
         self.phrases = phrases
-        self.delay_seconds = min(10.0, max(0.0, float(os.getenv("VOICE_ACK_DELAY_SECONDS", "0.9"))))
+        if delay_seconds is None:
+            delay_seconds = float(os.getenv("VOICE_ACK_DELAY_SECONDS", "0.9"))
+        self.delay_seconds = min(10.0, max(0.0, delay_seconds))
         self._cache: tuple[VoiceAcknowledgement, ...] = ()
         self._next_index = 0
         self._prepare_lock = asyncio.Lock()

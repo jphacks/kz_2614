@@ -12,6 +12,7 @@ import httpx
 from dotenv import load_dotenv
 
 from ..runtime import VoiceStageTimeout
+from ...dashboard.settings_store import get_dashboard_settings
 from ...dashboard.runtime_status import RuntimeObservation, component_configuration
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
@@ -32,20 +33,23 @@ class VoiceLLMConfig:
     max_output_tokens: int = 160
     context_length: int = 4096
     max_history_messages: int = 8
+    temperature: float = 0.7
     timeout_seconds: float = 45.0
     tail_mcp_enabled: bool = False
     tail_mcp_plugin_id: str = "mcp/nen-gitsune-tail"
 
     @classmethod
     def from_env(cls) -> "VoiceLLMConfig":
+        settings = get_dashboard_settings()["llm"]
         return cls(
             base_url=os.getenv("LM_STUDIO_BASE_URL", cls.base_url).rstrip("/"),
             api_key=os.getenv("LM_STUDIO_API_KEY", cls.api_key),
-            model=os.getenv("VOICE_LLM_MODEL", cls.model),
-            max_output_tokens=max(32, int(os.getenv("VOICE_LLM_MAX_TOKENS", "160"))),
-            context_length=max(512, int(os.getenv("VOICE_LLM_CONTEXT_LENGTH", "4096"))),
-            max_history_messages=max(0, int(os.getenv("VOICE_LLM_HISTORY_MESSAGES", "8"))),
-            timeout_seconds=max(5.0, float(os.getenv("VOICE_LLM_TIMEOUT_SECONDS", "45"))),
+            model=settings["model"],
+            max_output_tokens=settings["max_output_tokens"],
+            context_length=settings["context_length"],
+            max_history_messages=settings["max_history_messages"],
+            temperature=settings["temperature"],
+            timeout_seconds=settings["timeout_seconds"],
             tail_mcp_enabled=os.getenv("TAIL_MCP_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
             tail_mcp_plugin_id=os.getenv("TAIL_MCP_PLUGIN_ID", cls.tail_mcp_plugin_id),
         )
@@ -122,7 +126,7 @@ class VoiceLLMClient:
             "reasoning": "off",
             "max_output_tokens": self.config.max_output_tokens,
             "context_length": self.config.context_length,
-            "temperature": 0.7,
+            "temperature": self.config.temperature,
             "store": False,
             "stream": stream,
         }

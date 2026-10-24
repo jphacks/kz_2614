@@ -20,6 +20,7 @@
           <a class="nav-link" href="#runtime"><span class="nav-dot"></span>稼働状態</a>
           <a class="nav-link" href="#vad"><span class="nav-dot"></span>発話の検出</a>
           <a class="nav-link" href="#stt"><span class="nav-dot"></span>音声認識 STT</a>
+          <a class="nav-link" href="#llm"><span class="nav-dot"></span>返答生成 LLM</a>
           <a class="nav-link" href="#tts"><span class="nav-dot"></span>音声合成 TTS</a>
           <a class="nav-link" href="#behavior"><span class="nav-dot"></span>会話のふるまい</a>
         </nav>
@@ -190,13 +191,54 @@
               </div>
             </section>
 
+            <section id="llm" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon behavior-icon" aria-hidden="true">考</div>
+                <div><p class="eyebrow">RESPONSE · LLM</p><h2>返答生成</h2></div>
+                <span class="section-number">02</span>
+              </div>
+              <p class="section-description">LM Studioで使うモデルと、返答の長さ・ばらつき・会話履歴を調整します。変更は次の会話から反映されます。</p>
+              <div class="field-grid">
+                <label class="field field-wide">
+                  <span class="field-label">モデル名</span>
+                  <input name="llm.model" type="text" maxlength="200" required value="google/gemma-4-26b-a4b-qat" autocomplete="off">
+                  <span class="field-hint">LM Studioでロードしたモデル名と一致させてください。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">返答の上限（トークン）</span>
+                  <input name="llm.max_output_tokens" type="number" min="32" max="1024" step="1" required value="160">
+                  <span class="field-hint">大きくすると長い返答を許可します。話し方の「返答の長さ」も合わせて設定してください。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">モデルの文脈長</span>
+                  <input name="llm.context_length" type="number" min="512" max="65536" step="256" required value="4096">
+                  <span class="field-hint">ロード中のLM Studioモデルが対応する値に合わせます。大きい値はメモリを多く使います。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">会話履歴（メッセージ数）</span>
+                  <input name="llm.max_history_messages" type="number" min="0" max="32" step="1" required value="8">
+                  <span class="field-hint">0にすると以前の会話を送りません。ユーザーと返答をそれぞれ1メッセージとして数えます。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">返答の変化量（temperature）</span>
+                  <input name="llm.temperature" type="number" min="0" max="1.5" step="0.05" required value="0.7">
+                  <span class="field-hint">低いほど安定し、高いほど表現に幅が出ます。安全・停止の規則は変わりません。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">LLMの応答待ち上限（秒）</span>
+                  <input name="llm.timeout_seconds" type="number" min="5" max="180" step="1" required value="45">
+                  <span class="field-hint">上限を超えるとその発話を失敗として終了します。音声ターン全体の上限は別に適用されます。</span>
+                </label>
+              </div>
+            </section>
+
             <section id="tts" class="settings-card">
               <div class="section-title-row">
                 <div class="section-icon tts-icon" aria-hidden="true">声</div>
                 <div><p class="eyebrow">OUTPUT · TTS</p><h2>音声合成</h2></div>
-                <span class="section-number">02</span>
+                <span class="section-number">03</span>
               </div>
-              <p class="section-description">返事を作る音声モデルと、声の雰囲気を設定します。</p>
+              <p class="section-description">返事を作る音声モデル、声の雰囲気、合成後の出力音量を設定します。</p>
 
               <div class="field-grid">
                 <label class="field field-wide">
@@ -207,6 +249,11 @@
                   <span class="field-label">声の説明</span>
                   <textarea name="tts.caption" rows="3" maxlength="500" required>落ち着いて親しみやすく、聞き取りやすい自然な日本語で話す。話者の声質を一定に保つ。</textarea>
                   <span class="field-hint">例: やわらかく静かな声で、ゆっくり話す。声質は会話中に一貫させる。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">合成音声の出力音量（%）</span>
+                  <input name="tts.output_volume_percent" type="number" min="0" max="200" step="5" required value="100">
+                  <span class="field-hint">100%は変更なし、50%は半分、200%は2倍の振幅です。上げすぎると音が割れる場合があります。</span>
                 </label>
               </div>
               <div class="reference-audio-box">
@@ -230,7 +277,7 @@
               <div class="section-title-row">
                 <div class="section-icon behavior-icon" aria-hidden="true">心</div>
                 <div><p class="eyebrow">PERSONALITY</p><h2>会話のふるまい</h2></div>
-                <span class="section-number">03</span>
+                <span class="section-number">04</span>
               </div>
               <p class="section-description">話し方や返答の長さを選びます。安全や停止の決まりは、これらの好み設定より優先されます。</p>
 
@@ -262,6 +309,11 @@
                   <textarea name="behavior.custom_instruction" rows="3" maxlength="400" placeholder="例: まず気持ちを受け止めてから、短く返事をする"></textarea>
                   <span class="field-hint"><span id="instruction-count">0</span>/400文字。停止・安全・しっぽ制御の設定は変更できません。</span>
                 </label>
+                <label class="field">
+                  <span class="field-label">相づちまで待つ時間（秒）</span>
+                  <input name="behavior.ack_delay_seconds" type="number" min="0" max="10" step="0.1" required value="0.9">
+                  <span class="field-hint">返事の音声ができる前にこの時間を超えると、相づちを最大1回送ります。</span>
+                </label>
               </div>
 
               <div class="behavior-rules">
@@ -291,7 +343,7 @@
               <p class="eyebrow">QUICK GUIDE</p>
               <h3>設定の反映について</h3>
               <ol>
-                <li><span>1</span><p>STT・TTSと話し方を調整します。</p></li>
+                <li><span>1</span><p>VAD・STT・LLM・TTSと話し方を調整します。</p></li>
                 <li><span>2</span><p>「サーバーに保存」を押します。</p></li>
                 <li><span>3</span><p>新しい会話から設定が使われます。</p></li>
               </ol>

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import io
 import mimetypes
 import os
 import tempfile
 import threading
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,6 +47,7 @@ class TTSConfig:
     local_files_only: bool = True
     num_steps: int | None = None
     max_seconds: float = 30.0
+    output_volume_percent: int = 100
 
     @classmethod
     def from_env(cls) -> "TTSConfig":
@@ -69,6 +72,10 @@ class TTSConfig:
             codec_device=os.getenv("VOICE_TTS_CODEC_DEVICE", cls.codec_device),
             codec_precision=os.getenv("VOICE_TTS_CODEC_PRECISION", cls.codec_precision),
             caption=saved.get("caption", os.getenv("VOICE_TTS_CAPTION", cls.caption)),
+            output_volume_percent=min(
+                200,
+                max(0, int(saved.get("output_volume_percent", os.getenv("VOICE_TTS_OUTPUT_VOLUME_PERCENT", "100")))),
+            ),
             seed=os.getenv("VOICE_TTS_SEED", cls.seed),
             reference_audio_path=reference_audio_path,
             max_audio_bytes=max(1_024, int(os.getenv("VOICE_TTS_MAX_AUDIO_BYTES", str(cls.max_audio_bytes)))),
@@ -220,6 +227,7 @@ class IrodoriTTS:
         self._runtime_observation.begin()
         try:
             speech = self._synthesize_impl(text)
+            speech = self._apply_output_volume(speech)
             self._runtime_observation.success()
             return speech
         except Exception as error:
@@ -227,6 +235,48 @@ class IrodoriTTS:
             raise
         finally:
             self._runtime_observation.finish()
+
+    def _apply_output_volume(self, speech: SynthesizedSpeech) -> SynthesizedSpeech:
+        """Scale synthesized PCM before it is sent to the client; 100% preserves original bytes."""
+        if self.config.output_volume_percent == 100:
+            return speech
+        try:
+            import av
+            import numpy as np
+
+            output = io.BytesIO()
+            decoded_bytes = 0
+            gain = self.config.output_volume_percent / 100.0
+            with av.open(io.BytesIO(speech.audio_bytes)) as source:
+                audio_stream = next(iter(source.streams.audio), None)
+                if audio_stream is None:
+                    raise SpeechSynthesisError("Generated audio has no audio stream")
+                resampler = av.AudioResampler(format="s16", layout="mono", rate=48_000)
+                with wave.open(output, "wb") as writer:
+                    writer.setnchannels(1)
+                    writer.setsampwidth(2)
+                    writer.setframerate(48_000)
+
+                    def write_frame(frame: Any) -> None:
+                        nonlocal decoded_bytes
+                        samples = frame.to_ndarray().astype(np.float32, copy=False)
+                        adjusted = np.clip(np.rint(samples * gain), -32768, 32767).astype("<i2", copy=False)
+                        pcm = adjusted.tobytes()
+                        decoded_bytes += len(pcm)
+                        if decoded_bytes + 44 > self.config.max_audio_bytes:
+                            raise SpeechSynthesisError("Adjusted audio exceeds VOICE_TTS_MAX_AUDIO_BYTES")
+                        writer.writeframesraw(pcm)
+
+                    for frame in source.decode(audio=audio_stream.index):
+                        for converted in resampler.resample(frame):
+                            write_frame(converted)
+                    for converted in resampler.resample(None):
+                        write_frame(converted)
+            return SynthesizedSpeech(output.getvalue(), "audio/wav", ".wav")
+        except SpeechSynthesisError:
+            raise
+        except Exception as exc:
+            raise SpeechSynthesisError("Could not adjust generated audio volume") from exc
 
     def runtime_status(self) -> dict[str, Any]:
         return self._runtime_observation.snapshot()

@@ -42,9 +42,18 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "compute_type": "float16",
         "vad_filter": True,
     },
+    "llm": {
+        "model": "google/gemma-4-26b-a4b-qat",
+        "max_output_tokens": 160,
+        "context_length": 4096,
+        "max_history_messages": 8,
+        "temperature": 0.7,
+        "timeout_seconds": 45.0,
+    },
     "tts": {
         "checkpoint": "Aratako/Irodori-TTS-600M-v3-VoiceDesign",
         "caption": "落ち着いて親しみやすく、聞き取りやすい自然な日本語で話す。話者の声質を一定に保つ。",
+        "output_volume_percent": 100,
     },
     "behavior": {
         "persona": "gentle",
@@ -52,6 +61,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "question_frequency": "rarely",
         "custom_instruction": "",
         "backchannel_enabled": True,
+        "ack_delay_seconds": 0.9,
     },
 }
 
@@ -59,6 +69,21 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 def get_settings_defaults() -> dict[str, Any]:
     """Defaults must match the backend that a new pipeline will actually use."""
     defaults = copy.deepcopy(DEFAULT_SETTINGS)
+    llm = defaults["llm"]
+    llm_model = os.getenv("VOICE_LLM_MODEL", "").strip()
+    if llm_model:
+        llm["model"] = llm_model
+    llm["max_output_tokens"] = min(1024, max(32, int(os.getenv("VOICE_LLM_MAX_TOKENS", "160"))))
+    llm["context_length"] = min(65_536, max(512, int(os.getenv("VOICE_LLM_CONTEXT_LENGTH", "4096"))))
+    llm["max_history_messages"] = min(32, max(0, int(os.getenv("VOICE_LLM_HISTORY_MESSAGES", "8"))))
+    llm["temperature"] = min(1.5, max(0.0, float(os.getenv("VOICE_LLM_TEMPERATURE", "0.7"))))
+    llm["timeout_seconds"] = min(180.0, max(5.0, float(os.getenv("VOICE_LLM_TIMEOUT_SECONDS", "45"))))
+    defaults["behavior"]["ack_delay_seconds"] = min(
+        10.0, max(0.0, float(os.getenv("VOICE_ACK_DELAY_SECONDS", "0.9")))
+    )
+    defaults["tts"]["output_volume_percent"] = min(
+        200, max(0, int(os.getenv("VOICE_TTS_OUTPUT_VOLUME_PERCENT", "100")))
+    )
     if os.getenv("VOICE_TTS_BACKEND", "gradio").strip().lower() == "local":
         defaults["tts"]["checkpoint"] = "Aratako/Irodori-TTS-v4.1-Small"
     return defaults
@@ -286,6 +311,29 @@ def _boolean(value: Any, field: str, default: bool) -> bool:
     return value
 
 
+def _integer(value: Any, field: str, *, minimum: int, maximum: int, default: int) -> int:
+    if value is None:
+        value = default
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        raise ValueError(f"{field} must be an integer between {minimum} and {maximum}")
+    return value
+
+
+def _number(value: Any, field: str, *, minimum: float, maximum: float, default: float) -> float:
+    if value is None:
+        value = default
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+    ):
+        raise ValueError(f"{field} must be a number between {minimum} and {maximum}")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{field} must be a number between {minimum} and {maximum}")
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{field} must be a number between {minimum} and {maximum}")
+    return float(value)
+
+
 def validate_settings(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("Settings must be a JSON object")
@@ -317,11 +365,40 @@ def validate_settings(payload: dict[str, Any]) -> dict[str, Any]:
     )
     stt["vad_filter"] = _boolean(stt.get("vad_filter"), "stt.vad_filter", True)
 
+    llm = values["llm"]
+    llm["model"] = _string(llm.get("model"), "llm.model", maximum=200, default=DEFAULT_SETTINGS["llm"]["model"])
+    llm["max_output_tokens"] = _integer(
+        llm.get("max_output_tokens"), "llm.max_output_tokens", minimum=32, maximum=1024,
+        default=DEFAULT_SETTINGS["llm"]["max_output_tokens"],
+    )
+    llm["context_length"] = _integer(
+        llm.get("context_length"), "llm.context_length", minimum=512, maximum=65_536,
+        default=DEFAULT_SETTINGS["llm"]["context_length"],
+    )
+    if llm["max_output_tokens"] > llm["context_length"]:
+        raise ValueError("llm.max_output_tokens must not exceed llm.context_length")
+    llm["max_history_messages"] = _integer(
+        llm.get("max_history_messages"), "llm.max_history_messages", minimum=0, maximum=32,
+        default=DEFAULT_SETTINGS["llm"]["max_history_messages"],
+    )
+    llm["temperature"] = _number(
+        llm.get("temperature"), "llm.temperature", minimum=0.0, maximum=1.5,
+        default=DEFAULT_SETTINGS["llm"]["temperature"],
+    )
+    llm["timeout_seconds"] = _number(
+        llm.get("timeout_seconds"), "llm.timeout_seconds", minimum=5.0, maximum=180.0,
+        default=DEFAULT_SETTINGS["llm"]["timeout_seconds"],
+    )
+
     tts = values["tts"]
     tts["checkpoint"] = _string(
         tts.get("checkpoint"), "tts.checkpoint", maximum=200, default=DEFAULT_SETTINGS["tts"]["checkpoint"]
     )
     tts["caption"] = _string(tts.get("caption"), "tts.caption", maximum=500, default=DEFAULT_SETTINGS["tts"]["caption"])
+    tts["output_volume_percent"] = _integer(
+        tts.get("output_volume_percent"), "tts.output_volume_percent", minimum=0, maximum=200,
+        default=DEFAULT_SETTINGS["tts"]["output_volume_percent"],
+    )
 
     behavior = values["behavior"]
     behavior["persona"] = _choice(
@@ -337,6 +414,10 @@ def validate_settings(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(custom_instruction, str) or len(custom_instruction) > 400:
         raise ValueError("behavior.custom_instruction must be at most 400 characters")
     behavior["custom_instruction"] = custom_instruction.strip()
+    behavior["ack_delay_seconds"] = _number(
+        behavior.get("ack_delay_seconds"), "behavior.ack_delay_seconds", minimum=0.0, maximum=10.0,
+        default=DEFAULT_SETTINGS["behavior"]["ack_delay_seconds"],
+    )
     if behavior.get("backchannel_enabled") is not True:
         raise ValueError("Backchannels are required in the MVP and cannot be disabled")
     behavior["backchannel_enabled"] = True
@@ -344,9 +425,39 @@ def validate_settings(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def save_settings(payload: dict[str, Any]) -> dict[str, Any]:
-    if isinstance(payload, dict) and "vad" not in payload:
-        # An older client must not overwrite a VAD section it cannot display.
-        payload = {**payload, "vad": get_dashboard_settings()["vad"]}
+    if isinstance(payload, dict):
+        current_settings = None
+        for section in ("vad", "llm"):
+            if section not in payload:
+                # Older clients must not overwrite settings sections they cannot display.
+                if current_settings is None:
+                    current_settings = get_dashboard_settings()
+                payload = {**payload, section: current_settings[section]}
+        behavior = payload.get("behavior")
+        if isinstance(behavior, dict) and "ack_delay_seconds" not in behavior:
+            if current_settings is None:
+                current_settings = get_dashboard_settings()
+            # A client predating the configurable acknowledgement delay must
+            # preserve the saved value when it updates other behavior fields.
+            payload = {
+                **payload,
+                "behavior": {
+                    **behavior,
+                    "ack_delay_seconds": current_settings["behavior"]["ack_delay_seconds"],
+                },
+            }
+        tts = payload.get("tts")
+        if isinstance(tts, dict) and "output_volume_percent" not in tts:
+            if current_settings is None:
+                current_settings = get_dashboard_settings()
+            # A client predating output-volume control must preserve its saved value.
+            payload = {
+                **payload,
+                "tts": {
+                    **tts,
+                    "output_volume_percent": current_settings["tts"]["output_volume_percent"],
+                },
+            }
     settings = validate_settings(payload)
     settings_path = _settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)

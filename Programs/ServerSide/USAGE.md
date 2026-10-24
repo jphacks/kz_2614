@@ -115,6 +115,35 @@ bash Programs/ServerSide/start_server_ubuntu.sh 0.0.0.0 8765
 
 ## 6. ブラウザー画面と音声設定
 
+### 現在設定できる項目
+
+| 設定場所 | 項目 | 保存・反映 |
+| --- | --- | --- |
+| 音声操作 | 入力マイクの選択 | ブラウザーのタブ内に保存。利用可能なデバイスから選び、変更後は次の会話で使用します。 |
+| 音声操作 | 入力音量 25〜200% | タブ内に保存し、会話中も変更できます。プリセットは60%・100%・150%です。 |
+| 発話の検出 | 感度、無音待ち、最小発話時間、最大発話長、開始・終了しきい値、先頭保持時間 | サーバーへ保存し、新しい会話から適用します。音声上限と停止規則は変更しません。 |
+| 音声認識（STT） | モデル、言語、CPU／CUDA、計算形式、Whisper内部VAD | サーバーへ保存し、新しい会話から適用します。 |
+| 返答生成（LLM） | モデル、出力トークン上限、文脈長、履歴メッセージ数、temperature、応答待ち上限 | 今回追加した項目です。サーバーへ保存し、新しい会話から適用します。各範囲は画面で制限します。 |
+| 音声合成（TTS） | チェックポイント、声の説明、合成後の出力音量（0〜200%） | サーバーへ保存し、新しい会話から適用します。100%は変更なしです。 |
+| 参照音声 | WAVの登録・状態確認・削除 | サーバーへ保存します。形式・長さ・容量の条件は「設定の変更」を参照してください。 |
+| 会話のふるまい | 基本の話し方、返答の長さ、質問頻度、追加指示、相づち待ち時間 | サーバーへ保存し、新しい会話から適用します。相づちは必須で、待ち時間のみ変更できます。 |
+| サーバー接続 | 管理トークン、待受アドレス、ポート | 管理トークンは `.env` と現在のタブ、待受先は起動スクリプトで設定します。 |
+
+マイク選択と入力音量はブラウザー側の設定で、サーバーの設定JSONには保存しません。サーバーへ保存する設定は `Programs/ServerSide/dashboard/data/dashboard_settings.json` に保存され、同じ項目の `.env` 値より優先されます。設定の保存は進行中の会話を変更・中断せず、新しく開始する会話から反映されます。
+
+### `.env` で設定する項目
+
+ダッシュボードに入力欄がない接続先、認証情報、ランタイム設定は `Programs/ServerSide/.env` で管理します。代表的な項目は次のとおりです。
+
+- **LM Studio**: `LM_STUDIO_BASE_URL`、`LM_STUDIO_API_KEY`、`VOICE_LLM_GPU_RATIO`。モデル・出力上限・文脈長・履歴数・temperature・応答待ち時間は `VOICE_LLM_MODEL`、`VOICE_LLM_MAX_TOKENS`、`VOICE_LLM_CONTEXT_LENGTH`、`VOICE_LLM_HISTORY_MESSAGES`、`VOICE_LLM_TEMPERATURE`、`VOICE_LLM_TIMEOUT_SECONDS` で初期設定し、保存後は画面の値が優先されます。
+- **Whisper**: `WHISPER_MODEL_ID`、`WHISPER_DEVICE`、`WHISPER_COMPUTE_TYPE`、`WHISPER_LANGUAGE`、`WHISPER_VAD_FILTER`、`WHISPER_LOCAL_FILES_ONLY`、`WHISPER_MAX_AUDIO_BYTES`、`WHISPER_MAX_AUDIO_SECONDS`、`WHISPER_TIMEOUT_SECONDS`。画面に保存したモデル等は該当項目の環境値より優先されます。
+- **VAD**: `VOICE_VAD_THRESHOLD`、`VOICE_VAD_END_THRESHOLD`、`VOICE_VAD_MIN_SPEECH_MS`、`VOICE_VAD_SILENCE_MS`、`VOICE_VAD_PREROLL_MS`、`VOICE_VAD_MAX_SPEECH_SECONDS`。画面で保存した値が優先されます。
+- **Irodori-TTS**: `VOICE_TTS_BACKEND`、`IRODORI_URL`、`VOICE_TTS_CHECKPOINT`、`VOICE_TTS_MODEL_DEVICE`、`VOICE_TTS_MODEL_PRECISION`、`VOICE_TTS_CODEC_DEVICE`、`VOICE_TTS_CODEC_PRECISION`、`VOICE_TTS_CAPTION`、`VOICE_TTS_OUTPUT_VOLUME_PERCENT`、`VOICE_TTS_SEED`、`VOICE_TTS_REFERENCE_AUDIO`、`VOICE_TTS_MAX_AUDIO_BYTES`、`VOICE_TTS_TIMEOUT_SECONDS`、`IRODORI_LOCAL_FILES_ONLY`、`IRODORI_NUM_STEPS`、`IRODORI_MAX_SECONDS`、`IRODORI_SOURCE_DIR`、`IRODORI_CODEC_REPO`、`HF_HOME`、`HF_HUB_CACHE`。出力音量の画面保存値は環境値より優先します。
+- **相づち**: `VOICE_ACK_DELAY_SECONDS`。画面で保存した待ち時間が優先されます。
+- **セキュリティ・MCP**: `NENGITSUNE_DASHBOARD_TOKEN`、`TAIL_MCP_ENABLED`、`TAIL_MCP_PLUGIN_ID`、`TAIL_CONTROL_ENABLED`、`TAIL_DEVICE_URL`、`TAIL_DEVICE_TOKEN`、`TAIL_MCP_LOG_LEVEL`。しっぽ制御は既定で無効です。設定JSONの保存先は必要に応じて `NENGITSUNE_SETTINGS_PATH` で変更できます。
+
+APIキー、ダッシュボードトークン、Pi 4デバイストークンはWeb画面やGitに記録しないでください。
+
 ### 音声会話
 
 1. 画面の「会話を始める」を押します。
@@ -128,10 +157,12 @@ Web画面はPCM16LE・16kHzモノラルを256msごとに継続送信します。
 
 ### 設定の変更
 
+- **発話の検出**: 標準・感度低め・感度高めのプリセットと、無音待ち320〜2000ms、最小発話128〜1000ms、発話上限1〜30秒を調整できます。詳細設定では開始・終了しきい値と先頭保持時間も設定できます。発話検出はサーバーで行います。
 - **音声認識**: Whisperモデル、日本語／自動判定／英語、CPU／CUDA、計算形式、無音区間の除外を設定します。
-- **音声合成**: Irodori-TTSチェックポイントと声の説明を設定します。
+- **返答生成**: LM Studioモデル、出力上限32〜1024トークン、文脈長512〜65,536、履歴0〜32メッセージ、temperature 0〜1.5、LLM応答待ち5〜180秒を設定できます。出力上限は文脈長を超えられません。設定値はモデルが対応する範囲に合わせてください。
+- **音声合成**: Irodori-TTSチェックポイントと声の説明、合成音声の出力音量0〜200%を設定できます。100%は変更なし、50%は振幅半分、200%は振幅2倍です。上げすぎると音割れする場合があります。100%以外では、配信前に音声をPCM WAVへ変換して音量を調整します。相づちを含む合成音声に反映します。
 - **参照音声**: PCM WAV、16-bit、モノラルまたはステレオ、16〜48kHz、1〜30秒、最大10MBの音声をアップロードできます。アップロードしたWAVはサーバーに保存され、TTS生成時に送られます。不要になったら画面の「削除」を押してください。
-- **会話のふるまい**: 話し方、返答の長さ、質問頻度、追加の希望を設定できます。追加の希望は最大400文字です。安全・停止の規則や、しっぽ動作の許可はこの画面から変更できません。
+- **会話のふるまい**: 話し方、返答の長さ、質問頻度、追加の希望、返事を待つ相づちの時間0〜10秒を設定できます。追加の希望は最大400文字です。相づちは必須で、1回の発話につき最大1回です。安全・停止の規則や、しっぽ動作の許可はこの画面から変更できません。
 - **保存**: 「サーバーに保存」を押すと設定が保存されます。変更は新しく始める会話から反映され、進行中の会話には適用されません。「既定値に戻す」はフォームを戻す操作なので、サーバー設定を変えるには続けて保存してください。
 
 ダッシュボードに保存した設定は `Programs/ServerSide/dashboard/data/dashboard_settings.json` に保存され、同じ項目の `.env` 設定より優先されます。設定ファイルと参照WAVはローカルデータで、Gitには含まれません。

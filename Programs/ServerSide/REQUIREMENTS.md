@@ -61,10 +61,10 @@ Whisper・LLM・TTSのモデル、デバイス、バージョンと設定を記�
 | 段階 | 現行の初期設定 | 入出力・制約 | 未確認事項 |
 | --- | --- | --- | --- |
 | STT | `Systran/faster-whisper-small`、日本語、CUDA / float16、モデルキャッシュ `ServerSide/whisper/` | PyAVで16kHzモノラルへ復号。0.7秒の無音で区切り、0.25〜15秒の発話区間ごとにWhisperを実行。信頼度・無音確率を算出し、基本周波数・抑揚・声量も分析する | NVIDIA GPU上のCUDA 12・cuBLAS・cuDNN 9接続、ブラウザーごとの録音形式、分割閾値、小声認識と特徴量の実音声精度 |
-| LLM | `http://127.0.0.1:1234/api/v1/chat`、`google/gemma-4-26b-a4b`、最大160トークン、context 4096、履歴最大8メッセージ、45秒HTTP timeout | `reasoning=off`、`store=false`。文字起こしと音響分析の要約を `input` へ入れ、LM Studio SSEの差分を逐次取得。空本文とreasoning出力はエラー | 指定モデルの稼働、LM StudioのAPI互換性・実応答・音響情報の有用性 |
-| TTS | `http://127.0.0.1:7861/`、`Aratako/Irodori-TTS-600M-v3-VoiceDesign`、model / codec は CUDA・fp16 | LM Studioの句読点・長さで文節化し、文節単位でGradio `/_run_generation` を呼ぶ。音声チャンクをNDJSONで逐次配信する。一時結果ファイルはOS一時フォルダー内にある場合、読込後に削除 | サーバー・モデルの配置、GPU/CPU対応、応答時間、Android WebViewでの逐次再生形式 |
+| LLM | `http://127.0.0.1:1234/api/v1/chat`、既定 `google/gemma-4-26b-a4b-qat`、最大160トークン、context 4096、履歴最大8メッセージ、temperature 0.7、45秒HTTP timeout（画面から各値を設定） | `reasoning=off`、`store=false`。文字起こしと音響分析の要約を `input` へ入れ、LM Studio SSEの差分を逐次取得。空本文とreasoning出力はエラー | 指定モデルの稼働、LM StudioのAPI互換性・実応答・音響情報の有用性 |
+| TTS | `http://127.0.0.1:7861/`、`Aratako/Irodori-TTS-600M-v3-VoiceDesign`、model / codec は CUDA・fp16、合成後音量100%（設定範囲0〜200%） | LM Studioの句読点・長さで文節化し、文節単位でGradio `/_run_generation` を呼ぶ。音量100%以外では配信前にPyAVで48kHzモノラルPCM WAVへ変換し振幅調整する。音声チャンクをNDJSONで逐次配信する。一時結果ファイルはOS一時フォルダー内にある場合、読込後に削除 | サーバー・モデルの配置、GPU/CPU対応、応答時間、Android WebViewでの逐次再生形式・出力音量 |
 
-具体的な変更値は `ServerSide/.env.example` を参照する。保存済みのダッシュボード設定は `.env` の同項目より優先され、新しい会話パイプラインから反映する。進行中の会話には適用しない。Whisper・TTSは既定90秒、LLMは45秒の段階期限を持ち、音声ターン全体の期限は180秒です。STT/TTSの期限超過時はセッションを破棄して結果を配信しませんが、実行中のネイティブ推論スレッド自体を強制停止するものではありません。実モデルでの所要時間と停止競合は未確認です。
+具体的な変更値は `ServerSide/.env.example` を参照する。保存済みのダッシュボード設定は `.env` の同項目より優先され、新しい会話パイプラインから反映する。進行中の会話には適用しない。Whisper・TTSは既定90秒、LLMは既定45秒（設定範囲5〜180秒）の段階期限を持ち、音声ターン全体の期限は180秒で固定する。STT/TTSの期限超過時はセッションを破棄して結果を配信しませんが、実行中のネイティブ推論スレッド自体を強制停止するものではありません。実モデルでの所要時間と停止競合は未確認です。
 
 ## 4. 相づち（MVP必須）
 
@@ -113,7 +113,7 @@ Android Web向けの音声API契約は [VOICE_API.md](VOICE_API.md) に記録し
 
 ## 7. 設定・データ・起動
 
-- `dashboard/web/` の設定画面で、STTモデル・言語・デバイス・計算形式・VAD、TTSモデル・声の説明、会話の話し方・返答長・質問頻度を設定できる。設定読込・保存は `GET`／`PUT /api/v1/dashboard/settings` とし、値を検証して `dashboard/data/dashboard_settings.json` に保存する。
+- `dashboard/web/` の設定画面で、サーバーVAD、STTモデル・言語・デバイス・計算形式・Whisper VAD、LLMモデル・出力上限・文脈長・履歴数・temperature・応答待ち上限、TTSモデル・声の説明、会話の話し方・返答長・質問頻度・相づち待ち時間を設定できる。設定読込・保存は `GET`／`PUT /api/v1/dashboard/settings` とし、値を検証して `dashboard/data/dashboard_settings.json` に保存する。相づちは必須機能とし、設定できるのは配信までの待ち時間だけで、無効化や1ターン複数回の配信は許可しない。
 - TTSの参照音声としてPCM WAVを `PUT /api/v1/dashboard/reference-audio` でアップロードし、`GET` で状態確認、`DELETE` で削除できる。サーバー内の固定先 `dashboard/data/reference_voice.wav` へ検証後に原子的に保存し、元のファイル名やクライアント指定パスは保存先に使わない。形式は16-bit PCM、mono/stereo、16〜48kHz、長さ1〜30秒、サイズ10MB以下に制限する。
 - アップロードWAVは次に作る `IrodoriTTS` インスタンスの `ref_wav` として使う。インスタンス生成時に音声をメモリへ読み込み、保存音声の置換・削除後も進行中インスタンスは元の音声を使い続ける。音声は設定JSON・Git・ログに含めず、TTS生成時に設定されたIrodori-TTSサーバーへ送る。その他の音声形式は未対応。
 - 保存したSTT・TTS設定は、新しく作る音声処理インスタンスに反映する。会話のふるまい設定は安全ルールを変えない話し方の希望としてシステムプロンプトに加える。現在進行中の会話への動的変更は行わない。
