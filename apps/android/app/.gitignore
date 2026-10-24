@@ -1,1 +1,2 @@
-/build
+# Shared Android rules are maintained in ../.gitignore.
+# Keep this file for future app-specific exclusions.

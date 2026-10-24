@@ -1,34 +1,63 @@
-__pycache__/
-*.py[cod]
+# Shared exclusions. Component-specific rules live beside each component.
+# Policy and verification: docs/development/gitignore.md
 
-# Local credentials, recordings, model weights and build outputs
+# Local settings and credentials (keep the distributable template).
 .env
 .env.*
 !.env.example
-.venv/
+WiFiConfig.h
+TailConfig.h
+local.properties
+
+# Python environments, caches and local tools.
+.venv
+venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+node_modules/
+
+# Models and binary build products; download/build locally.
 *.gguf
 *.safetensors
 *.ckpt
 *.pt
 *.pth
+*.onnx
+*.tflite
+*.bin
+*.apk
+*.aab
+
+# Private input/reference/generated media. Review each public asset explicitly.
 *.wav
 *.mp3
 *.m4a
 *.webm
 *.mp4
-*.apk
-*.aab
-WiFiConfig.h
-TailConfig.h
-local.properties
 *.flac
 *.aac
 *.opus
 *.ogg
 !apps/web/sounds/heartbeat.ogg
-*.onnx
-*.tflite
-*.bin
 
-# Old private configuration retained during the layout migration
+# Local diagnostic output, editor and OS files.
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local Original backups are not current source. Git history keeps source revisions.
+Original-*/
+*.Original
+*.Original.*
+
+# Legacy private state during layout migration
 /Programs/

@@ -1,24 +1,19 @@
-.env
-.venv
-__pycache__/
-*.py[cod]
-**/__pycache__/
-**/*.py[cod]
-api/data/recorded_speech/
-api/data/dashboard_settings.json
-api/data/tail_settings.json
-api/data/reference_voice.wav
-whisper/*
+# Local settings, reference audio, recorded speech and acknowledgement assets.
+# Keep a possible directory placeholder; never expose private data by extension.
+/api/data/*
+!/api/data/.gitkeep
+
+# Model caches. Hide a local symlink; allow a real directory for README files.
 /whisper
-!whisper/.gitkeep
-!whisper/README.md
+!/whisper/
+/whisper/*
+!/whisper/.gitkeep
+!/whisper/README.md
+/models
 
-api/data/acknowledgements/
-
-# External runtimes and model caches are obtained separately.
-models/
-ai/third_party/Irodori-TTS/*
-!ai/third_party/Irodori-TTS/.gitkeep
-ai/third_party/whisper/*
-!ai/third_party/whisper/.gitkeep
-!ai/third_party/whisper/README.md
+# External runtimes are fetched separately; retain repository placeholders/docs.
+/ai/third_party/Irodori-TTS/*
+!/ai/third_party/Irodori-TTS/.gitkeep
+/ai/third_party/whisper/*
+!/ai/third_party/whisper/.gitkeep
+!/ai/third_party/whisper/README.md

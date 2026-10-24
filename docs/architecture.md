@@ -1,40 +1,187 @@
-# 現在の構成（2026-10-25）
+# 現在の構成と処理フロー
 
-## 音声
+2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](development/ownership.md) を参照してください。
 
-```text
-Webマイク → HTTP PCM入力 → PCのSilero VAD → Whisper small
-                                             ↓
-                                   Gemma 4 26B / LM Studio
-                                             ↓
-Webスピーカー ← NDJSONのPCMフレーム ← Irodori-TTS
+更新日: 2026-10-25。照合した実装は [`975b3ad`](https://github.com/jphacks/kz_2614/commit/975b3ada96203675a6beee43917cde61b2a43461) の統合済み `main`。この文書更新でプログラムの動作は変更していません。
+
+[仕様書一覧](README.md) / [サーバー要件](requirements/server.md) / [端末要件](requirements/clients.md)
+
+図の **実線は実装済みの接続**、**破線は未接続・今後の実装** です。実装済みでも実機確認が済んでいるとは限りません。各図の下の確認状況を併せて読んでください。GitHubのMarkdown表示でMermaidが図として描画されます。
+
+## 1. 全体構成
+
+```mermaid
+flowchart TB
+    subgraph Clients[入力・出力端末]
+        Web[Web画面]
+        Android[Android音声アプリ]
+        VoiceESP[ESP32音声通信部品]
+    end
+    subgraph PC[PCサーバー]
+        HTTP[HTTP 8765]
+        TCP[TCP 8766 / 別プロセス]
+        Pipeline[会話制御・VAD・STT・LLM・TTS]
+        MCP[ツール検証とstdio MCP]
+        Config[PC内の希望頻度設定]
+    end
+    subgraph Tail[しっぽ機器]
+        Reader[ESP32 Reader]
+        Follower[ESP32 Follower]
+        Servo[SG90 × 3]
+    end
+    Web <-->|PCM入力・NDJSON出力| HTTP
+    Android <-->|TCP v1| TCP
+    VoiceESP <-->|TCP v1| TCP
+    HTTP <--> Pipeline
+    TCP <--> Pipeline
+    Pipeline <-->|ツール要求・結果| MCP
+    MCP <-->|保存・取得| Config
+    MCP -.->|次の統合 / 未接続| Follower
+    Reader -->|Wi-Fi / teleop| Follower --> Servo
 ```
 
-音声は16kHz・mono・PCM16LE。Web入力は通常256ms分ずつ、出力は合成済みの文節を100ms以下に分けて送ります。TTSモデル内部で生成中のサンプルを取り出す方式ではありません。返答の生成・出力中も入力を受け、サーバーVADで新しい発話が始まると前の返答を打ち切ります。短い通信遅延では番号確認と再送で回復し、入力保存は約30秒までです。
+- **Web経路**: PC上の実モデルHTTP往復を確認した記録があります。新方式のHyperX実マイク・物理出力の聴感確認は残ります。
+- **TCP経路**: サーバーの模擬モデル・実ソケット試験あり。最新Android APK、ESP32音声部品のビルド・実機通話は未確認。WebとTCPは別プロセスなので、セッションやモデルインスタンスを共有しません。
+- **しっぽ**: Reader/FollowerのソースとEMORI側の実機記録を統合済み。このPCの会話から実サーボを動かす接続は未実装です。
 
-このPCの設定はSTT `Systran/faster-whisper-small`、LLM `google/gemma-4-26b-a4b-qat`、TTS `Aratako/Irodori-TTS-v4.1-Small`。稼働モデルと次回設定はWebの稼働表示で区別します。モデル本体と個別の声の参照WAVはGitに含めません。
+## 2. Web音声の1往復
 
-## しっぽ
-
-```text
-現在: 会話 → アプリ所有stdio MCP → 希望頻度の保存・取得（PC内）
-機器: ESP32 Reader → Wi-Fi → ESP32 Follower → SG90×3
-次の統合: PCのMCP → Follower HTTP API（未接続）
+```mermaid
+flowchart TD
+    Start[利用者が会話を開始] --> Capture[マイクPCMを継続送信 / 無音も含む]
+    Capture --> Gain[サーバーで入力音量を適用]
+    Gain --> Detect{Silero VAD}
+    Detect -->|発話途中| Preview[約1秒間隔で途中STT]
+    Preview --> Text[聞き取った内容を更新]
+    Detect -->|発話が確定| STT[確定STTと音響特徴の分析]
+    STT --> Speech{認識本文あり?}
+    Speech -->|なし| Listen[待受を継続]
+    Speech -->|あり| LLM[本文と会話履歴をLLMへ]
+    LLM --> Delta[返答テキストの差分]
+    Delta --> Segment[既存ルールで文節を確定]
+    Segment --> TTS[文節全体を合成]
+    TTS --> Frame[16kHz PCMへ変換 / 最大100msのフレーム]
+    Frame --> Stream[NDJSONで順次転送]
+    Stream --> Output[端末AudioWorkletで音声出力]
+    Output --> Done{生成完了かつ出力キューが空?}
+    Done -->|はい| Report[出力完了通知]
+    Report --> Listen
+    Done -->|いいえ| Output
 ```
 
-`emori-ESP32`のReader/FollowerソースとAPI仕様を統合済み。EMORI側の実機確認記録は保存していますが、このPCからの実機試験はしていません。MCP提案はdocs/esp32/historyに置き、実行用のtail_mcp_server.pyと分離します。単純置換では会話側の2ツール用検証と一致しないため、実動作の接続は別途実装が必要です。
+入力は返答生成・出力中も継続します。上の図は返答の処理順であり、マイクが各処理の完了を待つ意味ではありません。通信は入力PCM、状態取得、出力イベント、再生結果通知を並行して扱います。
 
-## 接続先と検証範囲
+**TTSの内部計算途中の音声を取り出す方式ではありません。** 文節の合成が完了すると最大100msに分けて転送し、返答全文の合成完了を待たず端末へ出力します。追加の文節細分化はしていません。
 
-| 経路 | ポート・場所 | 状態 |
+相づちはサーバーが判断します。現在の候補は「うんうん」「ふーん」「へー」。参照音声・設定が一致する保存素材を優先し、なければ生成してメモリへ準備します。待ち時間を超え、最初の本返答がまだなければ最大1回だけ配信します。
+
+## 3. 話しかけ直しと手動停止
+
+```mermaid
+sequenceDiagram
+    participant U as 利用者
+    participant W as Web端末
+    participant S as 会話サーバー
+    participant M as STT・LLM・TTS
+    Note over W,S: マイクPCMは返答生成・出力中も送信
+    S->>M: 発話Aを処理
+    U->>W: 新しい発話B
+    W->>S: PCMを継続送信
+    S->>S: VADで発話Bを検出しAを無効化
+    S-->>M: Aの取消を要求
+    S-->>W: interruption / ACK内にも通知
+    W->>W: Aの出力キューを破棄
+    Note over S,M: 実行中のネイティブ推論は残る場合あり / Aの結果は破棄
+    S->>M: 確定した発話Bを処理
+    U->>W: すぐに停止
+    W->>W: マイク・出力・通信を停止
+    W->>S: DELETE session
+    S->>S: 停止世代を更新し遅着結果を拒否
+    Note over W,S: ESP32の停止確認とは別 / 独立した実機停止接続は未実装
+```
+
+話しかけ直しは返答だけを中断し、セッション・入力連番を維持します。手動停止は会話を終了します。「おやすみ」後に短い返事を出して自動終了する制御は受け入れ未完了で、現行は応答指示と相づち抑止までです。
+
+## 4. 音声送信の確認・再送
+
+```mermaid
+flowchart TD
+    Packet[音声・連番・入力倍率を固定] --> Post[PCMをPOST / 1試行最大8秒]
+    Packet --> Get[独立GETで受理番号を確認]
+    Post --> Ack{同じ会話・世代で受理確認?}
+    Get --> Ack
+    Ack -->|next_sequenceが送信番号+1| Commit[1回だけ連番を進める / 遅いPOSTを取消]
+    Commit --> Next[次のPCMへ]
+    Ack -->|未確認・再試行可能| Budget{復旧予算と保存容量以内?}
+    Budget -->|はい| Retry[250msから最大2秒待つ]
+    Retry --> Post
+    Budget -->|いいえ| Fail[理由を表示して終了 / 手動再開]
+    Ack -->|世代・番号不整合やVAD重大障害| Fail
+```
+
+同一PCMの復旧予算は24,750ms、送信中を含む入力保持は960,000 bytes（約30秒）。Webの1回分は8192 bytes（256ms）。短い遅延では受理番号を確認しながら入力を継続します。長い切断を無制限に保存する仕様ではありません。出力再接続の期限は別で、厳密な総24.75秒を保証しません。詳細は [HTTP API](api/voice-http.md)。
+
+## 5. MCPとESP32の境界
+
+```mermaid
+flowchart TD
+    Request[頻度変更を依頼] --> LLM[LM Studioのツール要求]
+    LLM --> Check[PC bridge / 許可2ツール・引数・結果を検証]
+    Check --> MCP[stdio MCP]
+    MCP --> Set[PCの頻度API / 0.3から1.0Hz]
+    Set --> Saved[設定保存 / device_confirmed=false]
+    Saved --> Reply[設定結果として返答]
+    Future[今後: tap_tail / stop_tail / get_tail_status] -.-> Gate[現在の要求・セッション・停止世代の検証]
+    Gate -.-> Device[ESP32 Follower HTTP API]
+    Stop[今後: LLMと独立した停止経路] -.-> Device
+    Device --> Motor[SG90 × 3]
+```
+
+現在の会話に公開するのは `set_tail_frequency` と `get_tail_frequency`。`TAIL_CONTROL_ENABLED=false` で起動するアプリ所有MCPを使います。LM Studioのnative MCP登録をそのまま使う構成ではありません。
+
+ESP32引き継ぎの実動作は **0.3回/秒固定、0.5〜5秒、60秒枠で受理した動作時間の合計10秒まで**。PC保存値0.3〜1.0Hzをそのまま機器へ送ってはいけません。実装時は現要求の許可確認、独立停止、遅着開始の拒否が必要です。開始要求の自動再送、中立解除、Reader追従への自動復帰は行わない設計とします。機器の `feedback: command_only` は物理位置の実測ではありません。
+
+[現行頻度API](api/tail-frequency.md) / [ESP32引き継ぎ](esp32/README.md) / [PC統合の課題](esp32/integration-review.md)
+
+## 6. 設定と保存データ
+
+```mermaid
+flowchart LR
+    Example[Git管理する設定例] --> Local[各PCの.env / Git除外]
+    UI[Web設定画面] --> Validate[型・範囲・WAVの検証]
+    Validate --> Data[dashboard/data / Git除外]
+    Local --> New[新しい会話の設定を作成]
+    Data -->|保存済み項目を優先| New
+    New --> Runtime[稼働インスタンスの観測値]
+    Runtime --> View[設定値と観測値を分けて表示]
+    Input[会話音声] --> Temp[メモリ・処理用一時ファイル]
+    Temp --> Cleanup[成功・失敗・取消後に後片付け]
+```
+
+入力音量はPCMごとの倍率として会話中にも変更できます。VAD・モデル等の保存設定は新しい会話から反映し、進行中の会話を勝手に再起動しません。参照WAVと明示生成した相づちは意図して保持する例外であり、通常の会話録音とは分けます。
+
+## 接続先・実装ファイル
+
+| 経路 | 既定・場所 | 確認範囲 |
 | --- | --- | --- |
-| Web | HTTP 8765 | PCで起動・実モデル往復を確認済み |
-| LLM | HTTP 1234 | LM Studio。音声サーバーとは別プロセス |
-| Android直接音声 | TCP 8766 | コードあり。最新版のAPK・実機通話は未確認 |
-| ESP32音声 | TCP 8766、firmware/esp32/voice_tcp | 通信部品のみ。ビルド・実機未確認 |
-| ESP32しっぽ | Follower HTTP API | 機器側ソース・実機記録あり。PC会話との連携は未完了 |
+| Web | HTTP 127.0.0.1:8765 / `server/api/server.py` | PC実モデルHTTPの記録あり |
+| LLM | HTTP 127.0.0.1:1234 / `llm/lm_studio.py` | 指定Gemmaの記録あり。API選択はMCP有効/無効で異なる |
+| TTS | `tts/irodori.py`・`tts/local_backend.py` | このPCはlocal Irodori v4.1。テンプレートはGradioの旧既定も保持 |
+| Android音声 | TCP 8766 / `voice/tcp_server.py` | サーバー試験あり。最新APK・実機未確認 |
+| ESP32音声 | `firmware/esp32/voice_tcp` | 通信部品のみ。機器IO・新PCM出力profile対応は別作業 |
+| ESP32しっぽ | Follower HTTP 80 / `/api/tail/*` | EMORI実機記録あり。PC会話からの接続は未完了 |
 
-WebのサーバーVAD・連続PCM・割込みに関するテスト成功は、Android/ESP32端末でも同じ挙動が確認済みという意味ではありません。特に100msの出力profileと割込み通知への端末側対応には確認が残ります。
+このPCの確認済みモデルはWhisper small、`google/gemma-4-26b-a4b-qat`、`Aratako/Irodori-TTS-v4.1-Small`。これは過去の実行記録で、今の稼働保証ではありません。最新の観測はWeb稼働表示、設定・実測の履歴は [docs/setup/local-pc.md](setup/local-pc.md) を参照します。
+
+## フォルダー移行
+
+| 以前 | 現在 |
+| --- | --- |
+| `firmware/esp32Voice` | `firmware/esp32/voice_tcp` |
+| `firmware/esp32/codex-memo` | `docs/esp32/history` |
+| `Programs/ClientSide/Raspi4Ver` | `docs/archive/raspberry-pi` |
+
+[配置一覧](repository-layout.md)。ServerSide、androidVer、起動スクリプトは既存パスを維持しています。旧フォルダーのモデル・venvを参照するPCでは、移行確認前に旧チェックアウトを削除しないでください。
 
 ## ソース配置と分担
 

@@ -74,6 +74,9 @@ APIや音声形式の変更は双方の担当で確認します。詳細は [担
 
 ## 起動・開発
 
+- [仕様書・処理フロー図の一覧](docs/README.md)
+- [Git管理・除外方針](docs/development/gitignore.md)
+
 - [Windows・Ubuntuのセットアップ](docs/setup/server.md)
 - [このPCの環境と起動](docs/setup/local-pc.md)
 - [ESP32の配線・設定・起動](firmware/esp32/README.md)

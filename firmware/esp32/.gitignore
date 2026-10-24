@@ -1,6 +1,7 @@
-ESP32-Reader/WiFiConfig.h
-ESP32-Follower/WiFiConfig.h
-ESP32-Follower/TailConfig.h
+# WiFiConfig.h and TailConfig.h are excluded by the root .gitignore.
+# Keep WiFiConfig.example.h and TailConfig.example.h in version control.
+
+# Local Arduino tooling, research checkouts and build output.
 .research/
 .arduino-cli/
 .arduino-data/
@@ -10,8 +11,3 @@ ESP32-Follower/TailConfig.h
 .tools/
 arduino-cli-download.zip
 .build/
-
-.env
-.venv/
-__pycache__/
-*.py[cod]
