@@ -8,11 +8,11 @@ import time
 import uuid
 import wave
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from .server_vad import SAMPLE_RATE, ServerVoiceActivity
+from .server_vad import SAMPLE_RATE, ServerVADSettings, ServerVoiceActivity
 from .sessions import MAX_ACTIVE_SESSIONS, VoiceAPIError, VoiceSession, VoiceSessions
 
 
@@ -70,10 +70,16 @@ class ServerAudioStreams:
 
     def _state_locked(self, session_id: str, generation: int) -> _StreamState:
         self._purge_locked()
-        self.manager.get_active_session(session_id, generation)
+        session = self.manager.get_active_session(session_id, generation)
         state = self._states.get(session_id)
         if state is None:
-            state = _StreamState(session_id, generation, self._vad_factory())
+            saved = getattr(getattr(session, "pipeline", None), "vad_settings", None)
+            vad = (
+                ServerVoiceActivity(ServerVADSettings(**saved))
+                if self._vad_factory is ServerVoiceActivity and isinstance(saved, dict)
+                else self._vad_factory()
+            )
+            state = _StreamState(session_id, generation, vad)
             self._states[session_id] = state
         if state.generation != generation:
             raise VoiceAPIError(409, "generation_mismatch", "会話の状態が変わりました。")
@@ -142,6 +148,16 @@ class ServerAudioStreams:
     def get_status(self, session_id: str, generation: int) -> dict[str, Any]:
         with self._lock:
             return self._snapshot(self._state_locked(session_id, generation))
+
+    def runtime_snapshot(self, active_session_ids: set[str] | None = None) -> list[dict[str, Any]]:
+        """Report active VAD settings without refreshing/expiring/resetting streams."""
+        with self._lock:
+            return [
+                {"stage": state.stage, "settings": asdict(state.vad.settings)}
+                for state in self._states.values()
+                if hasattr(state.vad, "settings")
+                and (active_session_ids is None or state.session_id in active_session_ids)
+            ]
 
     @staticmethod
     def _write_wav(pcm: bytes) -> Path:

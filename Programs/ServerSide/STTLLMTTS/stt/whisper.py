@@ -11,6 +11,7 @@ from typing import Any, Callable
 from dotenv import load_dotenv
 
 from ...dashboard.settings_store import get_saved_settings
+from ...dashboard.runtime_status import RuntimeObservation, component_configuration
 from ..runtime import run_blocking_stage
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
@@ -101,11 +102,37 @@ class WhisperSTT:
 
     def __init__(self, config: WhisperConfig | None = None) -> None:
         self.config = config or WhisperConfig.from_env()
+        self._runtime_observation = RuntimeObservation(component_configuration(
+            self.config.model_id, device=self.config.device,
+            precision=self.config.compute_type, backend="faster_whisper",
+        ))
         self._model: Any | None = None
         self._load_lock = threading.Lock()
         self._inference_lock: threading.Lock | None = None
 
     def _load_model(self) -> Any:
+        observation = self._runtime_observation
+        loading = self._model is None
+        observation.begin(loading=loading)
+        try:
+            model = self._load_model_impl()
+            engine = getattr(model, "model", None)
+            observation.loaded(
+                model=self.config.model_id,
+                device=getattr(engine, "device", None),
+                precision=getattr(engine, "compute_type", None),
+            )
+            return model
+        except Exception as error:
+            observation.failure(error)
+            raise
+        finally:
+            observation.finish(loading=loading)
+
+    def runtime_status(self) -> dict[str, Any]:
+        return self._runtime_observation.snapshot()
+
+    def _load_model_impl(self) -> Any:
         with self._load_lock:
             if self._model is None:
                 key = (
@@ -158,6 +185,20 @@ class WhisperSTT:
             return self._model
 
     def transcribe_file(self, audio_path: str | Path) -> Transcription:
+        observation = self._runtime_observation
+        observation.begin()
+        try:
+            return self._transcribe_file_impl(audio_path)
+        except (ValueError, FileNotFoundError):
+            # An invalid upload is not evidence that the inference service failed.
+            raise
+        except Exception as error:
+            observation.failure(error)
+            raise
+        finally:
+            observation.finish()
+
+    def _transcribe_file_impl(self, audio_path: str | Path) -> Transcription:
         """Decode browser audio, split at sustained pauses, and transcribe speech regions."""
         path = Path(audio_path).expanduser()
         if not path.is_file():
@@ -213,6 +254,7 @@ class WhisperSTT:
                 if detected_language and language_probability is not None:
                     detected_languages.append((str(detected_language), float(language_probability)))
 
+        self._runtime_observation.success()
         text = " ".join(segment.text.strip() for segment in recognized_segments).strip()
         weights = [max(1, len(segment.text.strip())) for segment in recognized_segments]
         avg_logprob = self._weighted_segment_stat(recognized_segments, weights, "avg_logprob")

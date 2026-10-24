@@ -19,10 +19,13 @@ if TYPE_CHECKING:
 class LocalIrodoriBackend:
     # Pipelines are created per conversation; models must survive across pipelines.
     _runtimes: dict[tuple[str, ...], tuple[Any, Any, threading.RLock]] = {}
+    _runtime_descriptors: dict[tuple[str, ...], dict[str, str]] = {}
     _runtimes_guard = threading.Lock()
 
     def __init__(self, config: TTSConfig) -> None:
         self.config = config
+        self.runtime_details: dict[str, str] = {}
+        self.observation: Any | None = None
         self.source_dir = Path(config.source_dir).expanduser() if config.source_dir else (
             Path(__file__).resolve().parents[1] / "third_party" / "Irodori-TTS"
         )
@@ -91,6 +94,18 @@ class LocalIrodoriBackend:
         return requested, precision
 
     def _load(self) -> tuple[Any, Any, threading.RLock]:
+        if self.observation is not None:
+            self.observation.begin(loading=True)
+        try:
+            runtime = self._load_impl()
+            if self.observation is not None:
+                self.observation.loaded(**self.runtime_details)
+            return runtime
+        finally:
+            if self.observation is not None:
+                self.observation.finish(loading=True)
+
+    def _load_impl(self) -> tuple[Any, Any, threading.RLock]:
         config = self.config
         key = (
             str(self.source_dir.resolve()), config.checkpoint, config.codec_repo,
@@ -117,6 +132,12 @@ class LocalIrodoriBackend:
                 runtime = api.InferenceRuntime.from_key(runtime_key)
                 shared = (api, runtime, threading.RLock())
                 self._runtimes[key] = shared
+                self._runtime_descriptors[key] = {
+                    "model": config.checkpoint,
+                    "device": model_device,
+                    "precision": model_precision,
+                }
+            self.runtime_details = dict(self._runtime_descriptors.get(key, {}))
             return shared
 
     def synthesize(

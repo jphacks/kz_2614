@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import math
 import os
 import tempfile
 import wave
@@ -26,6 +27,14 @@ def _settings_path() -> Path:
     ).expanduser()
 
 DEFAULT_SETTINGS: dict[str, Any] = {
+    "vad": {
+        "threshold": 0.65,
+        "end_threshold": 0.35,
+        "min_speech_ms": 384,
+        "silence_ms": 896,
+        "preroll_ms": 640,
+        "max_speech_seconds": 20.0,
+    },
     "stt": {
         "model_id": "Systran/faster-whisper-small",
         "language": "ja",
@@ -47,6 +56,57 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 }
 
 
+def get_settings_defaults() -> dict[str, Any]:
+    """Defaults must match the backend that a new pipeline will actually use."""
+    defaults = copy.deepcopy(DEFAULT_SETTINGS)
+    if os.getenv("VOICE_TTS_BACKEND", "gradio").strip().lower() == "local":
+        defaults["tts"]["checkpoint"] = "Aratako/Irodori-TTS-v4.1-Small"
+    return defaults
+
+
+def validate_vad_settings(values: dict[str, Any]) -> dict[str, int | float]:
+    """Keep persisted controls and the streaming VAD within the same bounds."""
+    result: dict[str, int | float] = {}
+    for key in DEFAULT_SETTINGS["vad"]:
+        value = values.get(key, DEFAULT_SETTINGS["vad"][key])
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or (isinstance(value, float) and not math.isfinite(value))
+        ):
+            raise ValueError(f"vad.{key} must be a finite number")
+        if key.endswith("_ms") and not isinstance(value, int):
+            raise ValueError(f"vad.{key} must be an integer")
+        result[key] = value
+    if not 0 < result["end_threshold"] < result["threshold"] < 1:
+        raise ValueError("発話検出のしきい値は 0 < 終了 < 開始 < 1 にしてください。")
+    if not 128 <= result["min_speech_ms"] <= 1000:
+        raise ValueError("発話として認める長さは128〜1000msにしてください。")
+    if not 320 <= result["silence_ms"] <= 2000:
+        raise ValueError("話し終わりの待ち時間は320〜2000msにしてください。")
+    if not result["min_speech_ms"] + 128 <= result["preroll_ms"] <= 2000:
+        raise ValueError("先頭に残す音声は最小発話時間+128ms以上、2000ms以下にしてください。")
+    if not 1 <= result["max_speech_seconds"] <= 30:
+        raise ValueError("発話の最大長は1〜30秒にしてください。")
+    return result
+
+
+def _vad_environment_settings() -> dict[str, int | float]:
+    values = copy.deepcopy(DEFAULT_SETTINGS["vad"])
+    for key, env_name in (
+        ("threshold", "VOICE_VAD_THRESHOLD"),
+        ("end_threshold", "VOICE_VAD_END_THRESHOLD"),
+        ("min_speech_ms", "VOICE_VAD_MIN_SPEECH_MS"),
+        ("silence_ms", "VOICE_VAD_SILENCE_MS"),
+        ("preroll_ms", "VOICE_VAD_PREROLL_MS"),
+        ("max_speech_seconds", "VOICE_VAD_MAX_SPEECH_SECONDS"),
+    ):
+        raw = os.getenv(env_name)
+        if raw is not None:
+            values[key] = int(raw) if key.endswith("_ms") else float(raw)
+    return validate_vad_settings(values)
+
+
 def _read_saved_settings() -> dict[str, Any] | None:
     settings_path = _settings_path()
     if not settings_path.is_file():
@@ -57,11 +117,15 @@ def _read_saved_settings() -> dict[str, Any] | None:
         raise RuntimeError(f"Could not read dashboard settings: {settings_path}") from exc
     if not isinstance(parsed, dict):
         raise RuntimeError("Dashboard settings must be a JSON object")
+    # Legacy settings files predate VAD controls. Preserve their environment values
+    # until this section is explicitly saved, rather than silently resetting them.
+    if "vad" not in parsed:
+        parsed["vad"] = _vad_environment_settings()
     return validate_settings(parsed)
 
 
 def _merge_defaults(settings: dict[str, Any] | None) -> dict[str, Any]:
-    merged = copy.deepcopy(DEFAULT_SETTINGS)
+    merged = get_settings_defaults()
     if not settings:
         return merged
     for section, values in settings.items():
@@ -76,7 +140,8 @@ def get_dashboard_settings() -> dict[str, Any]:
     if saved is not None:
         return _merge_defaults(saved)
 
-    current = copy.deepcopy(DEFAULT_SETTINGS)
+    current = get_settings_defaults()
+    current["vad"] = _vad_environment_settings()
     stt = current["stt"]
     model_id = os.getenv("WHISPER_MODEL_ID", "").strip()
     if model_id:
@@ -236,6 +301,8 @@ def validate_settings(payload: dict[str, Any]) -> dict[str, Any]:
         if unknown_fields:
             raise ValueError(f"Unknown field in {section} settings")
 
+    values["vad"] = validate_vad_settings(values["vad"])
+
     stt = values["stt"]
     stt["model_id"] = _string(stt.get("model_id"), "stt.model_id", maximum=200, default=DEFAULT_SETTINGS["stt"]["model_id"])
     stt["language"] = _choice(stt.get("language"), "stt.language", {"ja", "auto", "en"}, "ja")
@@ -277,6 +344,9 @@ def validate_settings(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def save_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(payload, dict) and "vad" not in payload:
+        # An older client must not overwrite a VAD section it cannot display.
+        payload = {**payload, "vad": get_dashboard_settings()["vad"]}
     settings = validate_settings(payload)
     settings_path = _settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)

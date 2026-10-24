@@ -17,6 +17,8 @@
         <nav class="side-nav">
           <a class="nav-link active" href="#overview"><span class="nav-dot"></span>ダッシュボード</a>
           <a class="nav-link" href="#voice-call"><span class="nav-dot"></span>音声で話す</a>
+          <a class="nav-link" href="#runtime"><span class="nav-dot"></span>稼働状態</a>
+          <a class="nav-link" href="#vad"><span class="nav-dot"></span>発話の検出</a>
           <a class="nav-link" href="#stt"><span class="nav-dot"></span>音声認識 STT</a>
           <a class="nav-link" href="#tts"><span class="nav-dot"></span>音声合成 TTS</a>
           <a class="nav-link" href="#behavior"><span class="nav-dot"></span>会話のふるまい</a>
@@ -95,8 +97,40 @@
           <p class="voice-privacy-note">会話中は無音を含む音声をサーバーへ送信します。音声は処理中だけ扱い、終了後に破棄します。マイクの使用を許可してください。別の端末から接続する場合はHTTPSが必要です。</p>
         </section>
 
+        <section id="runtime" class="runtime-card" aria-labelledby="runtime-title">
+          <div class="runtime-heading">
+            <div><p class="eyebrow">RUNTIME</p><h2 id="runtime-title">実際の稼働状態</h2></div>
+            <button id="runtime-refresh" class="button button-quiet" type="button">状態を更新</button>
+          </div>
+          <p class="section-description">次の会話に使う設定と、稼働中の会話で確認できた状態を表示します。最後の成功はその時点の記録です。状態の更新で会話は停止しません。</p>
+          <p id="runtime-state-summary" class="runtime-summary" role="status" aria-live="polite">稼働状態を取得しています…</p>
+          <div class="runtime-grid">
+            <article class="runtime-component"><div class="runtime-component-heading"><h3>STT · 音声認識</h3><span id="runtime-stt-state" class="runtime-badge">未確認</span></div><p id="runtime-stt-configured" class="runtime-configured">次の会話の設定: 取得前</p><p id="runtime-stt-active" class="runtime-active">稼働中の会話: 観測前</p><p id="runtime-stt-detail" class="field-hint"></p></article>
+            <article class="runtime-component"><div class="runtime-component-heading"><h3>LLM · 返答生成</h3><span id="runtime-llm-state" class="runtime-badge">未確認</span></div><p id="runtime-llm-configured" class="runtime-configured">次の会話の設定: 取得前</p><p id="runtime-llm-active" class="runtime-active">稼働中の会話: 観測前</p><p id="runtime-llm-detail" class="field-hint"></p></article>
+            <article class="runtime-component"><div class="runtime-component-heading"><h3>TTS · 音声合成</h3><span id="runtime-tts-state" class="runtime-badge">未確認</span></div><p id="runtime-tts-configured" class="runtime-configured">次の会話の設定: 取得前</p><p id="runtime-tts-active" class="runtime-active">稼働中の会話: 観測前</p><p id="runtime-tts-detail" class="field-hint"></p></article>
+          </div>
+          <p id="runtime-vad" class="runtime-vad">発話検出: 取得前</p>
+          <p id="runtime-last-updated" class="field-hint">表示中は約10秒ごとに更新します。</p>
+        </section>
+
         <div class="settings-layout">
           <form id="settings-form" class="settings-form" autocomplete="off">
+            <section id="vad" class="settings-card">
+              <div class="section-title-row"><div class="section-icon stt-icon" aria-hidden="true">検</div><div><p class="eyebrow">SERVER · VAD</p><h2>発話の検出と区切り</h2></div></div>
+              <p class="section-description">サーバーが声と物音を見分け、話し終わりを判断する設定です。保存後に始める新しい会話から反映されます。</p>
+              <div class="field-grid">
+                <label class="field"><span class="field-label">声を拾う感度</span><select id="vad-sensitivity"><option value="low">低め · 物音を拾いにくい</option><option value="normal" selected>標準</option><option value="high">高め · 小さな声を拾いやすい</option><option value="custom">詳細設定の値</option></select><span class="field-hint">物音を拾いすぎるときは低め、小声が途切れるときは高めにします。</span></label>
+                <label class="field"><span class="field-label">話し終わりまで待つ無音時間（ms）</span><input name="vad.silence_ms" type="number" min="320" max="2000" step="1" required value="896"><span class="field-hint">長くすると途中の間で切れにくく、短くすると返答が早く始まります。1000ms = 1秒。</span></label>
+                <label class="field"><span class="field-label">声と判定する最短の長さ（ms）</span><input name="vad.min_speech_ms" type="number" min="128" max="1000" step="1" required value="384"><span class="field-hint">長くすると短い物音を除外しやすくなります。</span></label>
+                <label class="field"><span class="field-label">1回の発話の上限（秒）</span><input name="vad.max_speech_seconds" type="number" min="1" max="30" step="any" required value="20"><span class="field-hint">この長さに達すると、発話を区切って処理します。</span></label>
+              </div>
+              <details id="vad-advanced" class="vad-advanced"><summary>発話検出の詳細設定</summary><div class="field-grid">
+                <label class="field"><span class="field-label">発話を始める判定値</span><input name="vad.threshold" type="number" min="0" max="1" step="any" required value="0.65"><span class="field-hint">小さい値ほど声を拾いやすくなります。</span></label>
+                <label class="field"><span class="field-label">発話が終わる判定値</span><input name="vad.end_threshold" type="number" min="0" max="1" step="any" required value="0.35"><span class="field-hint">開始の判定値より小さくしてください。</span></label>
+                <label class="field field-wide"><span class="field-label">発話の先頭を保つ時間（ms）</span><input name="vad.preroll_ms" type="number" min="256" max="2000" step="1" required value="640"><span class="field-hint">声と判定する最短の長さより128ms以上長くし、話し始めを欠けにくくします。</span></label>
+              </div></details>
+              <p id="vad-validation-message" class="vad-validation" role="status" aria-live="polite"></p>
+            </section>
             <section id="stt" class="settings-card">
               <div class="section-title-row">
                 <div class="section-icon stt-icon" aria-hidden="true">聞</div>
@@ -137,8 +171,8 @@
                   </select>
                 </label>
                 <div class="field field-toggle">
-                  <div><span class="field-label">無音区間を除外</span><span class="field-hint">発話のない部分を認識処理から除きます。</span></div>
-                  <label class="switch"><input name="stt.vad_filter" type="checkbox"><span class="switch-track"></span><span class="sr-only">無音区間を除外</span></label>
+                  <div><span class="field-label">Whisperで無音区間を除外</span><span class="field-hint">文字起こし時の追加フィルターです。連続入力の感度と区切りは「発話の検出と区切り」で調整します。</span></div>
+                  <label class="switch"><input name="stt.vad_filter" type="checkbox"><span class="switch-track"></span><span class="sr-only">Whisperで無音区間を除外</span></label>
                 </div>
               </div>
             </section>

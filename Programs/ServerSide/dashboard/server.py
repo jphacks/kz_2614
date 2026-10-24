@@ -22,11 +22,11 @@ from urllib.parse import unquote, urlsplit
 from dotenv import load_dotenv
 
 from .settings_store import (
-    DEFAULT_SETTINGS,
     MAX_REFERENCE_WAV_BYTES,
     delete_reference_voice,
     get_dashboard_settings,
     get_reference_voice_info,
+    get_settings_defaults,
     save_reference_voice,
     save_settings,
 )
@@ -182,7 +182,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     200,
                     {
                         "settings": get_dashboard_settings(),
-                        "defaults": DEFAULT_SETTINGS,
+                        "defaults": get_settings_defaults(),
                         "applies": "new_pipeline_instance",
                     },
                 )
@@ -195,6 +195,30 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not self._api_auth_or_reject():
                 return
             self._send_json(200, {"status": "ok", "settings_api": "ready"})
+            return
+
+        if route == "/api/v1/dashboard/runtime":
+            if not self._api_auth_or_reject():
+                return
+            try:
+                from .runtime_status import get_runtime_status
+
+                # Observing status must not create a session, load a model, expire
+                # a conversation, or reset any microphone/VAD state.
+                with _VOICE_SESSIONS_LOCK:
+                    manager = _VOICE_SESSIONS
+                with _AUDIO_STREAMS_LOCK:
+                    streams = _AUDIO_STREAMS
+                status = get_runtime_status(manager)
+                live_ids = manager.runtime_session_ids() if manager is not None else set()
+                status["vad"] = {
+                    "configured": get_dashboard_settings()["vad"],
+                    "active": streams.runtime_snapshot(live_ids) if streams is not None else [],
+                }
+                self._send_json(200, status)
+            except (RuntimeError, ValueError, OSError):
+                LOGGER.warning("Runtime status could not be read")
+                self._send_json(503, {"error": "runtime_unavailable", "message": "稼働状態を取得できません。設定を確認してください。"})
             return
 
         if route == "/api/v1/dashboard/reference-audio":

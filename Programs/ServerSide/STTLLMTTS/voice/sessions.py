@@ -717,6 +717,36 @@ class VoiceSessions:
             "audio_device_stop_confirmed": False,
         }
 
+    def runtime_session_ids(self) -> set[str]:
+        """Return live IDs without expiring sessions or cancelling any task."""
+        now = time.monotonic()
+        with self._lock:
+            return {
+                session.session_id for session in self._sessions.values()
+                if session.active and (
+                    session.busy or now - session.last_activity < SESSION_TTL_SECONDS
+                )
+            }
+
+    def runtime_snapshot(self) -> dict[str, Any]:
+        """Read observed component state without model loading or service probes."""
+        with self._lock:
+            live_ids = self.runtime_session_ids()
+            pipelines = [
+                session.pipeline for session in self._sessions.values()
+                if session.session_id in live_ids and session.pipeline is not None
+            ]
+        components: dict[str, list[dict[str, Any]]] = {"stt": [], "llm": [], "tts": []}
+        for pipeline in pipelines:
+            for name in components:
+                client = getattr(pipeline, name, None)
+                reader = getattr(client, "runtime_status", None)
+                if callable(reader):
+                    snapshot = reader()
+                    if isinstance(snapshot, dict):
+                        components[name].append(snapshot)
+        return {"active_sessions": len(live_ids), "components": components}
+
     def status(self) -> dict[str, Any]:
         with self._lock:
             self._expire_locked()

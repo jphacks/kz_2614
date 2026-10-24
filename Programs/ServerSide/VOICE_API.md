@@ -23,6 +23,24 @@ STTは音声の基本周波数を約70〜400Hzの範囲で推定し、声の高�
 
 ## エンドポイント
 
+### `GET /api/v1/dashboard/settings` / `PUT /api/v1/dashboard/settings`
+
+既存のSTT・TTS・会話設定に `vad` セクションを追加します。保存は新しい会話から反映し、開始済みの会話のSilero設定は変更しません。
+
+```json
+{"vad":{"threshold":0.65,"end_threshold":0.35,"min_speech_ms":384,"silence_ms":896,"preroll_ms":640,"max_speech_seconds":20}}
+```
+
+開始・終了しきい値は `0 < end_threshold < threshold < 1`、最小発話時間は128〜1000ms、無音による終端待ちは320〜2000ms、先頭保持は `min_speech_ms + 128` 以上2000ms以下、最大発話長は1〜30秒です。NaN・無限大・真偽値・不正な型や範囲は拒否します。`stt.vad_filter` はWhisper用で、この連続PCM入力のSilero設定とは独立です。保存ファイルや旧クライアントの要求で `vad` が欠けている場合は、それまでの有効なVAD設定を保持します。
+
+### `GET /api/v1/dashboard/runtime`
+
+ダッシュボードと同じBearer認証を要求します。`checked_at`、`active_sessions`、`components.stt/llm/tts`、`vad` を返します。各部品の `configured` は次の会話に使う設定、`active` は進行中の会話インスタンスの観測値です。複数の会話で異なる設定を使用している場合も各値を保持します。
+
+状態は未確認、読み込み中、読み込み済み、処理中、最終成功、失敗を区別し、実処理で確認したモデル・デバイス・精度と最終成功時刻を返します。要求したデバイスと実測できたデバイスは区別し、外部サービスから確認できないGPU配置は未確認にします。最終成功は常時接続の保証ではありません。`vad.configured` は保存・環境値、`vad.active` は既存PCMストリームの設定です。
+
+このAPIはセッション作成、期限切れ処理、VADリセット、推論やモデルロード、外部サービスへの接続試験を行いません。発話本文・音声・APIキー・ローカルパスを返しません。現在値を取得できない場合は秘密情報を含まない `503 runtime_unavailable` を返します。
+
 ### `GET /api/v1/voice/status`
 
 音声APIの制限と現在のセッション数を返します。Whisper、LM Studio、Irodori-TTSの接続までは検査しません。

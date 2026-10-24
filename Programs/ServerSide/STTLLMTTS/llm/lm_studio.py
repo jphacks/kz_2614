@@ -12,6 +12,7 @@ import httpx
 from dotenv import load_dotenv
 
 from ..runtime import VoiceStageTimeout
+from ...dashboard.runtime_status import RuntimeObservation, component_configuration
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
@@ -62,6 +63,9 @@ class VoiceLLMClient:
 
     def __init__(self, config: VoiceLLMConfig | None = None) -> None:
         self.config = config or VoiceLLMConfig.from_env()
+        self._runtime_observation = RuntimeObservation(
+            component_configuration(self.config.model, backend="lm_studio"), external=True,
+        )
         headers = {"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {}
         self.client = httpx.AsyncClient(
             base_url=self.config.base_url,
@@ -139,6 +143,29 @@ class VoiceLLMClient:
         system_prompt: str = COMPANION_SYSTEM_PROMPT,
         speech_context: dict[str, str | float] | None = None,
     ) -> VoiceLLMReply:
+        if not user_text.strip():
+            raise ValueError("user_text must not be empty")
+        self._runtime_observation.begin()
+        try:
+            return await self._generate_response_impl(
+                user_text, history, system_prompt, speech_context,
+            )
+        except Exception as error:
+            self._runtime_observation.failure(error)
+            raise
+        finally:
+            self._runtime_observation.finish()
+
+    def runtime_status(self) -> dict[str, Any]:
+        return self._runtime_observation.snapshot()
+
+    async def _generate_response_impl(
+        self,
+        user_text: str,
+        history: Sequence[dict[str, str]] = (),
+        system_prompt: str = COMPANION_SYSTEM_PROMPT,
+        speech_context: dict[str, str | float] | None = None,
+    ) -> VoiceLLMReply:
         """STTで得た現在のユーザー発話を質問・依頼としてLM Studioへ送る。"""
         if not user_text.strip():
             raise ValueError("user_text must not be empty")
@@ -189,9 +216,31 @@ class VoiceLLMClient:
             "model": result.get("model_instance_id", self.config.model),
             "reasoning": "off",
         }
+        self._runtime_observation.success(model=result.get("model_instance_id"))
         return VoiceLLMReply(text=text, tool_calls=tool_calls, stats=dict(self.last_stats))
 
     async def stream_response(
+        self,
+        user_text: str,
+        history: Sequence[dict[str, str]] = (),
+        system_prompt: str = COMPANION_SYSTEM_PROMPT,
+        speech_context: dict[str, str | float] | None = None,
+    ) -> AsyncIterator[str]:
+        if not user_text.strip():
+            raise ValueError("user_text must not be empty")
+        self._runtime_observation.begin()
+        try:
+            async for delta in self._stream_response_impl(
+                user_text, history, system_prompt, speech_context,
+            ):
+                yield delta
+        except Exception as error:
+            self._runtime_observation.failure(error)
+            raise
+        finally:
+            self._runtime_observation.finish()
+
+    async def _stream_response_impl(
         self,
         user_text: str,
         history: Sequence[dict[str, str]] = (),
@@ -281,6 +330,8 @@ class VoiceLLMClient:
             "model": final_result.get("model_instance_id", self.config.model),
             "reasoning": "off",
         }
+        if final_result:
+            self._runtime_observation.success(model=final_result.get("model_instance_id"))
 
     async def close(self) -> None:
         await self.client.aclose()

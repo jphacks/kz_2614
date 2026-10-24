@@ -132,7 +132,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -.025em; }
 .field-wide { grid-column: 1 / -1; }
 .field-label { color: #4c4a42; font-size: 10.5px; font-weight: 700; }
 .field-label small { margin-left: 4px; color: #aaa49a; font-size: 9px; font-weight: 500; }
-input[type="text"], input[type="password"], select, textarea { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid #e5e1d9; border-radius: 7px; outline: none; background: #fff; color: #38362e; font-size: 11px; transition: border-color .16s ease, box-shadow .16s ease; }
+input[type="text"], input[type="password"], input[type="number"], select, textarea { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid #e5e1d9; border-radius: 7px; outline: none; background: #fff; color: #38362e; font-size: 11px; transition: border-color .16s ease, box-shadow .16s ease; }
 input:focus, select:focus, textarea:focus { border-color: #d4a07d; box-shadow: 0 0 0 3px rgba(196, 106, 59, .09); }
 select { cursor: pointer; }
 textarea { min-height: 74px; resize: vertical; line-height: 1.6; }
@@ -193,12 +193,36 @@ textarea { min-height: 74px; resize: vertical; line-height: 1.6; }
 .privacy-card p { margin: 0; color: #828477; font-size: 8.5px; line-height: 1.5; }
 .page-footer { display: flex; justify-content: space-between; margin-top: 23px; padding: 13px 2px; color: #a39e94; font-size: 9px; }
 .page-footer span { letter-spacing: .03em; }
+.runtime-card { margin-bottom: 22px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: var(--shadow); }
+.runtime-heading, .runtime-component-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.runtime-heading h2, .runtime-component-heading h3 { margin: 0; }
+.runtime-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.runtime-component { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: #fdfcf9; }
+.runtime-component-heading { align-items: flex-start; flex-wrap: wrap; gap: 6px; }
+.runtime-component h3 { font-size: 12px; }
+.runtime-component p { overflow-wrap: anywhere; }
+.runtime-badge { padding: 3px 8px; border-radius: 99px; background: #ece9e2; color: #777065; font-size: 9px; }
+.runtime-badge[data-state="ready"], .runtime-badge[data-state="loaded"] { background: #e9eee3; color: #66775a; }
+.runtime-badge[data-state="loading"], .runtime-badge[data-state="processing"] { background: #f8eddc; color: #90733e; }
+.runtime-badge[data-state="error"] { background: #fae8e1; color: #a85b45; }
+.runtime-summary { margin: 0 0 12px; color: var(--muted); font-size: 11px; }
+.runtime-summary.error, .vad-validation { color: #a85b45; }
+.runtime-configured { margin: 10px 0 8px; color: var(--muted); font-size: 10px; }
+.runtime-active, .runtime-vad { white-space: pre-line; font-size: 11px; }
+.runtime-active { margin-bottom: 8px; }
+.runtime-vad { margin: 14px 0 8px; color: #6c695f; }
+.runtime-component .field-hint { margin-bottom: 0; }
+.vad-advanced { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.vad-advanced summary { color: #73685c; font-size: 11px; cursor: pointer; }
+.vad-advanced .field-grid { margin-top: 12px; }
+.vad-validation { min-height: 16px; margin: 9px 0 0; font-size: 10px; }
 
 @media (max-width: 1120px) {
   .main-content { padding-right: 30px; padding-left: 30px; }
   .settings-layout { grid-template-columns: minmax(0, 1fr) 205px; }
 }
 @media (max-width: 900px) {
+  .runtime-grid { grid-template-columns: 1fr; }
   .sidebar { width: 205px; }
   .main-content { margin-left: 205px; padding-right: 22px; padding-left: 22px; }
   .settings-layout { grid-template-columns: minmax(0, 1fr); }
@@ -244,7 +268,8 @@ textarea { min-height: 74px; resize: vertical; line-height: 1.6; }
   .section-description { margin: 10px 0 14px; font-size: 9.5px; }
   .field-grid { gap: 12px 9px; }
   .field-label { font-size: 9.5px; }
-  input[type="text"], input[type="password"], select, textarea { min-height: 37px; padding: 8px; font-size: 10px; }
+  input[type="text"], input[type="password"], input[type="number"], select, textarea { min-height: 37px; padding: 8px; font-size: 10px; }
+  .runtime-card { padding: 15px 13px; }
   .field-hint { font-size: 8px; }
   .field-toggle { gap: 8px; }
   .inline-note { align-items: flex-start; font-size: 8.5px; }

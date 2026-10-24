@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import math
-import os
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
+from ...dashboard.settings_store import get_dashboard_settings, validate_vad_settings
 
 
 SAMPLE_RATE = 16_000
@@ -75,24 +76,11 @@ class ServerVADSettings:
 
     @classmethod
     def from_env(cls) -> "ServerVADSettings":
-        return cls(
-            threshold=float(os.getenv("VOICE_VAD_THRESHOLD", "0.65")),
-            end_threshold=float(os.getenv("VOICE_VAD_END_THRESHOLD", "0.35")),
-            min_speech_ms=int(os.getenv("VOICE_VAD_MIN_SPEECH_MS", "384")),
-            silence_ms=int(os.getenv("VOICE_VAD_SILENCE_MS", "896")),
-            preroll_ms=int(os.getenv("VOICE_VAD_PREROLL_MS", "640")),
-            max_speech_seconds=float(os.getenv("VOICE_VAD_MAX_SPEECH_SECONDS", "20")),
-        )
+        """New streams use saved dashboard values, otherwise the environment."""
+        return cls(**get_dashboard_settings()["vad"])
 
     def __post_init__(self) -> None:
-        if not 0 < self.end_threshold < self.threshold < 1:
-            raise ValueError("VAD thresholds must satisfy 0 < end < start < 1")
-        if not 128 <= self.min_speech_ms <= 1000 or not 320 <= self.silence_ms <= 2000:
-            raise ValueError("VAD speech/silence durations are outside supported bounds")
-        if not self.min_speech_ms + 128 <= self.preroll_ms <= 2000:
-            raise ValueError("VAD preroll must include speech confirmation and 128 ms margin")
-        if not math.isfinite(self.max_speech_seconds) or not 1 <= self.max_speech_seconds <= 30:
-            raise ValueError("VAD maximum speech duration must be 1–30 seconds")
+        validate_vad_settings(vars(self))
 
 
 @dataclass(frozen=True)

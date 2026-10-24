@@ -13,6 +13,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from ...dashboard.settings_store import get_saved_settings, reference_voice_path
+from ...dashboard.runtime_status import RuntimeObservation, component_configuration
 from ..runtime import run_blocking_stage
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
@@ -105,6 +106,10 @@ class IrodoriTTS:
 
     def __init__(self, config: TTSConfig | None = None) -> None:
         self.config = config or TTSConfig.from_env()
+        self._runtime_observation = RuntimeObservation(component_configuration(
+            self.config.checkpoint, device=self.config.model_device,
+            precision=self.config.model_precision, backend=self.config.backend,
+        ), external=self.config.backend == "gradio")
         if self.config.backend not in {"gradio", "local"}:
             raise ValueError("VOICE_TTS_BACKEND must be gradio or local")
         self._client: Any | None = None
@@ -208,6 +213,25 @@ class IrodoriTTS:
             pass
 
     def synthesize(self, text: str) -> SynthesizedSpeech:
+        if not text.strip():
+            raise ValueError("text must not be empty")
+        if len(text.strip()) > 1_000:
+            raise ValueError("text must be at most 1000 characters")
+        self._runtime_observation.begin()
+        try:
+            speech = self._synthesize_impl(text)
+            self._runtime_observation.success()
+            return speech
+        except Exception as error:
+            self._runtime_observation.failure(error)
+            raise
+        finally:
+            self._runtime_observation.finish()
+
+    def runtime_status(self) -> dict[str, Any]:
+        return self._runtime_observation.snapshot()
+
+    def _synthesize_impl(self, text: str) -> SynthesizedSpeech:
         """短い返答を合成し、音声バイト列と配信形式を返す。"""
         spoken_text = text.strip()
         if not spoken_text:
@@ -220,11 +244,14 @@ class IrodoriTTS:
             from .local_backend import LocalIrodoriBackend
 
             try:
-                audio = LocalIrodoriBackend(self.config).synthesize(
+                backend = LocalIrodoriBackend(self.config)
+                backend.observation = self._runtime_observation
+                audio = backend.synthesize(
                     spoken_text,
                     reference_audio=self._reference_audio_bytes,
                     reference_suffix=self._reference_audio_suffix,
                 )
+                self._runtime_observation.loaded(**backend.runtime_details)
             except Exception as exc:
                 raise SpeechSynthesisError("Local Irodori-TTS voice generation failed") from exc
             return self._read_audio(audio)

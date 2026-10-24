@@ -91,7 +91,11 @@ class VoicePipeline:
         if history_messages is None:
             history_messages = self.llm.config.max_history_messages
         self.history_messages = max(0, history_messages)
-        behavior = get_dashboard_settings()["behavior"]
+        settings = get_dashboard_settings()
+        behavior = settings["behavior"]
+        # Capture VAD preferences with this conversation, even if its first PCM
+        # packet arrives after the dashboard has saved settings for later calls.
+        self.vad_settings = dict(settings["vad"])
         self.behavior = behavior
         self.system_prompt = (
             COMPANION_SYSTEM_PROMPT
