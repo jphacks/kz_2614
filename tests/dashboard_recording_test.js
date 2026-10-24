@@ -22,10 +22,18 @@ const { browser, settle, assert } = require("./dashboard_browser_harness");
   const waiting = browser({ deferPCM: true }); await waiting.begin(); waiting.emit(1); waiting.emit(2); waiting.emit(3); await settle();
   assert.equal(waiting.frames().length, 1); waiting.pendingPCM[0].resolve(); await settle(); assert.equal(waiting.frames().length, 2);
   waiting.server().stage = "llm"; waiting.pendingPCM[1].resolve(); await settle();
-  assert.equal(waiting.frames().length, 2, "The server busy state must discard unsent capture queue, without assigning sequence numbers");
-  waiting.emit(3000); waiting.emit(0); await settle(); assert.equal(waiting.frames().length, 2);
-  waiting.server().stage = "listening"; await waiting.advance(350); waiting.emit(9); await settle();
-  assert.equal(waiting.frames().at(-1).options.headers["X-Audio-Sequence"], "2");
+  assert.equal(waiting.frames().length, 3, "Processing state must not drop or hold queued microphone frames");
+  waiting.pendingPCM[2].resolve(); await settle();
+  assert.deepEqual(waiting.frames().map((frame) => frame.options.headers["X-Audio-Sequence"]), ["0", "1", "2"]);
+
+  const continuous = browser(); await continuous.begin();
+  for (const stage of ["listening", "speaking", "stt", "llm", "tts", "reply_ready", "playing", "cooldown", "failed"]) {
+    continuous.server().stage = stage;
+    const before = continuous.frames().length;
+    continuous.emit(0, 0); await settle();
+    assert.equal(continuous.frames().length, before + 1, `Silence must still be sent during ${stage}`);
+    assert.ok(new Uint8Array(continuous.frames().at(-1).options.body).every((value) => value === 0));
+  }
 
   const overflow = browser({ deferPCM: true }); await overflow.begin(); overflow.emit();
   for (let index = 0; index < 8; index++) overflow.emit();
@@ -42,5 +50,5 @@ const { browser, settle, assert } = require("./dashboard_browser_harness");
   const late = browser({ deferPCM: true, ignorePCMAbort: true }); await late.begin(); late.emit(); await settle(); late.stop(); await late.begin();
   const before = late.status(); late.pendingPCM[0].resolve({ session_id: "session-1", generation: 0, sequence: 0, next_sequence: 1, stage: "speaking", transcript: "古い文字" }); await settle();
   assert.equal(late.status(), before); assert.notEqual(late.element("voice-transcript").textContent, "古い文字");
-  console.log("PCM transport checked: unconditional silence, sequence, one in-flight, retry identity, bounded overflow, server gating and stale ACKs");
+  console.log("PCM transport checked: silence in every server stage, sequence, one in-flight, retry identity, bounded overflow and stale ACKs");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

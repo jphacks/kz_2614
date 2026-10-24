@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import struct
+import base64
+import io
 import threading
 import time
 import unittest
 import uuid
 import wave
+from concurrent.futures import Future
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -108,6 +111,59 @@ class FakeManager:
         self.previews, self.finals = [], []
         self.paths = []
         self.progress = {"stage": "stt", "transcript": ""}
+        self.stream_cancelled = threading.Event()
+        self.emit_acknowledgement = False
+
+    def stream_turn(self, session, generation, turn_id, path, events):
+        future = Future()
+        self.stream_cancelled.clear()
+
+        def run():
+            base = {"session_id": session.session_id, "generation": generation, "turn_id": turn_id}
+            try:
+                self.paths.append(path)
+                with wave.open(str(path)) as audio:
+                    self.finals.append(audio.readframes(audio.getnframes()))
+                self.final_started.set()
+                audio = io.BytesIO()
+                with wave.open(audio, "wb") as writer:
+                    writer.setnchannels(1)
+                    writer.setsampwidth(2)
+                    writer.setframerate(48_000)
+                    writer.writeframes(bytes(960))
+                encoded = base64.b64encode(audio.getvalue()).decode("ascii")
+                events.put({**base, "type": "transcript", "text": "確定した文字"})
+                events.put({**base, "type": "text_delta", "text": "返答"})
+                if self.emit_acknowledgement:
+                    events.put({**base, "type": "acknowledgement", "text": "うん", "audio_base64": encoded, "media_type": "audio/wav"})
+                self.progress = {"stage": "tts", "transcript": "確定した文字"}
+                events.put({**base, "type": "audio_chunk", "index": 0, "text": "返答", "audio_base64": encoded, "media_type": "audio/wav"})
+                deadline = time.monotonic() + 3
+                while not self.final_release.wait(timeout=0.005):
+                    if self.stream_cancelled.is_set() or time.monotonic() > deadline:
+                        raise VoiceAPIError(409, "session_stopped", "stopped")
+                self.get_active_session(session.session_id, generation)
+                events.put({**base, "type": "text_delta", "text": "です。"})
+                events.put({**base, "type": "audio_chunk", "index": 1, "text": "です。", "audio_base64": encoded, "media_type": "audio/wav"})
+                events.put({**base, "type": "complete", "transcript": "確定した文字", "response_text": "返答です。",
+                            "speech": {"url": f"/turns/{turn_id}/audio", "media_type": "audio/wav"}})
+                future.set_result(None)
+            except Exception as error:
+                events.put({**base, "type": "error", "error": getattr(error, "code", "voice_processing_failed"), "message": str(error)})
+                future.set_exception(error)
+            finally:
+                session.busy = False
+                events.put(None)
+
+        threading.Thread(target=run, daemon=True).start()
+        return future
+
+    def cancel_stream_turn(self, session_id, generation):
+        self.stream_cancelled.set()
+
+    def timeout_stream_turn(self, session):
+        self.active = False
+        self.stream_cancelled.set()
 
     def get_active_session(self, session_id, generation, *, touch=False):
         if not self.active or self.expired or session_id != self.session_id:
@@ -181,16 +237,16 @@ class PCMStreamTests(unittest.TestCase):
         self.streams.close()
         self.assertTrue(all(not path.exists() for path in self.manager.paths))
 
-    def push(self, pcm):
-        response = self.streams.push_audio(self.manager.session_id, 0, self.sequence, pcm)
+    def push(self, pcm, *, input_gain=1.0):
+        response = self.streams.push_audio(self.manager.session_id, 0, self.sequence, pcm, input_gain=input_gain)
         self.sequence += 1
         return response
 
-    def feed(self, frame, count):
+    def feed(self, frame, count, *, input_gain=1.0):
         response = None
         while count:
             number = min(8, count)
-            response = self.push(frame * number)
+            response = self.push(frame * number, input_gain=input_gain)
             count -= number
         return response
 
@@ -230,6 +286,56 @@ class PCMStreamTests(unittest.TestCase):
             with self.assertRaises(VoiceAPIError) as error:
                 self.streams.push_audio(self.manager.session_id, 0, 1, data)
             self.assertEqual(error.exception.status, code)
+
+    def test_input_gain_clips_pcm16_without_mutating_source_and_preserves_silence(self):
+        self.status()
+        vad = self.streams._states[self.manager.session_id].vad
+        pattern = np.array([-32768, -20000, -1000, -1, 0, 1, 1000, 20000, 32767], dtype="<i2")
+        source = bytearray(np.resize(pattern, FRAME_SAMPLES).tobytes())
+        original = bytes(source)
+        with patch.object(vad, "feed", wraps=vad.feed) as feed:
+            self.push(source, input_gain=2.0)
+            actual = np.frombuffer(feed.call_args.args[0], dtype="<i2")[:len(pattern)].tolist()
+            self.assertEqual(actual, [-32768, -32768, -2000, -2, 0, 2, 2000, 32767, 32767])
+            self.assertEqual(bytes(source), original)
+            self.push(SILENCE, input_gain=0.25)
+            self.assertEqual(feed.call_args.args[0], SILENCE)
+            self.push(original)
+            self.assertEqual(feed.call_args.args[0], original)
+
+    def test_duplicate_sequence_and_discarded_input_do_not_apply_gain_again(self):
+        with patch.object(self.streams, "_apply_input_gain", wraps=self.streams._apply_input_gain) as apply:
+            self.push(VOICE, input_gain=0.5)
+            duplicate = self.streams.push_audio(self.manager.session_id, 0, 0, VOICE, input_gain=2.0)
+            self.assertEqual(duplicate["next_sequence"], 1)
+            self.assertEqual(apply.call_count, 1)
+            self.streams._states[self.manager.session_id].stage = "tts"
+            self.push(VOICE, input_gain=2.0)
+            self.assertEqual(apply.call_count, 1)
+
+    def test_invalid_input_gain_is_rejected_without_consuming_a_sequence(self):
+        for gain in (None, "1.0", False, True, float("nan"), float("inf"), -float("inf"),
+                     0, -1, 0.2499, 2.0001, 1 + 1j, 10 ** 1000):
+            with self.subTest(gain=repr(gain)):
+                with self.assertRaises(VoiceAPIError) as error:
+                    self.streams.push_audio(self.manager.session_id, 0, 0, SILENCE, input_gain=gain)
+                self.assertEqual((error.exception.status, error.exception.code), (400, "invalid_input_gain"))
+        self.assertEqual(self.status()["next_sequence"], 0)
+
+    def test_gain_changes_reach_preview_and_final_wav_without_stopping_the_session(self):
+        self.feed(VOICE, 50, input_gain=0.5)
+        self.assertTrue(self.manager.preview_started.wait(timeout=3))
+        self.assertEqual(struct.unpack_from("<h", self.manager.previews[0])[0], 2000)
+        self.feed(VOICE, 20, input_gain=2.0)
+        self.feed(SILENCE, 28, input_gain=2.0)
+        self.assertTrue(self.manager.final_started.wait(timeout=3))
+        final = self.manager.finals[0]
+        self.assertEqual(struct.unpack_from("<h", final)[0], 2000)
+        self.assertEqual(struct.unpack_from("<h", final, FRAME_BYTES * 50)[0], 8000)
+        self.assertEqual(set(np.frombuffer(final, dtype="<i2").tolist()), {0, 2000, 8000})
+        self.assertEqual(self.status()["session_id"], self.manager.session_id)
+        self.assertEqual(self.status()["generation"], 0)
+        self.assertTrue(self.manager.active)
 
     def test_live_preview_is_single_inflight_and_final_result_is_authoritative(self):
         self.feed(SILENCE, 20)

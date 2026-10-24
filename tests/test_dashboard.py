@@ -45,8 +45,11 @@ class VoiceBrowserRecoveryTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_browser_server_state_and_playback_notifications(self):
+    def test_browser_ndjson_phrase_playback_reconnect_and_completion_fence(self):
         self.run_browser_checks("dashboard_voice_test.js")
+
+    def test_browser_event_backpressure_preserves_pcm_and_unaccepted_cursor(self):
+        self.run_browser_checks("dashboard_event_backpressure_test.js")
 
     def test_browser_pcm_start_microphone_selection_and_cancellation(self):
         self.run_browser_checks("dashboard_start_test.js")
@@ -56,6 +59,9 @@ class VoiceBrowserRecoveryTests(unittest.TestCase):
 
     def test_pcm_worklet_resampling_frames_and_unconditional_silence(self):
         self.run_browser_checks("test_pcm_worklet.js")
+
+    def test_input_gain_live_controls_storage_and_retry_identity(self):
+        self.run_browser_checks("dashboard_input_gain_test.js")
 
 
 if __name__ == "__main__":

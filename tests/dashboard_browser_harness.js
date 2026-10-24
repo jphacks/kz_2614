@@ -9,7 +9,7 @@ const settle = () => new Promise(setImmediate);
 
 function browser(options = {}) {
   const elements = new Map(), timers = new Map(), documentListeners = new Map(), mediaListeners = new Map();
-  const calls = [], streams = [], contexts = [], worklets = [], microphoneConstraints = [], servers = new Map();
+  const calls = [], streams = [], contexts = [], worklets = [], microphoneConstraints = [], servers = new Map(), eventConnections = [];
   const pendingStarts = [], pendingMicrophones = [], pendingPCM = [], pendingGET = [], pendingDeletes = [];
   const storage = options.storage || new Map();
   const stats = { starts: 0, microphoneRequests: 0, resumes: 0, plays: 0, pcmInFlight: 0, maxPCMInFlight: 0, pcmAttempts: 0, modules: [] };
@@ -19,10 +19,11 @@ function browser(options = {}) {
   const clearTimer = (id) => timers.delete(id);
   const response = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
   const element = (id) => {
-    if (options.optionalDom === false && ["voice-input-level", "voice-microphone-status", "voice-mode-tag", "voice-record-button"].includes(id)) return null;
+    if (options.optionalDom === false && ["voice-input-level", "voice-microphone-status", "voice-mode-tag", "voice-record-button", "voice-input-gain", "voice-input-gain-value", "voice-input-gain-noisy", "voice-input-gain-normal", "voice-input-gain-quiet"].includes(id)) return null;
     if (!elements.has(id)) elements.set(id, {
       value: "", textContent: "", paused: true, ended: false, hidden: false, children: [],
-      classList: { remove() {}, add() {}, toggle() {} }, listeners: new Map(),
+      classList: { remove() {}, add() {}, toggle() {} }, listeners: new Map(), attributes: new Map(),
+      setAttribute(name, value) { this.attributes.set(name, value); }, getAttribute(name) { return this.attributes.get(name); },
       replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
       addEventListener(name, handler) { this.listeners.set(name, handler); },
       dispatch(name) { this.listeners.get(name)?.(); this[`on${name}`]?.(); },
@@ -49,6 +50,40 @@ function browser(options = {}) {
     const track = { stop() { stream.stopped = true; }, addEventListener(name, handler) { listeners.set(name, handler); } };
     stream.getTracks = () => [track]; stream.getAudioTracks = () => [track]; stream.disconnectDevice = () => listeners.get("ended")?.();
     streams.push(stream); return stream;
+  }
+  function eventReader(server) {
+    const chunks = [];
+    let waiting = null, ended = false, failure = null, heartbeat = null;
+    const encoder = new TextEncoder();
+    const reader = {
+      read() {
+        if (chunks.length) return Promise.resolve({ value: chunks.shift(), done: false });
+        if (failure) return Promise.reject(failure);
+        if (ended) return Promise.resolve({ done: true });
+        return new Promise((resolve, reject) => { waiting = { resolve, reject }; });
+      },
+      push(event) {
+        if (ended || failure) return;
+        const bytes = encoder.encode(JSON.stringify(event) + "\n");
+        const pieces = options.splitEventBytes ? [bytes.subarray(0, 7), bytes.subarray(7, 19), bytes.subarray(19)] : [bytes];
+        for (const value of pieces) {
+          if (!value.length) continue;
+          if (waiting) { const pending = waiting; waiting = null; pending.resolve({ value, done: false }); }
+          else chunks.push(value);
+        }
+      },
+      end() { ended = true; clearTimer(heartbeat); if (waiting) { waiting.resolve({ done: true }); waiting = null; } },
+      fail(error = new Error("Event connection lost")) { failure = error; clearTimer(heartbeat); if (waiting) { waiting.reject(error); waiting = null; } },
+      cancel() { chunks.length = 0; this.end(); return Promise.resolve(); },
+      releaseLock() {},
+    };
+    const beat = () => {
+      if (ended || failure) return;
+      reader.push({ type: "heartbeat", cursor: server.eventCursor, session_id: server.id, generation: 0, turn_id: null });
+      heartbeat = setTimer(beat, 10_000);
+    };
+    heartbeat = setTimer(beat, 10_000);
+    return reader;
   }
   function node() {
     return { disconnected: false, connections: [], connect(target) { this.connections.push(target); }, disconnect() { this.disconnected = true; } };
@@ -77,6 +112,7 @@ function browser(options = {}) {
   }
   const snapshot = (server, extra = {}) => ({ session_id: server.id, generation: 0, next_sequence: server.nextSequence, stage: server.stage,
     turn_id: server.turnId, transcript: server.transcript, response_text: server.responseText,
+    output_streaming: true, turn_complete: server.turnComplete, event_cursor: server.eventCursor,
     ...(server.turnId ? { speech: { url: `/speech/${server.turnId}`, media_type: "audio/wav" } } : {}), ...extra });
   function acceptPCM(server, request) {
     const sequence = Number(request.headers["X-Audio-Sequence"]);
@@ -105,7 +141,7 @@ function browser(options = {}) {
       },
     } },
     sessionStorage: { getItem(key) { return storage.get(key) || null; }, setItem(key, value) { storage.set(key, value); } },
-    Blob, ArrayBuffer, DataView, Uint8Array, AbortController, URL, setTimeout: setTimer, clearTimeout: clearTimer,
+    Blob, ArrayBuffer, DataView, Uint8Array, AbortController, URL, TextDecoder, atob, setTimeout: setTimer, clearTimeout: clearTimer,
     fetch: async (url, request = {}) => {
       calls.push({ url, options: request });
       if (request.method === "DELETE") {
@@ -114,7 +150,8 @@ function browser(options = {}) {
       }
       if (url === "/api/v1/voice/sessions") {
         const id = `session-${++stats.starts}`;
-        const server = { id, nextSequence: 0, acks: new Map(), stage: "listening", turnId: null, transcript: "", responseText: "", received: [], playback: [] };
+        const server = { id, nextSequence: 0, acks: new Map(), stage: "listening", turnId: null, transcript: "", responseText: "", received: [], playback: [],
+          events: [], eventCursor: 0, readers: [], turnComplete: false, playbackStarted: false };
         servers.set(id, server);
         if (stats.starts <= (options.deferStarts || 0)) return deferred(pendingStarts, request.signal, () => response(201, { session_id: id, generation: 0 }));
         if (options.failFirstStart && stats.starts === 1) return response(503, { message: "準備エラー" });
@@ -126,10 +163,19 @@ function browser(options = {}) {
       }
       const server = servers.get(url.split("/")[5]);
       assert.ok(server, `Unknown server route: ${url}`);
+      if (url.includes("/audio-stream/events?after=")) {
+        const after = Number(url.split("after=")[1]);
+        const reader = eventReader(server);
+        server.readers.push(reader); eventConnections.push({ after, reader, signal: request.signal });
+        for (const event of server.events) if (event.cursor > after || (options.replayLastEventOnReconnect && event.cursor === after)) reader.push(event);
+        if (!options.ignoreEventAbort) request.signal?.addEventListener("abort", () => { const error = new Error("Aborted"); error.name = "AbortError"; reader.fail(error); }, { once: true });
+        return { ok: true, body: { getReader: () => reader } };
+      }
       if (url.endsWith("/audio-stream/playback")) {
         const control = JSON.parse(request.body); server.playback.push(control);
-        if (control.event === "started") server.stage = "playing";
+        if (control.event === "started") { server.playbackStarted = true; if (server.turnComplete) server.stage = "playing"; }
         else if (control.event === "ended") {
+          if (!server.turnComplete) return response(409, { error: "playback_incomplete", message: "Reply generation is not complete" });
           server.stage = "cooldown";
           setTimer(() => { server.stage = "listening"; server.turnId = null; }, 600);
         } else server.stage = "reply_ready";
@@ -168,7 +214,7 @@ function browser(options = {}) {
   }
   return {
     context, environment, element, calls, streams, contexts, worklets, microphoneConstraints, stats, storage,
-    pendingStarts, pendingMicrophones, pendingPCM, pendingGET, pendingDeletes, advance,
+    pendingStarts, pendingMicrophones, pendingPCM, pendingGET, pendingDeletes, eventConnections, advance,
     start: () => element("voice-start-button").click(), stop: () => element("voice-stop-button").click(),
     idle: () => !element("voice-start-button").disabled,
     status: () => element("voice-call-status").textContent,
@@ -176,6 +222,20 @@ function browser(options = {}) {
     frames: () => calls.filter(({ url, options: request }) => url.endsWith("/audio-stream") && request.method === "POST"),
     emit(value = 0, level) { return worklets.at(-1).emit(value, level); },
     reply(turnId = "turn-1") { const server = this.server(); server.stage = "reply_ready"; server.turnId = turnId; server.transcript = "認識した発話"; server.responseText = "返答です。"; },
+    emitEvent(event) {
+      const server = this.server();
+      const payload = { cursor: ++server.eventCursor, session_id: server.id, generation: 0, turn_id: event.turn_id || server.turnId || "turn-1", ...event };
+      server.turnId = payload.turn_id;
+      if (event.type === "transcript") { server.transcript = event.text; server.stage = "llm"; }
+      if (event.type === "text_delta") server.responseText += event.text || "";
+      if (["audio_chunk", "acknowledgement"].includes(event.type)) server.stage = "tts";
+      if (event.type === "complete") { server.turnComplete = true; server.stage = server.playbackStarted ? "playing" : "reply_ready"; server.responseText = event.response_text || server.responseText; }
+      server.events.push(payload); for (const reader of server.readers) reader.push(payload); return payload.cursor;
+    },
+    replayEvent(cursor) { const server = this.server(); const event = server.events.find((value) => value.cursor === cursor); assert.ok(event); for (const reader of server.readers) reader.push(event); },
+    controlEvent(event) { const server = this.server(); const payload = { cursor: server.eventCursor, session_id: server.id, generation: 0, turn_id: null, ...event }; for (const reader of server.readers) reader.push(payload); },
+    disconnectEvents() { eventConnections.at(-1).reader.fail(); },
+    endEvents() { eventConnections.at(-1).reader.end(); },
     visibility(state, notify = true) { context.document.visibilityState = state; if (notify) documentListeners.get("visibilitychange")(); },
     devicesChanged() { mediaListeners.get("devicechange")?.(); },
     async begin() { this.start(); await settle(); await advance(0); },

@@ -254,6 +254,8 @@ class VoicePipeline:
         on_event: StreamEventHandler,
         *,
         on_progress: ProgressHandler | None = None,
+        on_stt_dispatched: Callable[[], None] | None = None,
+        on_stt_worker_finished: Callable[[], None] | None = None,
     ) -> VoiceStreamTurnResult:
         """Stream LLM text and phrase-level TTS audio while preserving turn ordering."""
         async with self._turn_lock:
@@ -264,9 +266,16 @@ class VoicePipeline:
                 self.start_acknowledgement_preparation()
             if on_progress is not None:
                 on_progress("stt", None)
+            stt_operation = (
+                self.stt.transcribe_file_async(audio_path, on_worker_finished=on_stt_worker_finished)
+                if on_stt_worker_finished is not None
+                else self.stt.transcribe_file_async(audio_path)
+            )
+            if on_stt_dispatched is not None:
+                on_stt_dispatched()
             transcription, stt_seconds = await _measure_stage(
                 "stt",
-                self.stt.transcribe_file_async(audio_path),
+                stt_operation,
             )
             if not transcription.text.strip():
                 raise NoSpeechDetected("Whisper did not detect speech in the audio file")

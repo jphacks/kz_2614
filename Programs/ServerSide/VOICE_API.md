@@ -1,8 +1,8 @@
 # Android Web 音声会話 API
 
-レビュー反映日: 2026-10-24。継続PCM入力とサーバーVADによる途中認識を追加し、従来の1発話ファイル送信・NDJSON逐次返答も保持します。PCM経路では発話確定後にLLM → 全文TTSを実行します。入力のリアルタイム認識と返答の逐次配信は別の経路です。
+レビュー反映日: 2026-10-24。継続PCM入力とサーバーVADによる途中認識を追加し、従来の1発話ファイル送信・NDJSON逐次返答も保持します。PCM経路でも発話確定後にLLMの差分と文節TTSを逐次配信します。音声入力POSTと返答受信GETは独立した接続で並行し、返答生成・再生中も無音を含むPCM送信を継続します。
 
-設定画面と同じ `NENGITSUNE_DASHBOARD_TOKEN` をBearer tokenに使います。別端末からはHTTPS、同一PCのlocalhost開発ではHTTPを使用できます。`GET /api/v1/voice/status` はAPIの存在と制限を示し、モデルの接続は保証しません。新しいPCM経路はコード・テストの確認対象であり、稼働中サービスは入力継続のため再起動していません。
+設定画面と同じ `NENGITSUNE_DASHBOARD_TOKEN` をBearer tokenに使います。別端末からはHTTPS、同一PCのlocalhost開発ではHTTPを使用できます。`GET /api/v1/voice/status` はAPIの存在と制限を示し、モデルの接続は保証しません。稼働状況と実環境での確認範囲は `LOCAL_SETUP.md` と作業履歴に記録します。入力中の会話を止める更新は行いません。
 
 ## 音声条件
 
@@ -69,10 +69,13 @@ STTは音声の基本周波数を約70〜400Hzの範囲で推定し、声の高�
 | フレーム | 1〜32,000 bytes、偶数バイト。Web既定は4096 samples（256ms） |
 | 世代 | `X-Voice-Generation` に開始時の世代 |
 | 連番 | `X-Audio-Sequence` を0から1ずつ増加。同一フレームの再送は同じ番号 |
+| 入力音量 | `X-Audio-Input-Gain` に0.25〜2.0（省略時1.0）。サーバーがPCMに適用して16-bit範囲へクリップ |
 
 ```json
 {"session_id":"UUID","generation":0,"sequence":0,"next_sequence":1,"stage":"listening","turn_id":null,"transcript":""}
 ```
+
+ブラウザーはPCM自体を加工せず、音量倍率をフレームと一緒に送ります。会話中も音量を変更でき、同一番号の再送では元の音声と倍率を維持します。VAD・途中認識・確定STTはサーバーが倍率を適用した音声で行います。不正な倍率は400 `invalid_input_gain` で拒否します。
 
 重複番号は再認識せずACKを返し、番号が飛ぶ場合は409 `audio_sequence_gap` と `expected_sequence` を返します。処理中・返答準備済み・再生中・クールダウン中の音声はACKして認識から除外します。途中文字は約1秒間隔のサーバー側STTで更新され、確定後に修正されることがあります。
 
@@ -80,11 +83,23 @@ STTは音声の基本周波数を約70〜400Hzの範囲で推定し、声の高�
 
 ### `GET /api/v1/voice/sessions/{session_id}/audio-stream`
 
-`X-Voice-Generation` を指定し、送信時と同じ現在状態を取得します。`stage` は `listening`、`speaking`、`stt`、`llm`、`tts`、`reply_ready`、`playing`、`cooldown`、`failed`。返答完了時は `response_text` と期限付き `speech.url` を返します。現在のPCM経路はNDJSON音声チャンクを配信しません。
+`X-Voice-Generation` を指定し、送信時と同じ現在状態を取得します。`stage` は `listening`、`speaking`、`stt`、`llm`、`tts`、`reply_ready`、`playing`、`cooldown`、`failed`。返答完了時は `response_text` と期限付き `speech.url` を返します。`output_streaming: true` の場合、下記eventsから文節音声を再生します。`turn_complete` はサーバー側の生成完了、`event_cursor` は最新イベント番号です。`speech.url` があっても、逐次再生した返答を重ねて再生しません。
+
+### `GET /api/v1/voice/sessions/{session_id}/audio-stream/events?after={cursor}`
+
+PCM入力とは独立した、返答用の長期NDJSON接続です。`X-Voice-Generation` を付け、初回は `after=0`、再接続は最後に受け取ったcursorを指定します。Bearer認証はPCM入力と同じです。
+
+`transcript`、`text_delta`、`acknowledgement`、`audio_chunk`、`complete`、`error` は従来の逐次応答と同じ内容に、`cursor`、`session_id`、`generation`、`turn_id` を付けます。cursorはセッション全体で1から増えます。音声は `media_type` と `audio_base64` で返し、Webは先頭の音声から受信順に再生します。返答全文と全音声の完成は待ちません。
+
+接続は最大25秒で正常終了し、同じcursorから再接続します。無送信時は最大10秒ごとに `heartbeat` を返します。heartbeatのcursorは受信位置の確認だけで増加しません。再接続で重複したデータは再生しません。停止・世代変更後のデータも破棄します。
+
+サーバーの再送用イベントは各セッション256件／16MiB以内に制限します。受信位置が保持範囲より古い場合は409 `events_expired`、先行した場合は409 `invalid_event_cursor` です。黙って音声を欠落させず、クライアントは会話の再開を案内します。長期受信接続は全体8本までで、超過時は503 `event_readers_busy` を返します。
+
+逐次応答開始前の失敗は通常のJSONです。開始後は `type: error`、`turn_id: null` の制御イベントを送って閉じます。この制御イベントはheartbeatと同様にcursorを増やさないため、クライアントは重複判定より先に処理します。出力接続の切断だけでは、マイク入力やサーバーの生成処理は停止しません。
 
 ### `POST /api/v1/voice/sessions/{session_id}/audio-stream/playback`
 
-`Content-Type: application/json` で `generation`、`turn_id`、`event`（`started` / `ended` / `failed`）を送ります。再生開始で `playing`、完了で600msの `cooldown` 後に待受へ戻ります。失敗は手動再生待ちとし、自動で待受へ戻しません。古い世代・発話・停止済み会話の通知は拒否します。完了通知の再送は同じ発話で冪等です。
+`Content-Type: application/json` で `generation`、`turn_id`、`event`（`started` / `ended` / `failed`）を送ります。最初の文節の実再生で `started` を通知します。`ended` は `complete` を受信し、かつ全音声の再生キューが空になった時だけ送ります。生成途中の再生終了通知は拒否します。完了後は600msの `cooldown` を経て待受へ戻ります。音声送信そのものは全段階で継続し、認識を待つかどうかはサーバーが決めます。失敗は手動再生待ちとし、自動で待受へ戻しません。古い世代・発話・停止済み会話の通知は拒否します。完了通知の再送は同じ発話で冪等です。
 
 ### `POST /api/v1/voice/sessions/{session_id}/transcription`
 
@@ -153,6 +168,6 @@ Raw audio bytes を本文として送ります。`Content-Type` は上記の対�
 ## データと確認範囲
 
 - 録音音声はログへ記録せず、処理用の一時ファイルを削除します。会話履歴と相づちキャッシュはセッションのメモリ内だけで保持します。
-- NDJSON対応クライアントはサーバーが選んだ音声を順番に再生します。NDJSON経路の再生通知は未実装。PCM経路は上記の通知を実装しています。
+- PCM経路はNDJSONイベントで返答を受信し、文節ごとに再生します。従来のファイル送信NDJSONも保持します。PCM経路の再生通知は上記を使い、従来APIの個別通知は未実装です。
 - Pi 4しっぽ制御もサーバー側の責務ですが、サーバー経由のクライアント操作APIとPi 4接続は未実装です。
 - このPCの既存サービスではSTT → 指定LLM → ローカルTTS、無音・破損音声、ブラウザー再生を確認済み。新PCM経路・NDJSON統合後の実モデル試験、HTTPS、Android／ESP32実機での受け入れは未実施です。

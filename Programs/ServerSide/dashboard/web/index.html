@@ -78,6 +78,19 @@
               </select>
               <span id="voice-microphone-help" class="field-hint">口元のヘッドセットマイクを選ぶと、周囲の音を抑えられます。</span>
             </label>
+            <div class="field voice-gain-control">
+              <div class="voice-gain-label">
+                <label class="field-label" for="voice-input-gain">入力音量</label>
+                <output id="voice-input-gain-value" for="voice-input-gain" aria-live="polite">100%</output>
+              </div>
+              <input id="voice-input-gain" type="range" min="25" max="200" step="5" value="100" aria-describedby="voice-input-gain-help">
+              <div class="voice-gain-presets" role="group" aria-label="入力音量のおすすめ設定">
+                <button id="voice-input-gain-noisy" class="button button-quiet" type="button" aria-pressed="false">周囲がうるさい</button>
+                <button id="voice-input-gain-normal" class="button button-quiet" type="button" aria-pressed="true">標準</button>
+                <button id="voice-input-gain-quiet" class="button button-quiet" type="button" aria-pressed="false">静か・小さい声</button>
+              </div>
+              <span id="voice-input-gain-help" class="field-hint">会話中も変更できます。周囲がうるさいときは小さく、小さい声は大きく調整してください。</span>
+            </div>
           </div>
           <div class="voice-call-actions">
             <button id="voice-start-button" class="button button-primary" type="button">会話を始める</button>

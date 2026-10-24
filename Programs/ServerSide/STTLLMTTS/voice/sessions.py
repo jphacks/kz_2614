@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import logging
 import threading
 import time
 import uuid
+import wave
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -122,7 +124,7 @@ class VoiceSessions:
         task = session.task
         if task is not None and self._loop is not None:
             if cancel_task:
-                self._loop.call_soon_threadsafe(task.cancel)
+                self._loop.call_soon_threadsafe(self._cancel_task_once, task)
         elif session.pipeline is not None and self._loop is not None:
             self._loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(session.pipeline.close())
@@ -510,6 +512,10 @@ class VoiceSessions:
         events: Queue[dict[str, Any] | None],
     ) -> None:
         current_task = asyncio.current_task()
+        stt_worker_finished = threading.Event()
+        stt_worker_finished.set()  # No native file reader exists before dispatch.
+        reply_speeches: list[SynthesizedSpeech] = []
+        reply_bytes = 0
         with self._lock:
             if not session.active or session.generation != generation:
                 events.put({
@@ -524,12 +530,19 @@ class VoiceSessions:
             pipeline = session.pipeline
 
         def publish(event: dict[str, object]) -> None:
+            nonlocal reply_bytes
             with self._lock:
                 if not session.active or session.generation != generation:
                     raise asyncio.CancelledError
             payload = dict(event)
-            speech = payload.pop("speech", None)
+            speech = payload.get("speech")
             if isinstance(speech, SynthesizedSpeech):
+                payload.pop("speech")
+                if payload.get("type") == "audio_chunk":
+                    reply_bytes += len(speech.audio_bytes)
+                    if reply_bytes > MAX_AUDIO_BYTES:
+                        raise VoiceAPIError(413, "reply_too_large", "返答音声の上限に達しました。")
+                    reply_speeches.append(speech)
                 payload["media_type"] = speech.media_type
                 payload["audio_base64"] = base64.b64encode(speech.audio_bytes).decode("ascii")
             payload.update(
@@ -561,7 +574,24 @@ class VoiceSessions:
                 on_progress=lambda stage, transcript: self._update_turn_progress(
                     session, generation, turn_id, stage, transcript
                 ),
+                on_stt_dispatched=stt_worker_finished.clear,
+                on_stt_worker_finished=stt_worker_finished.set,
             )
+            combined = self._combine_stream_speech(reply_speeches)
+            speech_metadata: dict[str, Any] | None = None
+            if combined is not None:
+                with self._lock:
+                    if not session.active or session.generation != generation:
+                        raise asyncio.CancelledError
+                    session.speeches[turn_id] = StoredSpeech(
+                        combined.audio_bytes, combined.media_type, generation,
+                        time.monotonic() + SPEECH_TTL_SECONDS,
+                    )
+                speech_metadata = {
+                    "url": f"/api/v1/voice/sessions/{session.session_id}/turns/{turn_id}/audio",
+                    "media_type": combined.media_type,
+                    "expires_in_seconds": SPEECH_TTL_SECONDS,
+                }
             self._update_turn_progress(
                 session, generation, turn_id, "complete", result.transcription.text
             )
@@ -571,6 +601,7 @@ class VoiceSessions:
                     "transcript": result.transcription.text,
                     "response_text": result.response.text,
                     "timings_seconds": result.timings_seconds,
+                    **({"speech": speech_metadata} if speech_metadata is not None else {}),
                 }
             )
         except asyncio.CancelledError:
@@ -634,6 +665,10 @@ class VoiceSessions:
                 "retryable": active,
             })
         finally:
+            # Task cancellation and the STT deadline do not stop a native decoder.
+            # A bridge may delete its input WAV only after this terminal sentinel.
+            while not stt_worker_finished.is_set():
+                await asyncio.sleep(0.05)
             self._update_turn_progress(session, generation, turn_id, "failed")
             with self._lock:
                 session.busy = False
@@ -647,6 +682,59 @@ class VoiceSessions:
                 except Exception as exc:
                     logger.warning("voice_pipeline_close_failed error_type=%s", type(exc).__name__)
             events.put(None)
+
+    @staticmethod
+    def _combine_stream_speech(parts: list[SynthesizedSpeech]) -> SynthesizedSpeech | None:
+        """Keep the existing whole-reply URL without synthesizing a second time."""
+        if not parts:
+            return None
+        output = io.BytesIO()
+        decoded_bytes = 0
+        try:
+            import av
+
+            with wave.open(output, "wb") as writer:
+                writer.setnchannels(1)
+                writer.setsampwidth(2)
+                writer.setframerate(48_000)
+                for part in parts:
+                    with av.open(io.BytesIO(part.audio_bytes)) as container:
+                        resampler = av.AudioResampler(format="s16", layout="mono", rate=48_000)
+                        for frame in container.decode(audio=0):
+                            for converted in resampler.resample(frame):
+                                pcm = converted.to_ndarray().astype("<i2", copy=False).tobytes()
+                                decoded_bytes += len(pcm)
+                                if decoded_bytes + 44 > MAX_AUDIO_BYTES:
+                                    raise VoiceAPIError(413, "reply_too_large", "返答音声の上限に達しました。")
+                                writer.writeframesraw(pcm)
+                        for converted in resampler.resample(None):
+                            pcm = converted.to_ndarray().astype("<i2", copy=False).tobytes()
+                            decoded_bytes += len(pcm)
+                            if decoded_bytes + 44 > MAX_AUDIO_BYTES:
+                                raise VoiceAPIError(413, "reply_too_large", "返答音声の上限に達しました。")
+                            writer.writeframesraw(pcm)
+            return SynthesizedSpeech(output.getvalue(), "audio/wav", ".wav")
+        except VoiceAPIError:
+            raise
+        except Exception as exc:
+            # Existing NDJSON integrations can supply another browser-supported
+            # encoding. Its streamed chunks remain available even without a fallback.
+            logger.warning("voice_stream_fallback_unavailable error_type=%s", type(exc).__name__)
+            return None
+
+    def cancel_stream_turn(self, session_id: str, generation: int) -> None:
+        """Cancel the asyncio task while preserving its native-reader cleanup fence."""
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is not None and session.active and session.generation == generation:
+                if session.task is not None and self._loop is not None:
+                    self._loop.call_soon_threadsafe(self._cancel_task_once, session.task)
+
+    @staticmethod
+    def _cancel_task_once(task: asyncio.Task[Any]) -> None:
+        # A second cancellation could interrupt the native-reader cleanup fence.
+        if not task.done() and not task.cancelling():
+            task.cancel()
 
     def stream_turn(
         self,

@@ -92,7 +92,13 @@ h1 { margin-bottom: 7px; font-size: clamp(23px, 2.8vw, 30px); font-weight: 600; 
 .voice-mode-tag { padding: 5px 9px; border-radius: 99px; background: #eee9df; color: #82796c; font-size: 9px; font-weight: 700; }
 .voice-call-card .section-description { margin: 12px 0 14px; }
 .voice-call-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.voice-device-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.voice-device-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: start; gap: 12px; margin-bottom: 14px; }
+.voice-gain-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.voice-gain-label output { min-width: 48px; padding: 2px 7px; border-radius: 6px; background: #f3e8df; color: var(--orange-dark); font-size: 11px; font-weight: 700; text-align: center; }
+.voice-gain-control input[type="range"] { width: 100%; min-width: 0; margin: 5px 0; accent-color: var(--orange); }
+.voice-gain-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.voice-gain-presets .button { min-height: 30px; padding: 3px 8px; font-size: 10px; }
+.voice-gain-presets .button[aria-pressed="true"] { border-color: #d5b79f; background: #f3e8df; color: var(--orange-dark); }
 .voice-call-actions .button:disabled { cursor: not-allowed; }
 .button-record { background: #75866a; color: #fff; box-shadow: 0 5px 12px rgba(89, 112, 76, .13); }
 .button-record:hover { background: #647758; }
