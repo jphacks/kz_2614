@@ -125,6 +125,25 @@
 - TTS連携: 新しい `IrodoriTTS` インスタンスが保存音声を読み込み、Gradioの `ref_wav` として送る。インスタンス作成後に保存音声を置換・削除しても、既存インスタンスは読み込み済みの音声を使う。
 - 未確認: アップロードAPI、破損WAV拒否、削除、実際のIrodori-TTS接続と生成、Androidブラウザーからの操作は未確認。MVPのWebアップロード形式はPCM WAVのみ。
 
+### 17. 文書と実装のブランチ分離（2026-10-24）
+
+- 依頼: Markdown文書は `main` に置き、ユーザーの実装部分は作業ブランチにまとめる。
+- 対応: Pi 4のAPI契約と関連要件・作業ガイドを `main` の `1d827fb` に記録。`codex/raspberry-pi-implementation` に `main` を統合し、ダッシュボード、音声セッション／処理、Android WebViewクライアントを `a3dbef8` と `65bc232` に保存。
+- 確認: 文書と実装の差分チェックは成功。設定例に実際のAPIキーらしき値がないことを簡易確認。テスト、ビルド、Android・Pi 4実機確認は未実施。
+- 未完了: Pi 4のデバイスサービス、音声機器との接続、MCPしっぽ制御のAPI整合と実機確認は未完了。機能ブランチはローカルに保存し、リモートへは未送信。
+
+### 18. Android WebViewとターン制音声会話（2026-10-24）
+
+- 依頼: `Programs/ClientSide/androidVer` にAndroid Webアプリを開く機能と、最低限の音声通話機能を追加し、音声通話の仕様はServerSide実装を見ながら整合する。
+- 決定: Android WebViewがサーバー画面を開き、スマートフォンのマイクで1発話ずつ録音し、サーバーがSTT→LLM→TTS、スマートフォンが返答を再生する。Pi 4のしっぽ制御は別経路とし、音声入出力に使わない。
+- Android: `MainActivity.java` でサーバーURL入力・保存・再起動時の再表示、同一オリジンだけのWebViewマイク許可を追加。録音・インターネット権限と起動ActivityをManifestに設定。
+- Web: `ServerSide/web/` に会話開始・録音・送信・返答表示／再生・即時停止UIを追加。HTTPSとマイク拒否の案内、60秒録音上限、停止時のローカル録音・再生停止を実装。
+- Server: `app/voice_sessions.py` と `dashboard_server.py` にセッション・状態・raw audio upload・期限付き音声取得・停止APIを追加。最大4セッション、1セッション1発話、15分期限、25MB・60秒入力上限、最大180秒処理期限。停止時は世代を進めて音声を破棄し、処理タスクへ取消を通知する。
+- データ方針: 入力音声はOS一時領域にのみ置いて処理後に削除。返答音声はメモリ内で2分まで、停止・期限切れで破棄。ログに音声本文を出さない。
+- 文書: `ServerSide/VOICE_API.md` を追加し、ClientSide／ServerSide要件、README、`Agent.md` の作業状況を更新。
+- 確認: Androidビルド、サーバー起動、API・ブラウザー動作、モデル接続、実機確認は実施していない。既存変更は保持し、テストは未実施。
+- 未完了: Android実機のHTTPS・権限・録音・再生、Whisper/LM Studio/Irodori-TTSの接続、相づち配信、再生完了通知、切断・停止競合の受け入れ確認。Pi 4音声機器連携はこのAndroid Web経路に含めない。
+
 ## 現在のファイル構成
 
 ```text
@@ -135,20 +154,27 @@ Programs/
 ├── WORK_HISTORY.md
 ├── ClientSide/
 │   ├── README.md
-│   └── REQUIREMENTS.md
+│   ├── REQUIREMENTS.md
+│   └── androidVer/
+│       ├── README.md
+│       ├── app/src/main/AndroidManifest.xml
+│       └── app/src/main/java/com/example/jphackskz2614androidver/MainActivity.java
 └── ServerSide/
     ├── README.md
     ├── RASPBERRY_PI_API.md
+    ├── VOICE_API.md
     ├── REQUIREMENTS.md
     ├── web/
     │   ├── index.html
     │   ├── dashboard.css
-    │   └── dashboard.js
+    │   ├── dashboard.js
+    │   └── voice_call.js
     ├── .gitignore
     ├── app/
     │   ├── README.md
     │   ├── __init__.py
     │   ├── dashboard_server.py
+    │   ├── voice_sessions.py
     │   ├── mcp.json.example
     │   ├── requirements.txt
     │   ├── settings_store.py
@@ -169,11 +195,11 @@ Programs/
 
 ## 現在の決定事項
 
-- 更新後のMVPではPi 4が音声入出力としっぽ制御、スマートフォンが操作画面を担当する。
-- AndroidはWebアプリを基本とし、設定ダッシュボードのHTMLなどは `ServerSide/web/` に配置してサーバーから配信する。
+- 更新後のAndroid Web MVPではスマートフォンが録音・再生、サーバーがSTT・LLM・TTSと会話セッションを担当する。Pi 4のしっぽ制御は別経路とする。
+- AndroidはWebViewでサーバーのWebアプリを開き、画面のHTMLなどは `ServerSide/web/` から配信する。
 - STT・TTS・会話のふるまいはサーバーのダッシュボードから設定し、サーバー側に保存する。設定は新しい音声処理インスタンスから反映する。
 - Irodori-TTSの参照音声はダッシュボードからPCM WAVをアップロードし、サーバー内の固定パスに保存する。ユーザーは置換・削除できる。
-- サーバー側で STT、LLM、TTS と音声配信を行う想定。
+- サーバー側で STT、LLM、TTS と返答音声配信を行う。Android Webは1発話ごとに録音・送信・再生する。
 - 相づちは MVP 要件に含める。
 - しっぽ制御は MCP 経由とし、無効設定を既定値にする。動作にはユーザーの明示的な依頼や制御条件を必要とする。
 - 「おやすみ」の会話上の終了と、UI の即時停止を区別する。即時停止は LLM の応答完了を待たない。
@@ -182,11 +208,11 @@ Programs/
 
 ## 未完了・未検証事項
 
-- 設定ダッシュボード、設定保存API、PCM WAVのアップロード・状態・削除コードを作成したが、起動・保存・再読込・Android表示・実TTS利用は未確認。音声会話用Web UI/APIとPi 4への音声送信・再生は未実装。
-- Irodori-TTS呼び出しクライアント、STT→LLM→TTS単発パイプライン、相づちキャッシュと遅延通知コールバックは実装済み。モデル接続、Pi 4への音声配信、再生完了通知、デバイスAPIは未実装・未確認。
-- 優先停止、セッション期限、再接続、遅着 LLM/MCP 動作の拒否は要件化されているが、コード上の一貫した実装・検証は未完了。
+- 設定ダッシュボード、設定保存API、PCM WAV管理、Android WebView、ターン制の録音・送信・再生UI、セッションAPIのコードを追加したが、起動・Android実機・HTTPS接続・モデル利用は未確認。
+- Irodori-TTS呼び出しクライアント、STT→LLM→TTSパイプライン、相づちキャッシュ、返答音声配信は実装コードがある。Android Webへの相づち配信と再生完了通知は未実装・未確認。
+- セッション停止・世代フェンス・期限を追加したが、外部モデル処理の実取消、切断・再接続、遅着LLM/MCP動作拒否は未確認。
 - `mcp.json.example` はこのPCの絶対パスを含む。別のPCで使う際にパスを変更する。
-- Raspberry Pi 4音声・サーボAPI案は `ServerSide/RASPBERRY_PI_API.md` に文書化済み。現行MCPクライアントとの不整合、セッション停止世代、デバイスサービス、音声機器、モーターの電源・角度・速度制限は未解消・未検証。
+- Raspberry Pi 4デバイスAPI案は `ServerSide/RASPBERRY_PI_API.md` に文書化済み。音声端点はAndroid Web MVPでは使わず、MCPしっぽ制御のAPI整合、セッション停止世代、デバイスサービス、モーターの電源・角度・速度制限は未解消・未検証。
 - 音声形式、録音時間・サイズ上限、各処理のタイムアウト、相づちを出すタイミング、バックグラウンド動作条件は未確定。
 - 実機、Whisper モデル、LM Studio、TTS、スマートフォンでの受け入れ試験は未実施。要件書にある受け入れ条件を実施済みとみなさない。
 

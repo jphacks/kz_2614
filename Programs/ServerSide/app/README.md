@@ -2,7 +2,7 @@
 
 このフォルダーには、自作の音声会話クライアントと、しっぽ制御用 MCP サーバーを置きます。外部ソースは親フォルダーの `third_party/`、Whisper モデルは `../whisper/` に分けます。
 
-サーバーの要件と現行コードとの差分は [要件定義](../REQUIREMENTS.md) を参照してください。`VoicePipeline` は既存音声ファイルを STT → LLM → TTS で処理し、文字起こし・返答・再生用音声バイト列・各段階の所要時間を返します。遅延時の相づち音声キャッシュと通知も実装済みです。Pi 4向けの音声・デバイスAPI、録音音声の受信、再生完了連携、優先停止は未実装です。
+サーバーの要件と現行コードとの差分は [要件定義](../REQUIREMENTS.md) を参照してください。`VoicePipeline` は入力音声を STT → LLM → TTS で処理し、文字起こし・返答・再生用音声バイト列・各段階の所要時間を返します。Android Web向けセッションAPIも追加しました。遅延時の相づち音声キャッシュと通知はありますが、ブラウザー再生経路にはまだつながっていません。
 
 ## 設定ダッシュボード
 
@@ -16,15 +16,21 @@ python -m Programs.ServerSide.app.dashboard_server
 
 参照音声はPCM WAVだけを受け付けます（16-bit、mono/stereo、16〜48kHz、1〜30秒、10MB以下）。アップロード先は固定の `app/data/reference_voice.wav` で、ファイル名やパスをクライアントから指定できません。新しいTTSインスタンスでIrodori-TTSの `ref_wav` に使います。インスタンス生成時に音声データをメモリへ読み込むため、ファイルを置換・削除しても既存インスタンスはその会話中に読み込み済みの音声を使い、新しいインスタンスは現在サーバーにあるWAVを使います。参照音声はTTS生成時に設定済みのIrodori-TTSサーバーへ送られます。
 
-LAN上の端末から開く場合は、`.env` または環境変数で32文字以上の `NENGITSUNE_DASHBOARD_TOKEN` を設定してから `--host 0.0.0.0` を指定してください。管理トークンのないLAN公開は起動時に拒否します。トークンはブラウザーの現在のタブ内でのみ保持します。LANアクセスは信頼できるネットワークに限定し、HTTPSリバースプロキシを利用してください。この設定画面は音声会話APIではなく、Pi 4との音声録音・配信・再生連携は別途実装が必要です。
+LAN上の端末から開く場合は、`.env` または環境変数で32文字以上の `NENGITSUNE_DASHBOARD_TOKEN` を設定してから `--host 0.0.0.0` を指定してください。管理トークンのないLAN公開は起動時に拒否します。トークンはブラウザーの現在のタブ内でのみ保持します。LANアクセスは信頼できるネットワークに限定し、HTTPSリバースプロキシを利用してください。音声会話APIは [VOICE_API.md](../VOICE_API.md) に従い、ブラウザー録音をサーバーで処理して返答音声を配信します。
+
+### Android Web 音声会話API
+
+同じサーバーで `GET /api/v1/voice/status`、`POST /api/v1/voice/sessions`、`POST /api/v1/voice/sessions/{session_id}/turns/{turn_id}`、`GET .../audio`、`DELETE /api/v1/voice/sessions/{session_id}` を提供します。Bearer tokenはダッシュボード管理トークンと共通です。入力はWebM/Ogg/WAV/MP4、最大25MB・60秒です。録音はWhisper処理中だけOS一時フォルダーに置き、返答音声はメモリに最大2分保持します。
+
+APIコードの追加まで完了し、起動、モデル接続、Android実機、HTTPS経由の動作確認は未実施です。詳細は [VOICE_API.md](../VOICE_API.md) を参照してください。
 
 ## Whisper → LM Studio → Irodori-TTS
 
 `voice_stt.py` は `faster-whisper` で音声ファイルを日本語文字起こしし、モデルを `../whisper/` に保存します。`voice_pipeline.py` は文字起こしを `voice_llm.py` に渡し、LLMの返答を `voice_tts.py` から Irodori-TTS へ送り、返却された音声をメモリ上のバイト列として返します。会話履歴は `VoicePipeline` インスタンス内に保持します。
 
-`voice_tts.py` は `gradio_client` を使い、`IRODORI_URL` の Gradio API `/_run_generation` を呼び出します。取得した一時音声ファイルは音声バイト列へ読み込んだあと、OSの一時フォルダー内にある場合だけ削除します。Irodori-TTS のモデル一式はここには含めず、互換サーバーを別途起動してください。GPUのない環境では、`.env` でモデルとcodecのデバイスを `cpu`、精度を `fp32` に変更します。モデル、デバイス、速度、Pi 4での再生形式は実機確認が必要です。
+`voice_tts.py` は `gradio_client` を使い、`IRODORI_URL` の Gradio API `/_run_generation` を呼び出します。取得した一時音声ファイルは音声バイト列へ読み込んだあと、OSの一時フォルダー内にある場合だけ削除します。Irodori-TTS のモデル一式はここには含めず、互換サーバーを別途起動してください。GPUのない環境では、`.env` でモデルとcodecのデバイスを `cpu`、精度を `fp32` に変更します。モデル、デバイス、速度、Android WebViewでの再生形式は実機確認が必要です。
 
-`voice_acknowledgements.py` は「うん、聞いてるよ。」「そっか、話してくれてありがとう。」の音声を会話開始前に同じTTS設定で生成し、メモリにキャッシュします。LLMの返答が `VOICE_ACK_DELAY_SECONDS`（既定0.9秒）を超える場合だけ1つを交互に選びます。「おやすみ」や停止要求には相づちを出しません。本返答と重ねないため、相づち用コールバックはPi 4での再生完了まで待ってから戻る必要があります。
+`voice_acknowledgements.py` は「うん、聞いてるよ。」「そっか、話してくれてありがとう。」の音声を会話開始前に同じTTS設定で生成し、メモリにキャッシュします。LLMの返答が `VOICE_ACK_DELAY_SECONDS`（既定0.9秒）を超える場合だけ1つを交互に選びます。「おやすみ」や停止要求には相づちを出しません。本返答と重ねないため、Android Webの再生完了通知を相づち配信経路へ接続する必要がありますが、現在は未実装です。
 
 ```text
 音声ファイル → WhisperSTT → 文字起こし → VoiceLLMClient → LM Studio → IrodoriTTS
@@ -41,8 +47,8 @@ async def handle_recording():
     pipeline = VoicePipeline()
 
     async def deliver_acknowledgement(ack):
-        # Pi 4デバイスAPI実装時に、再生完了確認まで待つ。
-        await pi4_player.play_and_wait(ack.speech.audio_bytes, ack.speech.media_type)
+        # Android Webの相づち配信・再生完了通知を接続する位置。現行APIには未実装。
+        await browser_player.play_and_wait(ack.speech.audio_bytes, ack.speech.media_type)
 
     try:
         # 会話開始前に相づち音声を作っておくと、初回ターンの待ち時間を減らせる。
@@ -93,7 +99,7 @@ MCP を有効にすると、LM Studio へ登録した `mcp/nen-gitsune-tail` の
 
 相づちはMVPの必須要件です。`voice_acknowledgements.py` が短い相づち音声を事前生成してメモリにキャッシュし、LLMの返答を設定時間だけ待ってから最大1回通知します。候補をターンごとに交互に使い、音声ファイルとして保存しません。
 
-STT後のLLM待機中のみ通知し、本返答が先に届いた場合は省略します。「おやすみ」や停止要求には追加の相づちを出しません。相づちコールバックはPi 4の再生完了まで待つ約束で、本返答との再生重複を防ぎます。コールバックを実装するデバイスAPIはまだないため、実機再生・停止との統合は未確認です。待ち時間、声、音量は実機で調整します。
+STT後のLLM待機中のみ通知し、本返答が先に届いた場合は省略します。「おやすみ」や停止要求には追加の相づちを出しません。Android Webへの相づち配信と再生完了通知は未実装のため、実機再生・停止との統合は未確認です。待ち時間、声、音量は実機で調整します。
 
 ## しっぽ制御 MCP
 
@@ -119,7 +125,7 @@ Raspberry Pi 4 → SG90サーボ → 柔らかいしっぽ
 
 ### Raspberry Pi 4 デバイス API
 
-音声入出力とサーボ操作の契約は [Raspberry Pi 4 API仕様](../RASPBERRY_PI_API.md) にまとめています。HTTPS上で音声WAVとJSON制御を転送します。現行MCPコードは旧 `/api/tail/...` パスを呼び、契約に未対応です。
+Pi 4デバイスAPI案は [Raspberry Pi 4 API仕様](../RASPBERRY_PI_API.md) にまとめています。文書には音声WAVとJSON制御の契約を含みますが、Android Web音声経路ではPi 4の音声APIを使いません。現行MCPコードは旧 `/api/tail/...` パスを呼び、しっぽAPI契約に未対応です。
 
 Pi 4デバイスサービス、セッション／停止世代との連携、遅着開始の拒否、機構の制限と手元停止は未実装・未確認です。停止制御と実機安全確認が終わるまでは `TAIL_CONTROL_ENABLED=false` のままにします。
 
@@ -147,8 +153,8 @@ LM Studioの `mcp.json` に `mcp.json.example` のサーバー項目を登録し
 
 - 実装済み: faster-whisper STT、LM Studio音声用クライアント、Irodori-TTS Gradioクライアント、既存音声ファイルから再生用音声バイト列を返すSTT→LLM→TTSパイプライン、相づち音声キャッシュと通知コールバック、限定ツール連携のリクエスト生成、MCPサーバー、旧パスを使う汎用HTTPクライアント。
 - 文書化済み・未実装: Raspberry Pi 4向けバージョン付きHTTP API契約（[RASPBERRY_PI_API.md](../RASPBERRY_PI_API.md)）。現在のクライアントのパス・応答形式、セッション停止世代との連携は未整合。
-- 未実装: Pi 4デバイスサービス、音声録音・アップロード、Pi 4スピーカー配信と再生完了通知、セッション管理・優先停止。
-- 未確認: Whisper・LM Studio・Irodori-TTSの実モデル接続と性能、Pi 4での音声録音・再生、LM Studioと指定モデルでのツール呼び出し、Pi 4サーボの強さ・速度・接触位置・騒音・発熱。
+- 未実装: Android Webへの相づち配信と再生完了通知、Pi 4しっぽデバイスサービス、MCPとセッション停止世代の連携。
+- 未確認: Android実機の録音・再生、Whisper・LM Studio・Irodori-TTSの実モデル接続と性能、LM Studioと指定モデルでのツール呼び出し、Pi 4サーボの強さ・速度・接触位置・騒音・発熱。
 
 MCP SDK は公式 Python SDK の v2 API (`MCPServer`, stdio transport) を使用しています。LM Studioの native MCP integration は LM Studio 0.4.0 以上が必要です。
 
