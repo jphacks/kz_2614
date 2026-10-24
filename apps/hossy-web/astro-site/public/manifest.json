@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "ねんぎつね - やさしいおやすみ時間",
+  "short_name": "ねんぎつね",
+  "description": "ねんぎつねといっしょに、今日の終わりをやさしく。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf8fd",
+  "theme_color": "#f7f5fc",
+  "lang": "ja",
+  "related_applications": [
+    { "platform": "webapp", "url": "/manifest.json", "id": "https://hiroron-jphacks2026.hiroron.net/" }
+  ],
+  "icons": [
+    { "src": "/icons/nengitsune-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/nengitsune-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

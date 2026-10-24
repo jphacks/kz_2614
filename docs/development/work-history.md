@@ -826,3 +826,12 @@ Programs/
 - 変更は文書と除外規則のみ。直前の新配置での219件のプログラムテスト成功、HTTP/TCP起動スモーク試験を維持。今回の統合でプログラムの動作は追加変更していない。
 
 - 公開用配置の稼働反映: 利用者の停止許可に基づきサービスを停止してmainを更新。非公開7ファイルをチェックアウト外へバックアップし、新保存先の全hash一致を確認。共有venv/cacheの実体は保持。再起動後health・画面・音声JS/Workletは200、service active、設定モデル維持。実モデル推論/実マイクは追加実施していない。移行記録はdocs/setup/local-pc.md。
+
+## 2026-10-25 — HOSSY＿WEBへAstro製品UIを追加
+
+- 依頼: C:\〇Codex-JPHACK2026apをHOSSY＿WEBとしてアップロード。指定末尾apは存在せず、利用者がC:\〇Codex-JPHACK2026appを対象として確認した。
+- 基点: origin/mainの9036cce。別worktree・HOSSY＿WEBブランチ（全角＿）を作成し、apps/hossy-web/へ元プロジェクトを独立して追加。既存apps/web、server、firmware、tests、元のWebプロジェクトは変更しない。
+- 内容: 元のb300ac8の追跡49ファイル、計4,591,660 bytes。Astroソース、PWA画像とService Worker、lockfile、Dockerfile、compose.yaml、DEPLOY、開発メモを取り込んだ。バイト単位のコピー後とビルド後に全ファイルのSHA-256一致を確認。node_modules、dist、.astro、npmキャッシュ、.env、元.gitは追加しない。
+- 案内: apps/hossy-web/README.mdを追加し、ルートREADME・配置表・担当表から参照。元DEPLOYは独立OneDev構成の記録として保持し、共有GitHubでの作業ディレクトリを新READMEに記載。静的UI・localStorageの範囲と、会話API・ESP32未統合を明示した。
+- 検証: Node v24.14.1 / npm 11.11.0、npm ciで191パッケージ、Astro 7.4.1の本番ビルド成功。public/app.jsとsw.jsのNode構文、生成物の一時localhost HTTP配信とPWA資産、文書相対リンク、git diff --checkを確認した。
+- 実施しない範囲: Docker実行、公開サイトへのデプロイ、ブラウザー操作・PWAインストール、サーバー再起動、モデル・マイク・ESP32操作。mainやemori-ESP32への統合は行わず、指定ブランチへ公開する。

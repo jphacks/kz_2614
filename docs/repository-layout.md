@@ -5,6 +5,7 @@ kz_2614/
 ├── README.md                 # JPHACKS公開用の製品・技術・担当説明
 ├── apps/
 │   ├── web/                  # HOSSy: ブラウザー画面と音声入出力
+│   ├── hossy-web/            # HOSSy: 独立したAstro製品UI・PWA
 │   └── android/              # Androidネイティブ音声アプリ
 ├── server/                   # kameyama: PCサーバー
 │   ├── api/                  # HTTP受付、設定、稼働情報
@@ -34,6 +35,8 @@ kz_2614/
     ├── archive/              # 旧Pi案・旧構成案
     └── licenses/             # 同梱ライセンス原文
 ```
+
+`apps/hossy-web/`は別プロジェクトから追加した製品UI・PWAです。[起動と構成](../apps/hossy-web/README.md)を参照してください。元の`astro-site/`とComposeを保持し、既存`apps/web/`のサーバー配信先は変更していません。
 
 ## 旧配置からの対応
 

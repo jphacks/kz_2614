@@ -4,7 +4,7 @@
 
 ## JPHACKS公開向けの現行配置（2026-10-25）
 
-- AI担当kameyama: server/aiとserver/api。Web担当HOSSy: apps/web。ESP32担当EMORI: firmware/esp32。Androidはapps/android、担当者名未指定。
+- AI担当kameyama: server/aiとserver/api。Web担当HOSSy: apps/webとapps/hossy-web（独立したAstro製品UI）。ESP32担当EMORI: firmware/esp32。Androidはapps/android、担当者名未指定。
 - 公開説明はREADME.md、配置表はdocs/repository-layout.md、作業分担はdocs/development/ownership.md。APIはdocs/api、起動はdocs/setup、作業記録はdocs/development/work-history.md。
 - Pythonモジュールはserver.api/server.ai。起動用のserver/.venv・server/.env、データ保存server/api/dataへ移行する。旧ProgramsはGit対象外。既存モデルと個人音声は公開・削除しない。
 - 次節以降の旧パスは当時の記録。現行作業ではこの配置と最新の利用者指示を優先する。
@@ -278,3 +278,9 @@
 
 - 状態: 完了。975b3adと現行ソースを照合し、仕様入口、サーバー/端末要件、6処理図、Git除外方針を整備。旧記録の要件ID・開発履歴を保持し、現在の仕様への参照順を先頭に追加した。
 - 確認: 相対ファイルリンク74件、Git除外72ケース、Mermaid6図の構文とブラウザーSVG描画、差分チェック成功。元ファイル16件のOriginal保管とハッシュ一致を確認。実行コード・個別設定・モデル・マイク・実機は変更していない。コミット/pushは未実施。
+
+### HOSSyのAstro Webプロジェクトを追加（2026-10-25）
+
+- 利用者の確認を受け、C:\〇Codex-JPHACK2026appをHOSSY＿WEB（全角＿）ブランチへ追加。最新mainの9036cceから別worktreeを作り、apps/hossy-webへ独立したプロジェクトとして取り込んだ。状態: 完了（ソース追加・検証）。
+- 元コミットb300ac8の追跡49ファイルをコピーし、全SHA-256一致を確認。既存apps/web、server、firmwareと元フォルダーを維持し、サーバーの配信先やAPI接続を変更しない。元アプリのOneDev mainに対するbehind表示は、その内容を更新する指示ではないため、ローカルの現物を対象とする。
+- npm ci、Astro 7.4.1の本番ビルド、public JS構文、生成物の一時HTTP配信、相対文書リンク、差分を検証。Dockerビルド・既存公開サイトの更新・端末のPWAインストールは今回行わない。新READMEから独立起動と未統合範囲を確認できる。
