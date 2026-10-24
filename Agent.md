@@ -306,3 +306,9 @@
 - 状態: 文書整理・検証完了。ローカルmainへa786078をfast-forwardで取り込み、docs/requirements/system.mdに全体仕様をまとめた。詳細はrequirements、契約はapi、機器統合と履歴はesp32へ分類。旧2パスは移動案内だけにする。
 - 確認: 相対ファイルリンク281件、Mermaid12図の構文、移動2仕様の本文保持、Original原本110件のhash、Markdown以外の変更なし、diff check成功。プログラム試験・実機・描画の過去結果は今回の試験とは区別する。
 - 実行コードと稼働環境は未変更。追加の整理は未コミット、pushは未実施。後続で公開を依頼された場合は他作業の差分を確認してから行う。
+
+### emori-ESP32へmainのフォルダー構成を同期確認（2026-10-25）
+
+- 依頼: フォルダー構成変更をmainから現在のブランチへ壊さず取り込む。状態: 完了（最新mainの包含を確認）。
+- origin/mainとorigin/emori-ESP32をfetchした結果、mainは9036cce、作業先はa786078。mainの公開用配置は既に履歴へ含まれ、git merge --ff-only origin/mainもAlready up to dateで、未取り込みコミット0・競合なし。
+- mainとの差分は前回の仕様書更新のみ。全非MarkdownファイルのGit差分0を確認し、実行コード・設定テンプレート・素材を保持。仕様書の相対リンクを再検査し、プログラムや実機を動かす試験は追加実施しない。
