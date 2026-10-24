@@ -18,8 +18,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.mcpserver.exceptions import ToolError
 
-from Programs.ServerSide.dashboard import tail_settings
-from Programs.ServerSide.STTLLMTTS import tail_mcp_server as tail
+from server.api import tail_settings
+from server.ai import tail_mcp_server as tail
 
 
 class TailFrequencyStoreTests(unittest.TestCase):
@@ -125,7 +125,7 @@ class TailFrequencyToolTests(unittest.IsolatedAsyncioTestCase):
 
 class TailFrequencyStdioTests(unittest.TestCase):
     def test_stdio_initialize_new_tools_and_unauthenticated_pc_http_round_trip(self):
-        from Programs.ServerSide.dashboard import server as dashboard
+        from server.api import server as dashboard
 
         requests = []
 

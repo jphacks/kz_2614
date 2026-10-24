@@ -16,12 +16,12 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from Programs.ServerSide.STTLLMTTS.voice.pcm_stream import ServerAudioStreams
-from Programs.ServerSide.STTLLMTTS.voice.server_vad import (
+from server.ai.voice.pcm_stream import ServerAudioStreams
+from server.ai.voice.server_vad import (
     FRAME_BYTES, FRAME_SAMPLES, SAMPLE_RATE, ServerVADSettings,
     ServerVoiceActivity, SileroStreamingVAD,
 )
-from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError, VoiceSession
+from server.ai.voice.sessions import VoiceAPIError, VoiceSession
 
 
 SILENCE = bytes(FRAME_BYTES)

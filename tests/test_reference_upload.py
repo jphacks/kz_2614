@@ -10,8 +10,8 @@ from unittest.mock import patch
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 import wave
-from Programs.ServerSide.dashboard.server import DashboardHTTPServer
-from Programs.ServerSide.dashboard.settings_store import save_reference_voice
+from server.api.server import DashboardHTTPServer
+from server.api.settings_store import save_reference_voice
 
 
 def wav(seconds=1, rate=16000, channels=1):
@@ -52,7 +52,7 @@ class ReferenceUploadTests(unittest.TestCase):
 
 class ReferenceSizeLimitTests(unittest.TestCase):
     def test_over_10mb_and_over_30seconds_save_successfully(self):
-        from Programs.ServerSide.dashboard.settings_store import get_reference_voice_info
+        from server.api.settings_store import get_reference_voice_info
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'NENGITSUNE_SETTINGS_PATH': str(Path(directory)/'settings.json')}):
             audio = wav(seconds=60, rate=48000, channels=2)
             self.assertGreater(len(audio), 10*1024*1024)
@@ -61,8 +61,8 @@ class ReferenceSizeLimitTests(unittest.TestCase):
             self.assertEqual((Path(directory)/'reference_voice.wav').read_bytes(), audio)
 
     def test_upload_and_tts_limits_are_consistent(self):
-        from Programs.ServerSide.dashboard.settings_store import MAX_REFERENCE_WAV_BYTES
-        from Programs.ServerSide.STTLLMTTS.tts.irodori import MAX_REFERENCE_AUDIO_BYTES
-        from Programs.ServerSide.STTLLMTTS.tts.local_backend import MAX_REFERENCE_WAV_BYTES as local_limit
+        from server.api.settings_store import MAX_REFERENCE_WAV_BYTES
+        from server.ai.tts.irodori import MAX_REFERENCE_AUDIO_BYTES
+        from server.ai.tts.local_backend import MAX_REFERENCE_WAV_BYTES as local_limit
         self.assertEqual(MAX_REFERENCE_WAV_BYTES, 100*1024*1024)
         self.assertEqual(MAX_REFERENCE_AUDIO_BYTES, local_limit)

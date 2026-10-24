@@ -13,7 +13,7 @@ class DashboardSettingsUITests(unittest.TestCase):
         if not node:
             self.skipTest("Set NODE or put Node.js on PATH to run dashboard checks")
         result = subprocess.run(
-            [node, str(Path(__file__).with_name("dashboard_settings_test.js"))],
+            [node, str(Path(__file__).parent / "web" / "dashboard_settings_test.js")],
             capture_output=True,
             text=True,
             timeout=20,

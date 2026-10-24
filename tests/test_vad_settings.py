@@ -9,12 +9,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from Programs.ServerSide.dashboard.settings_store import (
+from server.api.settings_store import (
     DEFAULT_SETTINGS, get_dashboard_settings, get_settings_defaults,
     save_settings, validate_settings,
 )
-from Programs.ServerSide.STTLLMTTS.voice.pcm_stream import ServerAudioStreams
-from Programs.ServerSide.STTLLMTTS.voice.server_vad import (
+from server.ai.voice.pcm_stream import ServerAudioStreams
+from server.ai.voice.server_vad import (
     FRAME_BYTES, ServerVADSettings, ServerVoiceActivity,
 )
 

@@ -17,9 +17,9 @@ class ConfigureTailMCPTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.project = self.root / "project"
-        self.server = self.project / "Programs" / "ServerSide"
+        self.server = self.project / "server"
         self.python = self.server / ".venv" / "bin" / "python"
-        self.script = self.server / "STTLLMTTS" / "tail_mcp_server.py"
+        self.script = self.server / "ai" / "tail_mcp_server.py"
         for path in (self.python, self.script):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("# test fixture\n", encoding="utf-8")

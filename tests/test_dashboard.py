@@ -8,10 +8,10 @@ import subprocess
 import unittest
 from unittest.mock import Mock, patch
 
-from Programs.ServerSide.dashboard.server import DashboardHandler, main
+from server.api.server import DashboardHandler, main
 
 
-MODULE = "Programs.ServerSide.dashboard.server"
+MODULE = "server.api.server"
 
 
 class DevelopmentAPITests(unittest.TestCase):
@@ -88,7 +88,7 @@ class VoiceBrowserRecoveryTests(unittest.TestCase):
         if not node:
             self.skipTest("Set NODE or put Node.js on PATH to run browser logic checks")
         result = subprocess.run(
-            [node, str(Path(__file__).with_name(filename))],
+            [node, str(Path(__file__).parent / "web" / filename)],
             capture_output=True,
             text=True,
             timeout=15,

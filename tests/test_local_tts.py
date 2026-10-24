@@ -20,10 +20,10 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from Programs.ServerSide.STTLLMTTS.tts.irodori import (
+from server.ai.tts.irodori import (
     IrodoriTTS, SpeechSynthesisError, TTSConfig,
 )
-from Programs.ServerSide.STTLLMTTS.tts.local_backend import LocalIrodoriBackend
+from server.ai.tts.local_backend import LocalIrodoriBackend
 
 
 class AudioTensor:
@@ -146,8 +146,8 @@ class LocalTTSTests(unittest.TestCase):
                                     "IRODORI_SOURCE_DIR": "/existing/source",
                                     "IRODORI_CODEC_REPO": "/existing/weights.pth",
                                     "IRODORI_NUM_STEPS": "4"}, clear=True), \
-             patch("Programs.ServerSide.STTLLMTTS.tts.irodori.get_saved_settings", return_value={}), \
-             patch("Programs.ServerSide.STTLLMTTS.tts.irodori.reference_voice_path", return_value=Path(directory) / "absent.wav"):
+             patch("server.ai.tts.irodori.get_saved_settings", return_value={}), \
+             patch("server.ai.tts.irodori.reference_voice_path", return_value=Path(directory) / "absent.wav"):
             config = TTSConfig.from_env()
         self.assertEqual(config.backend, "local")
         self.assertEqual(config.checkpoint, "Aratako/Irodori-TTS-v4.1-Small")
@@ -235,7 +235,7 @@ class LocalTTSTests(unittest.TestCase):
         self.runtime.synthesize.side_effect = RuntimeError("original inference failure")
         config = replace(self.config, model_device="cuda", model_precision="bf16")
         with self.fake_model(), patch.dict(sys.modules, {"torch": types.SimpleNamespace(cuda=cuda)}), \
-             self.assertLogs("Programs.ServerSide.STTLLMTTS.tts.local_backend", level="WARNING"):
+             self.assertLogs("server.ai.tts.local_backend", level="WARNING"):
             with self.assertRaises(SpeechSynthesisError) as error:
                 IrodoriTTS(config).synthesize("こんにちは。")
         self.assertEqual(str(error.exception.__cause__), "original inference failure")
@@ -247,7 +247,7 @@ if __name__ == "__main__":
 
 class ReferenceAudioLoaderTests(unittest.TestCase):
     def test_missing_torchcodec_falls_back_to_existing_soundfile(self):
-        from Programs.ServerSide.STTLLMTTS.tts.local_backend import load_audio_with_soundfile_fallback
+        from server.ai.tts.local_backend import load_audio_with_soundfile_fallback
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/"reference.wav"
             with wave.open(str(path), "wb") as audio:
@@ -262,7 +262,7 @@ class ReferenceAudioLoaderTests(unittest.TestCase):
             self.assertEqual(samples.dtype,np.float32)
 
     def test_normal_loader_and_unrelated_errors_are_preserved(self):
-        from Programs.ServerSide.STTLLMTTS.tts.local_backend import load_audio_with_soundfile_fallback
+        from server.ai.tts.local_backend import load_audio_with_soundfile_fallback
         expected = (object(),16000)
         self.assertIs(load_audio_with_soundfile_fallback("unused",Mock(return_value=expected)),expected)
         with self.assertRaises(ValueError):

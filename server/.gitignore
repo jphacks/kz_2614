@@ -1,0 +1,24 @@
+.env
+.venv
+__pycache__/
+*.py[cod]
+**/__pycache__/
+**/*.py[cod]
+api/data/recorded_speech/
+api/data/dashboard_settings.json
+api/data/tail_settings.json
+api/data/reference_voice.wav
+whisper/*
+/whisper
+!whisper/.gitkeep
+!whisper/README.md
+
+api/data/acknowledgements/
+
+# External runtimes and model caches are obtained separately.
+models/
+ai/third_party/Irodori-TTS/*
+!ai/third_party/Irodori-TTS/.gitkeep
+ai/third_party/whisper/*
+!ai/third_party/whisper/.gitkeep
+!ai/third_party/whisper/README.md

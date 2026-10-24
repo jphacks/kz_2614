@@ -8,7 +8,7 @@ import struct
 import threading
 import unittest
 from unittest.mock import Mock
-from Programs.ServerSide.STTLLMTTS.voice.tcp_server import VoiceTCPServer, receive
+from server.ai.voice.tcp_server import VoiceTCPServer, receive
 
 
 def send(sock, value):
@@ -130,7 +130,7 @@ class ESP32AudioProfileTests(unittest.TestCase):
         return buffer.getvalue()
 
     def test_downmix_and_resample_preserve_event_identity(self):
-        from Programs.ServerSide.STTLLMTTS.voice.tcp_server import esp32_audio_event
+        from server.ai.voice.tcp_server import esp32_audio_event
         value = {'type': 'audio_chunk', 'turn_id': 'turn', 'cursor': 5,
                  'audio_base64': base64.b64encode(self.wav()).decode()}
         result = esp32_audio_event(value)
@@ -143,15 +143,15 @@ class ESP32AudioProfileTests(unittest.TestCase):
         self.assertNotIn('format', value)  # Android event remains unchanged
 
     def test_long_segment_fails_instead_of_silent_truncation(self):
-        from Programs.ServerSide.STTLLMTTS.voice.tcp_server import esp32_audio_event
-        from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError
+        from server.ai.voice.tcp_server import esp32_audio_event
+        from server.ai.voice.sessions import VoiceAPIError
         with self.assertRaises(VoiceAPIError) as caught:
             esp32_audio_event({'type': 'acknowledgement', 'audio_base64': base64.b64encode(self.wav(16000, 1, 270000)).decode()})
         self.assertEqual(caught.exception.code, 'device_audio_too_large')
 
     def test_malformed_audio_and_non_audio_events(self):
-        from Programs.ServerSide.STTLLMTTS.voice.tcp_server import esp32_audio_event
-        from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError
+        from server.ai.voice.tcp_server import esp32_audio_event
+        from server.ai.voice.sessions import VoiceAPIError
         with self.assertRaises(VoiceAPIError) as caught:
             esp32_audio_event({'type': 'audio_chunk', 'audio_base64': 'invalid'})
         self.assertEqual(caught.exception.code, 'device_audio_conversion_failed')

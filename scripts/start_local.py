@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-SERVER_DIR = PROJECT_DIR / "Programs" / "ServerSide"
+SERVER_DIR = PROJECT_DIR / "server"
 
 
 def api_models(base_url: str) -> set[str] | None:
@@ -131,7 +131,7 @@ def main() -> None:
     os.chdir(PROJECT_DIR)
     os.execvpe(
         sys.executable,
-        [sys.executable, "-m", "Programs.ServerSide.dashboard.server", *sys.argv[1:]],
+        [sys.executable, "-m", "server.api.server", *sys.argv[1:]],
         os.environ,
     )
 

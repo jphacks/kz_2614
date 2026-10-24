@@ -20,3 +20,5 @@ git pull --ff-only origin main
 mainがまだローカルにない場合は `git switch --track origin/main` を使います。単一ブランチだけを取得するcloneでは、まず `git remote set-branches origin '*'` で取得対象を広げてください。
 
 フォルダーの変更は [構成図](../architecture.md) を参照してください。機器ごとのWi-Fi設定とモデル、音声、.envは取り直したりGitへ追加したりせず、各PCで管理します。
+
+担当別の作業場所と連携は [ownership.md](ownership.md)、旧Programs環境の移行は [layout-migration.md](layout-migration.md) を参照してください。

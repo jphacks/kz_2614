@@ -11,10 +11,10 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from Programs.ServerSide.STTLLMTTS.runtime import VoiceStageTimeout
-from Programs.ServerSide.STTLLMTTS.tts.cancellation import SynthesisCancelled
-from Programs.ServerSide.STTLLMTTS.tts.irodori import IrodoriTTS, TTSConfig
-from Programs.ServerSide.STTLLMTTS.tts.local_backend import LocalIrodoriBackend
+from server.ai.runtime import VoiceStageTimeout
+from server.ai.tts.cancellation import SynthesisCancelled
+from server.ai.tts.irodori import IrodoriTTS, TTSConfig
+from server.ai.tts.local_backend import LocalIrodoriBackend
 
 
 WAV = b"RIFF\x00\x00\x00\x00WAVE\x00\x00"
@@ -71,7 +71,7 @@ class TTSCancellationTests(unittest.IsolatedAsyncioTestCase):
         self.patchers = [
             patch.object(LocalIrodoriBackend, "_load", return_value=(self.api, self.runtime, self.lock)),
             patch.object(LocalIrodoriBackend, "_encode_wav", self.encoder),
-            patch("Programs.ServerSide.STTLLMTTS.tts.local_backend.tempfile.NamedTemporaryFile", side_effect=temporary),
+            patch("server.ai.tts.local_backend.tempfile.NamedTemporaryFile", side_effect=temporary),
         ]
         for patcher in self.patchers:
             patcher.start()

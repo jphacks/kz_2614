@@ -11,9 +11,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from Programs.ServerSide.dashboard import server as dashboard
-from Programs.ServerSide.dashboard import tail_settings
-from Programs.ServerSide.STTLLMTTS import tail_mcp_server
+from server.api import server as dashboard
+from server.api import tail_settings
+from server.ai import tail_mcp_server
 
 
 class TailFrequencyHTTPTests(unittest.TestCase):

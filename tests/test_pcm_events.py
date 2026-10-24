@@ -10,12 +10,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from Programs.ServerSide.STTLLMTTS.stt.whisper import Transcription, WhisperConfig, WhisperSTT
-from Programs.ServerSide.STTLLMTTS.voice.pcm_stream import (
+from server.ai.stt.whisper import Transcription, WhisperConfig, WhisperSTT
+from server.ai.voice.pcm_stream import (
     MAX_STREAM_EVENT_BYTES, MAX_STREAM_EVENTS, ServerAudioStreams,
 )
-from Programs.ServerSide.STTLLMTTS.voice.server_vad import ServerVoiceActivity
-from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError, VoiceSessions
+from server.ai.voice.server_vad import ServerVoiceActivity
+from server.ai.voice.sessions import VoiceAPIError, VoiceSessions
 from test_pcm_stream import FakeManager, SpeechProbability, SILENCE, VOICE
 from test_voice_merge import make_pipeline
 
@@ -142,7 +142,7 @@ class PCMEventTests(unittest.TestCase):
         state.turn_id = str(uuid.uuid4())
         event = {"type": "text_delta", "text": "x" * 240, "session_id": state.session_id,
                  "generation": 0, "turn_id": state.turn_id}
-        with patch("Programs.ServerSide.STTLLMTTS.voice.pcm_stream.MAX_STREAM_EVENT_BYTES", 1024):
+        with patch("server.ai.voice.pcm_stream.MAX_STREAM_EVENT_BYTES", 1024):
             with self.streams._lock:
                 for _ in range(8):
                     self.streams._append_event_locked(state, event)

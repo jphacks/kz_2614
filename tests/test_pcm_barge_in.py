@@ -12,13 +12,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from Programs.ServerSide.STTLLMTTS.llm.lm_studio import VoiceLLMReply
-from Programs.ServerSide.STTLLMTTS.stt.whisper import Transcription
-from Programs.ServerSide.STTLLMTTS.tts.irodori import SynthesizedSpeech
-from Programs.ServerSide.STTLLMTTS.voice.pcm_stream import ServerAudioStreams
-from Programs.ServerSide.STTLLMTTS.voice.pipeline import VoiceStreamTurnResult
-from Programs.ServerSide.STTLLMTTS.voice.server_vad import ServerVoiceActivity
-from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError, VoiceSessions
+from server.ai.llm.lm_studio import VoiceLLMReply
+from server.ai.stt.whisper import Transcription
+from server.ai.tts.irodori import SynthesizedSpeech
+from server.ai.voice.pcm_stream import ServerAudioStreams
+from server.ai.voice.pipeline import VoiceStreamTurnResult
+from server.ai.voice.server_vad import ServerVoiceActivity
+from server.ai.voice.sessions import VoiceAPIError, VoiceSessions
 from test_pcm_stream import SILENCE, VOICE, SpeechProbability
 
 

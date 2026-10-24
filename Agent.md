@@ -1,6 +1,13 @@
 # JPHACKS 作業ガイド
 
-このファイルは、このリポジトリで作業するエージェント向けの指示と、引き継ぐ作業リストです。新しい作業を始めるときは、依頼内容に加えてこのファイル、関連する `Programs/README.md`・要件定義・`Programs/WORK_HISTORY.md` を確認してください。
+このファイルは、このリポジトリで作業するエージェント向けの指示と、引き継ぐ作業リストです。新しい作業を始めるときは、依頼内容に加えてこのファイル、関連する `docs/repository-layout.md`・要件定義・`docs/development/work-history.md` を確認してください。
+
+## JPHACKS公開向けの現行配置（2026-10-25）
+
+- AI担当kameyama: server/aiとserver/api。Web担当HOSSy: apps/web。ESP32担当EMORI: firmware/esp32。Androidはapps/android、担当者名未指定。
+- 公開説明はREADME.md、配置表はdocs/repository-layout.md、作業分担はdocs/development/ownership.md。APIはdocs/api、起動はdocs/setup、作業記録はdocs/development/work-history.md。
+- Pythonモジュールはserver.api/server.ai。起動用のserver/.venv・server/.env、データ保存server/api/dataへ移行する。旧ProgramsはGit対象外。既存モデルと個人音声は公開・削除しない。
+- 次節以降の旧パスは当時の記録。現行作業ではこの配置と最新の利用者指示を優先する。
 
 ## 現在の構成・ブランチ（2026-10-25統合）
 
@@ -12,10 +19,10 @@
 ## 作業の進め方
 
 - 依頼された範囲を優先し、関連する既存実装・要件・未コミット変更を確認してから編集する。
-- `Programs/ServerSide/REQUIREMENTS.md` と `Programs/ClientSide/REQUIREMENTS.md` を仕様の参照先とする。要件、実装済み機能、実機で確認済みの機能を区別する。
+- `docs/requirements/server.md` と `docs/requirements/clients.md` を仕様の参照先とする。要件、実装済み機能、実機で確認済みの機能を区別する。
 - 外部リポジトリは参照のみの指示がある場合、読み取りに限定する。外部コードをコピーする場合は、ライセンスと依存関係も確認する。
 - 作業リストの項目は、ユーザーの依頼範囲に沿って進める。無関係な項目を独断で実装しない。
-- 変更を終えたら、`Programs/WORK_HISTORY.md` に依頼の要約、変更したファイル、実施した確認、未完了事項を日付付きで追記する。
+- 変更を終えたら、`docs/development/work-history.md` に依頼の要約、変更したファイル、実施した確認、未完了事項を日付付きで追記する。
 - テストや実機確認を実施していない場合、完了・合格と記載しない。作業リストにも確認状況を残す。
 - ユーザーの既存変更を保持する。履歴や作業リストの完了項目を削除せず、状態を更新する。
 
@@ -49,7 +56,7 @@
 4. **STT → LLM → TTS を実環境で接続する** — ユーザー方針: GPU搭載のローカルPCでWhisper・LM Studio・Irodori-TTSを使う。現在のサーバー開発ではTLSを設定せず、同一PC内のサービスはloopback HTTPで接続する。プライベートLANから一時利用する場合はファイアウォールで接続元を制限し、インターネットへ公開しない。Android WebViewのマイク入力はHTTPSのセキュアコンテキストが必要であり、実機で音声往復を確認する段階でTLS終端を用意する。Windows作業時はAMD表示アダプターのみでCUDA未確認だった。その後、このLinux PCのRTX 4060 LaptopでWhisper CUDA・指定26B QAT・Irodoriの音声往復を確認し、時間と失敗条件をLOCAL_SETUP.mdへ記録した。HTTPS終端とAndroid実機は未確認。状態: 進行中。
 5. **返答音声の配信と相づちを実装する** — サーバーがNDJSON逐次返答の要求時に相づち候補を事前生成し、0.9秒後までに最初の返答音声を用意できない場合に最大1回選んでNDJSONへ配信する。LM Studio SSEの返答差分を句読点・文節で分けてIrodori-TTSへ送り、音声を逐次配信する。従来のNDJSON返答APIを保持する。Web PCM経路もNDJSON音声チャンクを受信順に再生する。最初の実再生で開始、生成完了かつ全キュー再生後に終了を通知する。無音・生成・再生中もPCM送信を継続する。実端末での順序・停止確認は残っている。状態: 進行中。
 6. **停止・異常時の動作を統合する** — 録音／再生のローカル停止、サーバーセッション停止、世代フェンス、処理タスクの取消通知、最大180秒の全体期限を追加した。実際のサービス中断・切断・復帰確認は未実施。状態: 進行中。
-7. **初期音声MVPの受け入れ条件を確認する** — `Programs/ServerSide/REQUIREMENTS.md` と `Programs/ClientSide/REQUIREMENTS.md` に沿い、音声1往復・発話分割・音響分析・逐次TTS・相づち・停止・無音・破損音声・切断・再接続を確認する。既存APIのモデル接続・ブラウザーでの音声往復はこのPCで確認した。統合後の実モデルHTTP往復も確認した。Android／ESP32端末受け入れは未実施。Pi 4・しっぽ固有の条件は後続フェーズで確認する。状態: 未着手。
+7. **初期音声MVPの受け入れ条件を確認する** — `docs/requirements/server.md` と `docs/requirements/clients.md` に沿い、音声1往復・発話分割・音響分析・逐次TTS・相づち・停止・無音・破損音声・切断・再接続を確認する。既存APIのモデル接続・ブラウザーでの音声往復はこのPCで確認した。統合後の実モデルHTTP往復も確認した。Android／ESP32端末受け入れは未実施。Pi 4・しっぽ固有の条件は後続フェーズで確認する。状態: 未着手。
 8. **サーバー側のMCPしっぽ制御をRaspberry Pi 4へ接続する** — [Raspberry Pi 4 API仕様](docs/archive/raspberry-pi/RASPBERRY_PI_API.md) に機器API案を記録済み。サーバー側の会話制御・MCPプロセスが明示的要求と設定を検証し、Pi 4デバイスサービスを呼び出す。Pi 4接続先・動作許可・セッション／停止世代・遅着拒否・状態確認はサーバー側で管理し、Androidはサーバー向け要求と結果表示だけを行う。連続動作上限、手元停止、状態確認を実装し、実機で確認する。ユーザー方針により初期音声MVP後へ延期。状態: 未着手（後続）。
 
 9. **発話検出設定と稼働状態を画面へ追加する** — サーバーVADの感度・無音終端待ち・最小発話・先頭保持・最大長を検証付きで保存し、新しい会話へ反映する。既存会話のVADを固定して入力継続を維持する。STT・LLM・TTSは次回設定と現在の観測モデル・デバイス・精度・読み込み／処理／最終成功／失敗を分けて表示する。状態取得ではモデルロード・外部接続試験・推論・音声状態のリセットを行わない。2026-10-24にLLMモデル・出力トークン・文脈長・履歴数・temperature・応答待ち上限、相づち待ち時間、TTS合成後の出力音量を画面へ追加し、新規パイプラインで使う設定へ接続した。Windows側の既存自動テスト86件（ブラウザー設定ロジック7シナリオを含む）は前回確認分。今回の変更は未テスト。稼働中サービスへの反映、実モデル・実マイク・Android画面の確認は未実施。状態: 確認待ち。
@@ -96,7 +103,7 @@
 - 指定GemmaからMCPを呼び、一時HTTPサーバーへの0.8Hz保存と読み出しに成功。各2ラウンド・1呼出し・ツール失敗0。読み出し後の返答は19差分で取得した。音声本文やテスト出力本文は記録せず、稼働音声サービスとマイクは変更していない。
 - 全124件の自動テストがskipなしで成功。実stdio、HTTPの入力拒否・保存失敗、SSE tool-call断片、allowlist、呼出し上限、途中終了時の同一タスク内cleanup、既存PCM／NDJSON・心音を含む。
 - 利用者の「再起動してMCPを有効にする」という今回限りの明示承認後、音声サービスを再起動しactiveを確認。画面・health・音声status・頻度APIが200、反映後の環境設定で指定Gemma→MCP→稼働設定APIの読み出しに成功。既存0.6Hzは変更せず、ブラウザー再読込・マイクの自動開始・実機操作はしていない。
-- ESP32実装、実機へのプッシュ、サーボ動作の確認は別担当。[担当者向けAPI仕様](Programs/ServerSide/TAIL_FREQUENCY_API.md) を引き渡す。`TAIL_CONTROL_ENABLED=false`を維持する。今回の承認を今後の包括的な停止・再起動許可へ広げない。
+- ESP32実装、実機へのプッシュ、サーボ動作の確認は別担当。[担当者向けAPI仕様](docs/api/tail-frequency.md) を引き渡す。`TAIL_CONTROL_ENABLED=false`を維持する。今回の承認を今後の包括的な停止・再起動許可へ広げない。
 
 ### ネイティブ音声通話／直接TCPへの変更（2026-10-24）
 
@@ -251,3 +258,9 @@
 - ESP32関連と資料を整理し、現行README・構成図・ブランチ移行ガイドを追加。サーバー/Androidの実行パスを保持し、移動したソースの内容一致と全Markdown相対リンクを確認した。
 - 全217件のテストがskipなしで成功。ESP32スケッチはEMORI先端と同一、移動したVoiceTCPソースもPC先端と同一。Arduino/ESP-IDF/Androidのビルド環境がこのPCにないため機器ビルド・実機試験は追加実施していない。
 - 心音の配布元CC BY 3.0とSHA-1一致、Gradle Wrapperの内蔵ライセンス、Android robotのGoogleの配布条件を確認し、表示をTHIRD_PARTY_NOTICES.mdへ追加。実音声・設定・モデルはGit対象外とし除外規則も強化。
+
+### JPHACKS公開向け技術・担当別再配置（2026-10-25）
+
+- apps/web=HOSSy、server= kameyama、firmware/esp32=EMORI、apps/android=担当者名未指定としてコードと公開資料を再構成。詳細はdocs/repository-layout.mdとdocs/development/ownership.md。
+- import・CLI・静的Web・設定保存パスを更新し、最終219件の自動テストがskipなしで成功。相対リンクとコード/素材保存を確認。旧Programsの非公開設定移行はdocs/development/layout-migration.mdに従う。
+- 現行APIの意味・VAD・TTS合成方式・実機制御の有効状態は変更しない。実機MCP接続、Android/ESP32ビルド・実機は未完了のまま区別して公開する。

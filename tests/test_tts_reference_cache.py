@@ -15,8 +15,8 @@ from unittest.mock import Mock, patch
 
 import torch
 
-from Programs.ServerSide.STTLLMTTS.tts.irodori import TTSConfig
-from Programs.ServerSide.STTLLMTTS.tts.local_backend import LocalIrodoriBackend
+from server.ai.tts.irodori import TTSConfig
+from server.ai.tts.local_backend import LocalIrodoriBackend
 
 
 @dataclass
@@ -66,7 +66,7 @@ class ReferenceCacheTests(unittest.TestCase):
         self.patchers = [
             patch.object(LocalIrodoriBackend, "_load", return_value=(self.api, self.runtime, self.lock)),
             patch.object(LocalIrodoriBackend, "_encode_wav", return_value=b"generated WAV"),
-            patch("Programs.ServerSide.STTLLMTTS.tts.local_backend.tempfile.NamedTemporaryFile", side_effect=self.temporary),
+            patch("server.ai.tts.local_backend.tempfile.NamedTemporaryFile", side_effect=self.temporary),
         ]
         for patcher in self.patchers:
             patcher.start()
@@ -267,7 +267,7 @@ class ReferenceCacheTests(unittest.TestCase):
             return result
 
         self.runtime.synthesize.side_effect = generate
-        with self.assertLogs("Programs.ServerSide.STTLLMTTS.tts.local_backend", level="INFO") as captured:
+        with self.assertLogs("server.ai.tts.local_backend", level="INFO") as captured:
             self.synthesize(b"private reference bytes")
             self.synthesize(b"private reference bytes")
         logged = "\n".join(captured.output)

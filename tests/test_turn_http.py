@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import Mock, patch
 import uuid
 
-from Programs.ServerSide.dashboard.server import DashboardHandler
+from server.api.server import DashboardHandler
 
 
 class TurnHTTPCompatibilityTests(unittest.TestCase):
@@ -51,7 +51,7 @@ class TurnHTTPCompatibilityTests(unittest.TestCase):
                     future.set_result(None)
                     return future
                 manager.stream_turn.side_effect = stream
-                with patch('Programs.ServerSide.dashboard.server._voice_sessions', return_value=manager):
+                with patch('server.api.server._voice_sessions', return_value=manager):
                     handler._receive_voice_turn(session_id, turn_id)
                 manager.begin_turn.assert_called_once_with(session_id, turn_id)
                 if accept == 'application/json':

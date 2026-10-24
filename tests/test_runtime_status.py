@@ -17,16 +17,16 @@ from unittest.mock import Mock, patch
 
 import httpx
 
-from Programs.ServerSide.dashboard.runtime_status import (
+from server.api.runtime_status import (
     RuntimeObservation, component_configuration, get_runtime_status,
 )
-from Programs.ServerSide.STTLLMTTS.llm.lm_studio import VoiceLLMClient, VoiceLLMConfig
-from Programs.ServerSide.STTLLMTTS.stt.whisper import (
+from server.ai.llm.lm_studio import VoiceLLMClient, VoiceLLMConfig
+from server.ai.stt.whisper import (
     CudaUnavailableError, Transcription, WhisperConfig, WhisperSTT,
 )
-from Programs.ServerSide.STTLLMTTS.tts.irodori import IrodoriTTS, TTSConfig
-from Programs.ServerSide.STTLLMTTS.tts.local_backend import LocalIrodoriBackend
-from Programs.ServerSide.STTLLMTTS.voice.sessions import (
+from server.ai.tts.irodori import IrodoriTTS, TTSConfig
+from server.ai.tts.local_backend import LocalIrodoriBackend
+from server.ai.voice.sessions import (
     SESSION_TTL_SECONDS, VoiceSession, VoiceSessions,
 )
 
@@ -171,7 +171,7 @@ class ClientObservationTests(unittest.IsolatedAsyncioTestCase):
         stt = WhisperSTT(WhisperConfig(device="cpu", compute_type="int8"))
         stt._model = object()
         stt._runtime_observation.loaded(model="cached", device="cpu", precision="int8")
-        with patch("Programs.ServerSide.dashboard.runtime_status._now", side_effect=["earlier", "later"]):
+        with patch("server.api.runtime_status._now", side_effect=["earlier", "later"]):
             stt._runtime_observation.success()
             with patch.object(stt, "_transcribe_file_impl", return_value=Transcription("", None, None, 1.0)):
                 stt.transcribe_file("unused.wav")

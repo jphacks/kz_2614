@@ -12,8 +12,8 @@ from unittest.mock import patch
 import httpx
 from mcp import types
 
-from Programs.ServerSide.STTLLMTTS.llm import tail_tools as tail
-from Programs.ServerSide.STTLLMTTS.runtime import VoiceStageTimeout
+from server.ai.llm import tail_tools as tail
+from server.ai.runtime import VoiceStageTimeout
 
 
 def event(delta=None, *, finish=None, usage=None):

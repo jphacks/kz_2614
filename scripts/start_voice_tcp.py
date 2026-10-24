@@ -12,4 +12,4 @@ if (packages / 'torch' / 'lib').is_dir():
 previous = os.environ.get('LD_LIBRARY_PATH', '')
 os.environ['LD_LIBRARY_PATH'] = ':'.join([*(str(p) for p in libraries), *([previous] if previous else [])])
 os.chdir(root)
-os.execvpe(sys.executable, [sys.executable, '-m', 'Programs.ServerSide.STTLLMTTS.voice.tcp_server', *sys.argv[1:]], os.environ)
+os.execvpe(sys.executable, [sys.executable, '-m', 'server.ai.voice.tcp_server', *sys.argv[1:]], os.environ)

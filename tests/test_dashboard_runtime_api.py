@@ -4,8 +4,8 @@ import copy
 import unittest
 from unittest.mock import Mock, patch
 
-from Programs.ServerSide.dashboard.server import DashboardHandler
-from Programs.ServerSide.dashboard.settings_store import DEFAULT_SETTINGS
+from server.api.server import DashboardHandler
+from server.api.settings_store import DEFAULT_SETTINGS
 
 
 class RuntimeHTTPTests(unittest.TestCase):
@@ -19,10 +19,10 @@ class RuntimeHTTPTests(unittest.TestCase):
     def test_request_without_credentials_can_observe_runtime(self):
         handler = self.handler()
         with (
-            patch("Programs.ServerSide.dashboard.server._VOICE_SESSIONS", None),
-            patch("Programs.ServerSide.dashboard.server._AUDIO_STREAMS", None),
-            patch("Programs.ServerSide.dashboard.server.get_dashboard_settings", return_value=copy.deepcopy(DEFAULT_SETTINGS)),
-            patch("Programs.ServerSide.dashboard.runtime_status.get_runtime_status", return_value={"components": {}}) as status,
+            patch("server.api.server._VOICE_SESSIONS", None),
+            patch("server.api.server._AUDIO_STREAMS", None),
+            patch("server.api.server.get_dashboard_settings", return_value=copy.deepcopy(DEFAULT_SETTINGS)),
+            patch("server.api.runtime_status.get_runtime_status", return_value={"components": {}}) as status,
         ):
             handler.do_GET()
         status.assert_called_once_with(None)
@@ -31,12 +31,12 @@ class RuntimeHTTPTests(unittest.TestCase):
     def test_empty_server_observation_does_not_start_sessions_or_models(self):
         handler = self.handler()
         with (
-            patch("Programs.ServerSide.dashboard.server._VOICE_SESSIONS", None),
-            patch("Programs.ServerSide.dashboard.server._AUDIO_STREAMS", None),
-            patch("Programs.ServerSide.dashboard.server._voice_sessions") as sessions,
-            patch("Programs.ServerSide.dashboard.server._audio_streams") as streams,
-            patch("Programs.ServerSide.dashboard.server.get_dashboard_settings", return_value=copy.deepcopy(DEFAULT_SETTINGS)),
-            patch("Programs.ServerSide.dashboard.runtime_status.get_runtime_status", return_value={"components": {}}) as status,
+            patch("server.api.server._VOICE_SESSIONS", None),
+            patch("server.api.server._AUDIO_STREAMS", None),
+            patch("server.api.server._voice_sessions") as sessions,
+            patch("server.api.server._audio_streams") as streams,
+            patch("server.api.server.get_dashboard_settings", return_value=copy.deepcopy(DEFAULT_SETTINGS)),
+            patch("server.api.runtime_status.get_runtime_status", return_value={"components": {}}) as status,
         ):
             handler.do_GET()
         status.assert_called_once_with(None)
@@ -52,10 +52,10 @@ class RuntimeHTTPTests(unittest.TestCase):
         manager.runtime_session_ids.return_value = {"active"}
         streams.runtime_snapshot.return_value = [{"stage": "speaking", "settings": DEFAULT_SETTINGS["vad"]}]
         with (
-            patch("Programs.ServerSide.dashboard.server._VOICE_SESSIONS", manager),
-            patch("Programs.ServerSide.dashboard.server._AUDIO_STREAMS", streams),
-            patch("Programs.ServerSide.dashboard.server.get_dashboard_settings", return_value=copy.deepcopy(DEFAULT_SETTINGS)),
-            patch("Programs.ServerSide.dashboard.runtime_status.get_runtime_status", return_value={"components": {}}) as status,
+            patch("server.api.server._VOICE_SESSIONS", manager),
+            patch("server.api.server._AUDIO_STREAMS", streams),
+            patch("server.api.server.get_dashboard_settings", return_value=copy.deepcopy(DEFAULT_SETTINGS)),
+            patch("server.api.runtime_status.get_runtime_status", return_value={"components": {}}) as status,
         ):
             handler.do_GET()
         status.assert_called_once_with(manager)
@@ -66,7 +66,7 @@ class RuntimeHTTPTests(unittest.TestCase):
 
     def test_configuration_failure_does_not_expose_private_error_details(self):
         handler = self.handler()
-        with patch("Programs.ServerSide.dashboard.runtime_status.get_runtime_status", side_effect=ValueError("secret api key")):
+        with patch("server.api.runtime_status.get_runtime_status", side_effect=ValueError("secret api key")):
             handler.do_GET()
         code, body = handler._send_json.call_args.args
         self.assertEqual(code, 503)

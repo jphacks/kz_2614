@@ -6,8 +6,8 @@ import unittest
 import uuid
 from unittest.mock import Mock, patch
 
-from Programs.ServerSide.dashboard.server import DashboardHandler, MAX_PCM_FRAME_BYTES
-from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError
+from server.api.server import DashboardHandler, MAX_PCM_FRAME_BYTES
+from server.ai.voice.sessions import VoiceAPIError
 
 
 class PCMHTTPTests(unittest.TestCase):
@@ -31,7 +31,7 @@ class PCMHTTPTests(unittest.TestCase):
         handler = self.handler(body)
         manager = Mock()
         manager.push_audio.return_value = {"stage": "listening", "next_sequence": 1}
-        with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=manager):
+        with patch("server.api.server._audio_streams", return_value=manager):
             handler._receive_pcm_frame(self.session_id)
         manager.push_audio.assert_called_once_with(self.session_id, 0, 0, body, input_gain=1.0)
         handler._send_json.assert_called_once_with(200, manager.push_audio.return_value)
@@ -40,7 +40,7 @@ class PCMHTTPTests(unittest.TestCase):
         body = b"\x01\x00\xff\x7f" * 2048
         handler = self.handler(body, headers={"X-Audio-Input-Gain": "0.6", "X-Audio-Sequence": "7"})
         manager = Mock()
-        with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=manager):
+        with patch("server.api.server._audio_streams", return_value=manager):
             handler._receive_pcm_frame(self.session_id)
         manager.push_audio.assert_called_once_with(self.session_id, 0, 7, body, input_gain=0.6)
 
@@ -48,7 +48,7 @@ class PCMHTTPTests(unittest.TestCase):
         for gain in ("NaN", "inf", "-1", "0", "0.24", "2.1", "text", ""):
             with self.subTest(gain=gain):
                 handler = self.handler(headers={"X-Audio-Input-Gain": gain})
-                with patch("Programs.ServerSide.dashboard.server._audio_streams") as factory:
+                with patch("server.api.server._audio_streams") as factory:
                     handler._receive_pcm_frame(self.session_id)
                 factory.assert_not_called()
                 self.assertEqual(handler.rfile.tell(), 0)
@@ -64,7 +64,7 @@ class PCMHTTPTests(unittest.TestCase):
             ({}, bytes(MAX_PCM_FRAME_BYTES + 2), 413),
             ({"Content-Length": "5"}, b"\x00\x00", 400),
         ]
-        with patch("Programs.ServerSide.dashboard.server._audio_streams") as factory:
+        with patch("server.api.server._audio_streams") as factory:
             for headers, body, status in cases:
                 with self.subTest(headers=headers, bytes=len(body)):
                     handler = self.handler(body, headers=headers)
@@ -98,7 +98,7 @@ class PCMHTTPTests(unittest.TestCase):
         manager = Mock()
         manager.push_audio.side_effect = error
         handler = self.handler(headers={"X-Audio-Sequence": "4"})
-        with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=manager):
+        with patch("server.api.server._audio_streams", return_value=manager):
             handler._receive_pcm_frame(self.session_id)
         status, payload = handler._send_json.call_args.args
         self.assertEqual((status, payload["expected_sequence"]), (409, 3))
@@ -107,14 +107,14 @@ class PCMHTTPTests(unittest.TestCase):
         manager = Mock()
         handler = self.handler()
         handler.path = f"/api/v1/voice/sessions/{self.session_id}/audio-stream"
-        with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=manager):
+        with patch("server.api.server._audio_streams", return_value=manager):
             handler.do_GET()
         manager.get_status.assert_called_once_with(self.session_id, 0)
 
         turn_id = str(uuid.uuid4())
         body = json.dumps({"generation": 0, "turn_id": turn_id, "event": "ended"}).encode()
         handler = self.handler(body, headers={"Content-Type": "application/json"})
-        with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=manager):
+        with patch("server.api.server._audio_streams", return_value=manager):
             handler._receive_playback_event(self.session_id)
         manager.playback.assert_called_once_with(self.session_id, 0, turn_id, "ended")
 
@@ -123,7 +123,7 @@ class PCMHTTPTests(unittest.TestCase):
                         {"generation": True, "turn_id": "id", "event": "ended"}):
             with self.subTest(payload=payload):
                 handler = self.handler(json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
-                with patch("Programs.ServerSide.dashboard.server._audio_streams") as factory:
+                with patch("server.api.server._audio_streams") as factory:
                     handler._receive_playback_event(self.session_id)
                 factory.assert_not_called()
                 self.assertEqual(handler._send_json.call_args.args[0], 400)

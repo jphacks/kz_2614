@@ -15,14 +15,14 @@ import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
-from Programs.ServerSide.dashboard.server import DashboardHandler
-from Programs.ServerSide.dashboard.settings_store import DEFAULT_SETTINGS
-from Programs.ServerSide.STTLLMTTS.stt.whisper import (
+from server.api.server import DashboardHandler
+from server.api.settings_store import DEFAULT_SETTINGS
+from server.ai.stt.whisper import (
     AudioDurationExceeded, CudaUnavailableError, Transcription, WhisperConfig, WhisperSTT,
 )
-from Programs.ServerSide.STTLLMTTS.tts.irodori import SynthesizedSpeech
-from Programs.ServerSide.STTLLMTTS.voice.pipeline import VoicePipeline
-from Programs.ServerSide.STTLLMTTS.voice.sessions import (
+from server.ai.tts.irodori import SynthesizedSpeech
+from server.ai.voice.pipeline import VoicePipeline
+from server.ai.voice.sessions import (
     SESSION_TTL_SECONDS, VoiceAPIError, VoiceSessions,
 )
 
@@ -59,7 +59,7 @@ class VoiceProgressTests(unittest.TestCase):
         )
         self.tts = types.SimpleNamespace(synthesize_async=tts_operation)
         with patch(
-            "Programs.ServerSide.STTLLMTTS.voice.pipeline.get_dashboard_settings",
+            "server.ai.voice.pipeline.get_dashboard_settings",
             return_value=copy.deepcopy(DEFAULT_SETTINGS),
         ):
             self.pipeline = VoicePipeline(
@@ -178,7 +178,7 @@ class VoiceProgressTests(unittest.TestCase):
     def test_failure_retains_transcript_but_does_not_log_it(self):
         self.release_all()
         self.tts.synthesize_async = AsyncMock(side_effect=RuntimeError("synthesis unavailable"))
-        with self.assertLogs("Programs.ServerSide.STTLLMTTS.voice.pipeline", level="INFO") as logs:
+        with self.assertLogs("server.ai.voice.pipeline", level="INFO") as logs:
             with self.assertRaises(VoiceAPIError) as error:
                 self.manager.process_turn(self.session, self.generation, self.turn_id, Path("recording.wav"))
         self.assertEqual(error.exception.code, "voice_processing_failed")
@@ -198,12 +198,12 @@ class ProgressHTTPHandlerTests(unittest.TestCase):
 
     def test_progress_route_returns_status_and_404_for_expired_turns(self):
         expected = {"stage": "llm", "transcript": "recognized"}
-        with patch("Programs.ServerSide.dashboard.server._voice_sessions") as manager:
+        with patch("server.api.server._voice_sessions") as manager:
             manager.return_value.get_turn_status.return_value = expected
             self.handler.do_GET()
             manager.return_value.get_turn_status.assert_called_once_with(self.session_id, self.turn_id)
         self.handler._send_json.assert_called_with(200, expected)
-        with patch("Programs.ServerSide.dashboard.server._voice_sessions") as manager:
+        with patch("server.api.server._voice_sessions") as manager:
             manager.return_value.get_turn_status.side_effect = VoiceAPIError(404, "turn_not_found", "expired")
             self.handler.do_GET()
         self.assertEqual(self.handler._send_json.call_args.args[0], 404)
@@ -280,7 +280,7 @@ class LiveTranscriptionTests(unittest.TestCase):
         self.stt.config = WhisperConfig(device="cpu", compute_type="int8", timeout_seconds=0.01)
         self.stt.transcribe_file = self.blocked_transcription
         first_path = self.recording()
-        with patch("Programs.ServerSide.STTLLMTTS.voice.sessions.PREVIEW_TIMEOUT_SECONDS", 0.05):
+        with patch("server.ai.voice.sessions.PREVIEW_TIMEOUT_SECONDS", 0.05):
             with self.assertRaises(VoiceAPIError) as error:
                 self.manager.transcribe_preview(self.session_id, self.generation, first_path)
         self.assertEqual(error.exception.status, 504)
@@ -372,7 +372,7 @@ class LiveTranscriptionHTTPTests(unittest.TestCase):
             path.unlink()
             return {"session_id": session_id, "generation": generation, "transcript": "途中"}
 
-        with patch("Programs.ServerSide.dashboard.server._voice_sessions") as manager:
+        with patch("server.api.server._voice_sessions") as manager:
             manager.return_value.transcribe_preview.side_effect = preview
             self.handler.do_POST()
         self.handler._send_json.assert_called_with(200, {
@@ -392,7 +392,7 @@ class LiveTranscriptionHTTPTests(unittest.TestCase):
             with self.subTest(changes=changes):
                 self.handler.headers = {**original, **changes}
                 self.handler.rfile = io.BytesIO(self.audio if body is None else body)
-                with patch("Programs.ServerSide.dashboard.server._voice_sessions") as manager:
+                with patch("server.api.server._voice_sessions") as manager:
                     self.handler.do_POST()
                     manager.assert_not_called()
                 self.assertEqual(self.handler._send_json.call_args.args[0], status)

@@ -11,12 +11,12 @@ import wave
 from email.message import Message
 from unittest.mock import Mock, patch
 
-from Programs.ServerSide.STTLLMTTS.voice.audio_frames import (
+from server.ai.voice.audio_frames import (
     PCM_STREAM_PROFILE, iter_audio_frames,
 )
-from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError
-from Programs.ServerSide.STTLLMTTS.voice.tcp_server import VoiceTCPServer
-from Programs.ServerSide.dashboard.server import DashboardHandler
+from server.ai.voice.sessions import VoiceAPIError
+from server.ai.voice.tcp_server import VoiceTCPServer
+from server.api.server import DashboardHandler
 
 
 def event(samples=3500, rate=16000, channels=1):
@@ -69,7 +69,7 @@ class AudioFramesTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(VoiceAPIError) as error:
                 list(iter_audio_frames({**event(), **changes}))
             self.assertEqual(error.exception.code, "audio_frame_conversion_failed")
-        with patch("Programs.ServerSide.STTLLMTTS.voice.audio_frames.MAX_PCM_BYTES", 100):
+        with patch("server.ai.voice.audio_frames.MAX_PCM_BYTES", 100):
             with self.assertRaises(VoiceAPIError) as error:
                 list(iter_audio_frames(event()))
             self.assertEqual(error.exception.code, "audio_frame_too_large")
@@ -97,8 +97,8 @@ class AudioFrameHTTPTests(unittest.TestCase):
                 streams = Mock()
                 source = event()
                 streams.read_events.return_value = [source]
-                with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=streams), \
-                     patch("Programs.ServerSide.dashboard.server.AUDIO_EVENT_STREAM_SECONDS", 0):
+                with patch("server.api.server._audio_streams", return_value=streams), \
+                     patch("server.api.server.AUDIO_EVENT_STREAM_SECONDS", 0):
                     handler._stream_audio_events("session")
                 sent = [call.args[0] for call in handler._write_ndjson_event.call_args_list]
                 self.assertEqual([item["type"] for item in sent], ["audio_frame"] * 3 if profile else ["audio_chunk"])

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nen-gitsune-tail": {
+      "command": "/absolute/path/to/kz_2614/server/.venv/bin/python",
+      "args": ["/absolute/path/to/kz_2614/server/ai/tail_mcp_server.py"]
+    }
+  }
+}

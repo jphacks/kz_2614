@@ -9,9 +9,9 @@ import types
 import unittest
 import wave
 from unittest.mock import AsyncMock, patch
-from Programs.ServerSide.STTLLMTTS.tts.irodori import TTSConfig, SynthesizedSpeech
-from Programs.ServerSide.STTLLMTTS.voice.acknowledgements import DEFAULT_ACKNOWLEDGEMENT_PHRASES, VoiceAcknowledgementSystem
-from Programs.ServerSide.STTLLMTTS.voice.acknowledgement_assets import input_identity, validate_wav, load_assets
+from server.ai.tts.irodori import TTSConfig, SynthesizedSpeech
+from server.ai.voice.acknowledgements import DEFAULT_ACKNOWLEDGEMENT_PHRASES, VoiceAcknowledgementSystem
+from server.ai.voice.acknowledgement_assets import input_identity, validate_wav, load_assets
 
 
 def tone():
@@ -37,13 +37,13 @@ class AcknowledgementAssetTests(unittest.TestCase):
     def test_requested_phrases_are_exact_tts_inputs(self):
         self.assertEqual(DEFAULT_ACKNOWLEDGEMENT_PHRASES,('うんうん','ふーん','へー'))
         system=VoiceAcknowledgementSystem(self.tts)
-        with patch('Programs.ServerSide.STTLLMTTS.voice.acknowledgements.load_assets',return_value=None):
+        with patch('server.ai.voice.acknowledgements.load_assets',return_value=None):
             asyncio.run(system.prepare())
         self.assertEqual([call.args[0] for call in self.tts.synthesize_async.await_args_list],list(DEFAULT_ACKNOWLEDGEMENT_PHRASES))
         self.assertEqual([system.next().text for _ in range(4)],['うんうん','ふーん','へー','うんうん'])
 
     def test_saved_assets_used_without_regenerating(self):
-        with tempfile.TemporaryDirectory() as folder,patch('Programs.ServerSide.STTLLMTTS.voice.acknowledgement_assets.assets_directory',return_value=Path(folder)):
+        with tempfile.TemporaryDirectory() as folder,patch('server.ai.voice.acknowledgement_assets.assets_directory',return_value=Path(folder)):
             self.write_assets(Path(folder))
             system=VoiceAcknowledgementSystem(self.tts)
             asyncio.run(system.prepare())
@@ -52,7 +52,7 @@ class AcknowledgementAssetTests(unittest.TestCase):
             self.assertEqual(system.next().speech.audio_bytes,self.audio)
 
     def test_changed_reference_or_corrupt_asset_is_rejected(self):
-        with tempfile.TemporaryDirectory() as folder,patch('Programs.ServerSide.STTLLMTTS.voice.acknowledgement_assets.assets_directory',return_value=Path(folder)):
+        with tempfile.TemporaryDirectory() as folder,patch('server.ai.voice.acknowledgement_assets.assets_directory',return_value=Path(folder)):
             root=Path(folder);self.write_assets(root)
             self.tts._reference_audio_bytes=b'new reference'
             self.assertIsNone(load_assets(self.tts,DEFAULT_ACKNOWLEDGEMENT_PHRASES))

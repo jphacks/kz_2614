@@ -1,23 +1,92 @@
 # ねんぎつね（仮）
 
-音声会話と、ESP32によるしっぽのトントン動作を組み合わせる添い寝ロボットのプロジェクトです。PC側の会話システムとESP32側のファームウェアを `main` に統合しています。
+**声で会話し、しっぽのトントンで寄り添う、きつね型の添い寝ロボット。**
 
-## まず読む
+JPHACKS 2026 / チーム `kz_2614`
 
-- [現在の構成と確認状況](docs/architecture.md)
-- [このPCの起動手順](LOCAL_SETUP.md)
-- [Windows・Ubuntuのセットアップ](Programs/ServerSide/USAGE.md)
-- [ESP32 Reader・Followerの配線と起動](Programs/ClientSide/ESP32/README.md)
-- [フォルダー一覧](Programs/README.md)
-- [ブランチ運用と移行方法](docs/development/branches.md)
-- [外部素材・ライセンス](THIRD_PARTY_NOTICES.md)
+## 製品概要
 
-## 現在できること
+### 背景・解決したい課題
 
-PCのWeb画面から連続音声入力、途中の文字起こし、Whisper → Gemma（LM Studio）→ Irodori-TTSによる返答音声の送信、話しかけ直したときの返答中断に対応します。VADと入力音量の適用はサーバー側です。
+寝る前に少し話したい、ひとりの時間に誰かの気配がほしい。そのような場面に向け、短い音声会話と柔らかいしっぽの動きを組み合わせる添い寝クッションを開発しています。
 
-ESP32 Reader/Followerのスケッチ、HTTPしっぽ制御API、AndroidとESP32の音声TCP通信コードも含みます。ただし、PC会話のMCPは現在も希望頻度の保存・取得のみです。ESP32実機を動かすMCPへの接続と、新しいAndroid/ESP32音声経路の実機確認は未完了です。ソース統合と実機連携の完了は区別しています。
+### 製品説明
 
-## 公開対象
+マイクへ話しかけるとPC上で音声を認識し、返答を生成して端末へ音声を返します。並行して開発したESP32 Reader・Followerは、可変抵抗器の入力やHTTP要求に応じてSG90サーボ3台を制御します。会話からの機器制御は統合途中です。
 
-ソース、設定テンプレート、テスト、仕様、配布条件を確認した素材だけを管理します。モデル本体、録音、参照音声、生成音声、実Wi-Fi設定、`.env`、ビルド成果物は含めません。プロジェクトのコードは [MIT](LICENSE)、第三者素材は [個別の条件](THIRD_PARTY_NOTICES.md) に従います。
+### 特長・注力したこと
+
+1. **話している途中から文字が更新される会話。** 音声を継続送信し、発話検出と文字起こしをPC側へ集約しています。
+2. **話しかけ直せる音声応答。** 返答の生成・出力中も入力を受け付け、新しい発話が始まると前の返答を打ち切ります。
+3. **音声と機器の役割分担。** Web・Android・ESP32の入出力と、PCのAI処理を分けています。機器側には動作時間・速度・停止の制約を設けています。
+
+## 現在のデモと確認状況
+
+| 機能 | 状態 |
+| --- | --- |
+| PCのWeb画面からSTT → LLM → TTSの音声往復 | 実モデルで確認済み |
+| 連続PCM入力、返答PCM配信、割込み、短い通信遅延からの復旧 | 実装済み。自動テストと記録済みのHTTP試験あり |
+| ESP32 Reader/Follower・SG90制御 | ファームウェアとEMORI側の実機記録あり |
+| 会話のMCPからESP32を直接動作 | 未完了。現行MCPはPC内の希望頻度の保存・取得 |
+| Android / ESP32の新しい音声TCP経路 | コードあり。最新版の端末ビルド・実機通話は未確認 |
+
+公開用デモ動画・製品写真はまだ掲載していません。[デモ手順と確認範囲](docs/demo.md) に、再現方法と残っている確認を記載しています。
+
+## 技術構成
+
+```text
+Webマイク ─HTTP PCM→ PCサーバー ─PCMフレーム→ Webスピーカー
+                         │
+                  Silero VAD → Whisper → Gemma → Irodori-TTS
+                         │
+                  MCP（現在は頻度の保存・取得）
+
+ESP32 Reader ─Wi-Fi→ ESP32 Follower → SG90 × 3
+                     ↑
+              PC会話との実接続は今後の統合
+```
+
+| 領域 | 使用技術 | ソース |
+| --- | --- | --- |
+| AI・会話制御 | Python、faster-whisper、Silero VAD、LM Studio、Irodori-TTS、MCP | [server/ai](server/ai/) |
+| HTTP・設定・音声API | Python HTTPサーバー、JSON、NDJSON、PCM16LE | [server/api](server/api/) |
+| Web | HTML、CSS、JavaScript、Web Audio / AudioWorklet | [apps/web](apps/web/) |
+| Android | Java、Android SDK、Gradle、TCPソケット | [apps/android](apps/android/) |
+| しっぽ・機器 | ESP32、Arduino C++、Wi-Fi/HTTP、SG90 × 3 | [firmware/esp32](firmware/esp32/) |
+| ESP32音声通信部品 | C、ESP-IDF、TCP、PCM16LE | [firmware/esp32/voice_tcp](firmware/esp32/voice_tcp/) |
+
+このPCで使用するモデルは `Systran/faster-whisper-small`、`google/gemma-4-26b-a4b-qat`、`Aratako/Irodori-TTS-v4.1-Small`。モデルの重みや外部ランタイムは配布元から別途取得します。
+
+### チームで実装した部分
+
+既存の音声認識・言語・音声合成モデルを接続する会話パイプライン、連続PCMの送受信、発話による返答中断、受理番号による送信復旧、参照音声処理の再利用、設定画面、MCP頻度操作、ESP32の入力・連動制御とHTTP APIを実装しています。モデルそのものを独自開発したものではありません。
+
+## 作業分担
+
+| 担当 | 主な領域 | 変更する場所 |
+| --- | --- | --- |
+| **kameyama** | AI・音声パイプライン、サーバー側の会話・MCP連携 | `server/ai/`、`server/api/`、`docs/api/` |
+| **HOSSy** | Web画面、マイク入力・音声出力、操作・設定UI | `apps/web/`、`tests/web/` |
+| **EMORI** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、`docs/esp32/` |
+| 担当者名未指定 | Android音声クライアント | `apps/android/` |
+
+APIや音声形式の変更は双方の担当で確認します。詳細は [担当範囲と連携ルール](docs/development/ownership.md) を参照してください。
+
+## 起動・開発
+
+- [Windows・Ubuntuのセットアップ](docs/setup/server.md)
+- [このPCの環境と起動](docs/setup/local-pc.md)
+- [ESP32の配線・設定・起動](firmware/esp32/README.md)
+- [構成と通信経路](docs/architecture.md)
+- [フォルダー一覧](docs/repository-layout.md)
+- [開発参加・テスト](CONTRIBUTING.md)
+
+依存関係とモデルを用意したこのPCでは、ルートの `./service-local.sh start` でWebサーバーを起動し、`http://127.0.0.1:8765/` を開きます。クリーンなcloneでは先にセットアップが必要です。
+
+## 今後の展望
+
+会話MCPとESP32実機の接続、Android/ESP32の音声入出力と停止の実機検証、利用環境に応じた応答品質・速度の調整を進めます。実装済み・実測済み・未確認を分けて [開発履歴](docs/development/work-history.md) に残します。
+
+## ライセンス・公開データ
+
+プロジェクトのコードは [MIT](LICENSE)。心音・Android robot・Gradle Wrapperは [第三者素材の表示](THIRD_PARTY_NOTICES.md) に従います。モデル、録音、参照音声、生成音声、実Wi-Fi設定、`.env`、ビルド成果物はリポジトリに含めません。

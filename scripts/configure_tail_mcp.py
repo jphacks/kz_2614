@@ -39,22 +39,22 @@ def absolute_path(path: str | Path) -> Path:
 
 def build_entry(project_root: Path, python_override: str | Path | None = None) -> dict[str, Any]:
     root = absolute_path(project_root)
-    server_root = root / "Programs" / "ServerSide"
+    server_root = root / "server"
     if python_override is None:
         unix = server_root / ".venv" / "bin" / "python"
         windows = server_root / ".venv" / "Scripts" / "python.exe"
         candidates = [windows, unix] if sys.platform == "win32" else [unix, windows]
         python = next((candidate for candidate in candidates if candidate.is_file()), None)
         if python is None:
-            raise ConfigurationError("ServerSide/.venv の Python がありません。--python で指定してください。")
+            raise ConfigurationError("server/.venv の Python がありません。--python で指定してください。")
     else:
         python = absolute_path(python_override)
         if not python.is_file():
             raise ConfigurationError("--python は既存の Python 実行ファイルを指定してください。")
-    script = server_root / "STTLLMTTS" / "tail_mcp_server.py"
+    script = server_root / "ai" / "tail_mcp_server.py"
     if not script.is_file():
         raise ConfigurationError("このプロジェクトの tail_mcp_server.py が見つかりません。")
-    # Secrets remain in ServerSide/.env, which the server loads itself.
+    # Secrets remain in server/.env, which the server loads itself.
     return {"command": str(python), "args": [str(script)]}
 
 

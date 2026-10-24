@@ -8,11 +8,11 @@ import unittest
 import uuid
 from unittest.mock import Mock, patch
 
-from Programs.ServerSide.dashboard.server import DashboardHandler, DashboardHTTPServer
-from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError
+from server.api.server import DashboardHandler, DashboardHTTPServer
+from server.ai.voice.sessions import VoiceAPIError
 
 
-MODULE = "Programs.ServerSide.dashboard.server"
+MODULE = "server.api.server"
 
 
 def chunked_events(data):

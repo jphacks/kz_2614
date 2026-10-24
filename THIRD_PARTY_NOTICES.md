@@ -4,7 +4,7 @@
 
 ## 心音素材
 
-- 対象: `Programs/ServerSide/dashboard/web/sounds/heartbeat.ogg`
+- 対象: `apps/web/sounds/heartbeat.ogg`
 - 作品: Heartbeat.ogg / 作者: HerbertBoland
 - [配布元](https://commons.wikimedia.org/wiki/File:Heartbeat.ogg) / [原掲載](https://www.freesound.org/people/HerbertBoland/sounds/32731/)
 - ライセンス: [Creative Commons Attribution 3.0 Unported](https://creativecommons.org/licenses/by/3.0/)
@@ -13,14 +13,14 @@
 
 ## Gradle Wrapper
 
-- 対象: `Programs/ClientSide/androidVer/gradlew`、`gradlew.bat`、`gradle/wrapper/gradle-wrapper.jar`
+- 対象: `apps/android/gradlew`、`gradlew.bat`、`gradle/wrapper/gradle-wrapper.jar`
 - Gradleの生成スクリプト・Wrapper。スクリプトの著作権表示とApache-2.0表記、JAR内のMETA-INF/LICENSEを保持します。
 - JAR内のライセンス原文を [Gradle-Wrapper-LICENSE.txt](docs/licenses/Gradle-Wrapper-LICENSE.txt) にも同梱します。
 - [Gradle公式ソース](https://github.com/gradle/gradle)。アプリの配布にはそのビルドに含める依存ライブラリの表示も別途必要です。
 
 ## Androidテンプレートのロボット図形
 
-- 対象: `Programs/ClientSide/androidVer/app/src/main/res/drawable/ic_launcher_foreground.xml` と各密度の `mipmap-*/ic_launcher*.webp`。
+- 対象: `apps/android/app/src/main/res/drawable/ic_launcher_foreground.xml` と各密度の `mipmap-*/ic_launcher*.webp`。
 - Android Studioテンプレートに由来するAndroid robot図形。白色・背景・影付きの派生表示です。
 - [Googleの配布条件](https://developer.android.com/distribute/marketing-tools/brand-guidelines#android_robot) / [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
 - The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License.

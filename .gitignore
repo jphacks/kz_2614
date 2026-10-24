@@ -25,7 +25,10 @@ local.properties
 *.aac
 *.opus
 *.ogg
-!Programs/ServerSide/dashboard/web/sounds/heartbeat.ogg
+!apps/web/sounds/heartbeat.ogg
 *.onnx
 *.tflite
 *.bin
+
+# Old private configuration retained during the layout migration
+/Programs/

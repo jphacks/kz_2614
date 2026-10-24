@@ -4,9 +4,9 @@
 
 # 添い寝ロボット「ねんぎつね」（仮）— Programs
 
-2026-10-24 最新指定: AndroidはWebView方式から、音声通話専用のネイティブアプリと直接TCP通信へ変更。[新しい接続・起動手順](../../Programs/ServerSide/VOICE_TCP.md)を優先する。以下のWeb構成説明は既存経路の記録として保持する。APKビルド・実機通話は未確認。
+2026-10-24 最新指定: AndroidはWebView方式から、音声通話専用のネイティブアプリと直接TCP通信へ変更。[新しい接続・起動手順](../api/voice-tcp.md)を優先する。以下のWeb構成説明は既存経路の記録として保持する。APKビルド・実機通話は未確認。
 
-2026-10-24の追加指定: 現在のMCP対応はPCへのトントン頻度の保存・取得に限定し、接続先ESP32の実装は別担当とします。[頻度API仕様](../../Programs/ServerSide/TAIL_FREQUENCY_API.md) を引き渡し先に使います。以下のPi 4実機制御は以前からの将来案であり、今回の動作対象には含めません。
+2026-10-24の追加指定: 現在のMCP対応はPCへのトントン頻度の保存・取得に限定し、接続先ESP32の実装は別担当とします。[頻度API仕様](../api/tail-frequency.md) を引き渡し先に使います。以下のPi 4実機制御は以前からの将来案であり、今回の動作対象には含めません。
 
 寝る前の寂しさに寄り添う、きつね型の添い寝クッションを動かすソフトウェアの概要と実装方針です。名前・構成・モデルは検討中の案を含み、確定していない項目はその旨を記載しています。
 
@@ -14,7 +14,7 @@
 
 現フェーズの運用方針（2026-10-24に決定）: GPU搭載のローカルPCでWhisper・LM Studio・Irodori-TTSを使用し、Androidから同一LocalNET内のサーバーURLへ接続して音声入力・音声出力を行います。実際の接続先URL、HTTPS終端、モデル設定と実環境での動作は未確認です。しっぽ制御は音声会話の初期MVPの後に進めます。
 
-> `emori-ESP32` ブランチの追加実装：ESP32 2台とSG90 3台によるしっぽ制御を [ClientSide/ESP32](../../Programs/ClientSide/ESP32/README.md) に収録しました。配線・Arduino IDEでの設定・実機記録・HTTP API・MCP提案は同フォルダを参照してください。以下に残るESP32未実装・構成未定の記述は当初の設計段階の内容です。既存のServerSideコードは今回変更していません。
+> `emori-ESP32` ブランチの追加実装：ESP32 2台とSG90 3台によるしっぽ制御を [ClientSide/ESP32](../../firmware/esp32/README.md) に収録しました。配線・Arduino IDEでの設定・実機記録・HTTP API・MCP提案は同フォルダを参照してください。以下に残るESP32未実装・構成未定の記述は当初の設計段階の内容です。既存のServerSideコードは今回変更していません。
 
 ## 目指す体験
 
@@ -36,7 +36,7 @@
 
 ## プログラムの構成案
 
-このリポジトリの `ClientSide` と `ServerSide` を、次の役割に分ける想定です。Android Web音声APIを [音声会話API仕様](../../Programs/ServerSide/VOICE_API.md)、Pi 4デバイスAPI案を [Raspberry Pi 4 API仕様](raspberry-pi/RASPBERRY_PI_API.md) にまとめました。音声会話APIコードはありますが実機確認は未完了です。Pi 4の音声API案はAndroid Web MVPの音声経路では使用しません。
+このリポジトリの `ClientSide` と `ServerSide` を、次の役割に分ける想定です。Android Web音声APIを [音声会話API仕様](../api/voice-http.md)、Pi 4デバイスAPI案を [Raspberry Pi 4 API仕様](raspberry-pi/RASPBERRY_PI_API.md) にまとめました。音声会話APIコードはありますが実機確認は未完了です。Pi 4の音声API案はAndroid Web MVPの音声経路では使用しません。
 
 ### 開発作業の担当分け
 
@@ -93,7 +93,7 @@
 - MCPサーバーからRaspberry Pi 4への固定動作指示（HTTPS/JSON API）
 - 失敗・切断・タイムアウト時の停止処理
 
-サーバーコードは `ServerSide/STTLLMTTS/` とWebアプリ層の `ServerSide/dashboard/` に分けています。ダッシュボードはブラウザー画面を指し、`dashboard/server.py` はその配信とHTTP受付を行います。`STTLLMTTS/voice/pipeline.py` がモデル接続をつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSide利用マニュアル](../../Programs/ServerSide/USAGE.md)、[ServerSideの構成](../../Programs/ServerSide/README.md)、[音声API](../../Programs/ServerSide/VOICE_API.md)、[STTLLMTTS](../../Programs/ServerSide/STTLLMTTS/README.md)、[Web画面](../../Programs/ServerSide/dashboard/README.md) を参照してください。
+サーバーコードは `ServerSide/STTLLMTTS/` とWebアプリ層の `ServerSide/dashboard/` に分けています。ダッシュボードはブラウザー画面を指し、`dashboard/server.py` はその配信とHTTP受付を行います。`STTLLMTTS/voice/pipeline.py` がモデル接続をつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSide利用マニュアル](../setup/server.md)、[ServerSideの構成](../../server/README.md)、[音声API](../api/voice-http.md)、[STTLLMTTS](../../server/ai/README.md)、[Web画面](../../server/api/README.md) を参照してください。
 
 モデル名は引き続きコードの初期設定・候補値です。ユーザー方針としてGPU搭載PC上でWhisperとLM Studioをローカル利用し、TTSにIrodori-TTSを使います。モデルの実配置、GPUデバイス設定、接続先、起動、応答速度は未確認です。
 

@@ -15,12 +15,12 @@ from queue import Queue
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-from Programs.ServerSide.dashboard.settings_store import DEFAULT_SETTINGS
-from Programs.ServerSide.STTLLMTTS.llm.lm_studio import VoiceLLMReply
-from Programs.ServerSide.STTLLMTTS.stt.whisper import Transcription
-from Programs.ServerSide.STTLLMTTS.tts.irodori import SynthesizedSpeech
-from Programs.ServerSide.STTLLMTTS.voice.pipeline import VoicePipeline
-from Programs.ServerSide.STTLLMTTS.voice.sessions import VoiceAPIError, VoiceSessions
+from server.api.settings_store import DEFAULT_SETTINGS
+from server.ai.llm.lm_studio import VoiceLLMReply
+from server.ai.stt.whisper import Transcription
+from server.ai.tts.irodori import SynthesizedSpeech
+from server.ai.voice.pipeline import VoicePipeline
+from server.ai.voice.sessions import VoiceAPIError, VoiceSessions
 
 
 def make_pipeline(deltas, *, pause_after_first=None):
@@ -60,7 +60,7 @@ def make_pipeline(deltas, *, pause_after_first=None):
     acknowledgements.is_goodnight_or_stop_request.return_value = False
     acknowledgements.prepare = AsyncMock()
     with patch(
-        "Programs.ServerSide.STTLLMTTS.voice.pipeline.get_dashboard_settings",
+        "server.ai.voice.pipeline.get_dashboard_settings",
         return_value=copy.deepcopy(DEFAULT_SETTINGS),
     ):
         return VoicePipeline(stt=stt, llm=llm, tts=tts, acknowledgements=acknowledgements)
@@ -137,7 +137,7 @@ class PipelineMergeTests(unittest.IsolatedAsyncioTestCase):
     async def test_plain_session_creation_does_not_prewarm_tts(self):
         manager = object.__new__(VoiceSessions)
         pipeline = Mock()
-        with patch("Programs.ServerSide.STTLLMTTS.voice.sessions.VoicePipeline", return_value=pipeline):
+        with patch("server.ai.voice.sessions.VoicePipeline", return_value=pipeline):
             self.assertIs(await manager._create_pipeline(), pipeline)
         pipeline.start_acknowledgement_preparation.assert_not_called()
 

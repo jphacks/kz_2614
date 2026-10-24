@@ -11,10 +11,10 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from Programs.ServerSide.STTLLMTTS.tts.irodori import IrodoriTTS, TTSConfig
-from Programs.ServerSide.STTLLMTTS.tts.local_backend import LocalIrodoriBackend
-from Programs.ServerSide.STTLLMTTS.voice.acknowledgements import DEFAULT_ACKNOWLEDGEMENT_PHRASES
-from Programs.ServerSide.STTLLMTTS.voice.acknowledgement_assets import input_identity, assets_directory, validate_wav, load_assets
+from server.ai.tts.irodori import IrodoriTTS, TTSConfig
+from server.ai.tts.local_backend import LocalIrodoriBackend
+from server.ai.voice.acknowledgements import DEFAULT_ACKNOWLEDGEMENT_PHRASES
+from server.ai.voice.acknowledgement_assets import input_identity, assets_directory, validate_wav, load_assets
 
 
 def generate():

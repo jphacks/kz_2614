@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import httpx
 
-from Programs.ServerSide.STTLLMTTS.llm import lm_studio
-from Programs.ServerSide.STTLLMTTS.runtime import VoiceStageTimeout
+from server.ai.llm import lm_studio
+from server.ai.runtime import VoiceStageTimeout
 
 
 class TailLLMBridgeTests(unittest.IsolatedAsyncioTestCase):
