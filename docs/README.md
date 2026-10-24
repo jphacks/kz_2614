@@ -4,6 +4,8 @@
 
 2026-10-25更新。`975b3ad`で統合したmainのコードを基準に、現行の仕様と未完了の接続を整理しています。文書の「実装済み」「確認記録あり」「未実装」を区別してください。
 
+ESP32の詳細仕様は公開用配置へ移行した`9036cce`を照合して再編しました。全体・音声の既存仕様と履歴も保持しています。
+
 | 読みたい内容 | 参照先 |
 | --- | --- |
 | 全体構成・会話・割込み・通信復旧・MCP・保存の図 | [構成と処理フロー](architecture.md) |
@@ -12,7 +14,10 @@
 | HTTP PCM・NDJSON・停止・再生結果通知 | [Web音声API](api/voice-http.md) |
 | TCPのフレーム形式・profile・端末対応 | [TCP音声API](api/voice-tcp.md) |
 | 現在のMCPが保存する希望頻度 | [頻度設定API](api/tail-frequency.md) |
-| ESP32実機API・引き継ぎ・未接続箇所 | [ESP32資料](esp32/README.md) |
+| ESP32の配線・校正・PWM・モード遷移 | [しっぽ制御システム仕様](esp32/specification.md) |
+| ESP32へ送る8 API・入力・応答・操作例 | [機器HTTP API](esp32/http-api.md) |
+| 現在のMCPと実機用提案・未接続箇所 | [MCP統合仕様](esp32/mcp-integration.md) |
+| ESP32の導入・資料の読み順・検証履歴 | [ESP32仕様の入口](esp32/README.md) |
 | 管理するファイルと除外するファイル | [Git除外方針](development/gitignore.md) |
 | 起動・設定・実測の記録 | [このPC](setup/local-pc.md) / [利用手順](setup/server.md) |
 | ソースの配置と共同作業 | [配置](repository-layout.md) / [ブランチ運用](development/branches.md) |
