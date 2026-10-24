@@ -1,0 +1,17 @@
+ESP32-Reader/WiFiConfig.h
+ESP32-Follower/WiFiConfig.h
+ESP32-Follower/TailConfig.h
+.research/
+.arduino-cli/
+.arduino-data/
+.arduino-downloads/
+.arduino-sketchbook/
+.arduino-cache/
+.tools/
+arduino-cli-download.zip
+.build/
+
+.env
+.venv/
+__pycache__/
+*.py[cod]

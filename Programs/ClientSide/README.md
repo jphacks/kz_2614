@@ -1,9 +1,12 @@
-# ClientSide
+# クライアントと機器
 
-2026-10-24 最新指定: AndroidはWebView方式から、音声通話専用のネイティブアプリと直接TCP通信へ変更。[新しい接続・起動手順](../ServerSide/VOICE_TCP.md)を優先する。以下のWeb構成説明は既存経路の記録として保持する。APKビルド・実機通話は未確認。
+音声認識・発話検出・返答生成はPCサーバーが担当します。Web画面は [ServerSide/dashboard/web](../ServerSide/dashboard/web/) にあります。
 
-AndroidではWebアプリを基本とします。[Android WebViewアプリ](androidVer/)でサーバーURLを開き、設定と音声会話の画面は [ServerSide/dashboard/web](../ServerSide/dashboard/web/) から配信します。Web画面でスマートフォンのマイクを録音し、サーバーのSTT・LLM・TTSを経て返答音声をスマートフォンで再生します。STT・TTS・会話のふるまいに加え、Irodori-TTSの参照WAVをアップロード・保存・削除できます。WAVはサーバー内の固定パスに保存され、次のTTSインスタンスから使われます。
+| フォルダー | 役割 | 確認状況 |
+| --- | --- | --- |
+| [androidVer](androidVer/) | Androidネイティブ音声アプリ。PCへ直接TCP接続 | 最新方式のAPKビルド・実機通話は未確認 |
+| [ESP32Voice](ESP32Voice/README.md) | ESP32用の音声TCP通信部品 | マイク・スピーカー・GPIO制御を含まない。ビルド・実機は未確認 |
+| [ESP32](ESP32/README.md) | Reader/FollowerのArduinoスケッチ、SG90 3台の制御、HTTP API | EMORI側の実機記録あり。このPCの会話MCPとの実接続は未完了 |
+| [Raspi4Ver](Raspi4Ver/RASPBERRY_PI_API.md) | 以前のRaspberry Pi構成案 | 現行ESP32構成では使用しない |
 
-必須動作、未決事項、受け入れ条件は [REQUIREMENTS.md](REQUIREMENTS.md) を参照してください。Android WebView、ターン制の録音・送信、NDJSONによる相づち・テキスト差分・文節音声の逐次受信と順次再生、サーバーセッションAPIのコードを追加しました。再生結果通知、Pi 4のハードウェア連携、Android実機での音声確認は未完了です。音声会話ではHTTPS接続とマイク許可が必要です。
-
-2026-10-24: [ESP32向け音声TCP通信部品](ESP32Voice/README.md)を追加。ユーザー指定によりGPIO・マイク・スピーカー制御は含めず、既存ESP32プログラムから呼ぶ送受信APIとして提供する。Android版とは別実装。ESP32実機・ビルドは未確認。
+音声通信は [VOICE_TCP.md](../ServerSide/VOICE_TCP.md)、要件は [REQUIREMENTS.md](REQUIREMENTS.md) を参照してください。ESP32のMCP提案は引き継ぎ資料であり、稼働中サーバーのMCPを置換したものではありません。
