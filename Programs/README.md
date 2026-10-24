@@ -21,7 +21,7 @@ Programs/
 ```
 
 - [サーバー](ServerSide/README.md) / [端末・機器](ClientSide/README.md)
-- [現在の構成と実装状況](../docs/architecture.md)
+- [仕様書一覧](../docs/README.md) / [構成と処理フロー](../docs/architecture.md)
 - [ESP32引き継ぎ資料](../docs/esp32/README.md)
 - [旧構成案](../docs/archive/2026-10-24-programs-design.md) / [旧Pi API案](../docs/archive/raspberry-pi/RASPBERRY_PI_API.md)
 

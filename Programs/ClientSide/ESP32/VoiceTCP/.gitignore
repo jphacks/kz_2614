@@ -1,3 +1,4 @@
+# ESP-IDF generated state. sdkconfig can contain Wi-Fi credentials.
 build/
 sdkconfig
 sdkconfig.old

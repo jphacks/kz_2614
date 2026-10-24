@@ -4,7 +4,9 @@
 
 ## まず読む
 
-- [現在の構成と確認状況](docs/architecture.md)
+- [仕様書一覧](docs/README.md)
+- [構成と処理フロー（Mermaid図）](docs/architecture.md)
+- [Git管理・除外の方針](docs/development/gitignore.md)
 - [このPCの起動手順](LOCAL_SETUP.md)
 - [Windows・Ubuntuのセットアップ](Programs/ServerSide/USAGE.md)
 - [ESP32 Reader・Followerの配線と起動](Programs/ClientSide/ESP32/README.md)

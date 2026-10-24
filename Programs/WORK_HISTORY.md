@@ -792,3 +792,15 @@ Programs/
 - 全217件の自動テストが10.687秒、skip0で成功（/tmp/main-integration-tests.log）。相対リンク切れ0、ESP32スケッチと移動したVoiceTCPコードの元ブランチとのbyte一致を確認。Android/ESP32ビルドと実機確認は未実施。
 - 公開ファイルの確認: 心音199816Bは配布元CC BY 3.0、SHA-1 929e11379465ea6c181f0e0a5956b7baa46b55bdで一致。Gradle Wrapper内蔵LICENSEを抽出同梱、Android robotのGoogle由来・CC BY 3.0表示を追加。THIRD_PARTY_NOTICES.mdに出典と条件を整理。モデル・外部ランタイム・実録音・参照音声・生成音声・実Wi-Fi設定・.env・ビルド成果物は含めない。既存Git履歴は書き換えない。
 - ブランチ整理ではPC先端とEMORI先端をarchive/2026-10-25-*タグで残し、mainへの包含とリモート先端一致を確認してから統合済み2ブランチを削除する。稼働チェックアウトはmainへ移行し、外部モデルを保持する旧kz_2614・Original保管・stashは維持する。
+
+
+## 2026-10-25 統合mainの仕様・Git除外・処理図を整理
+
+- 依頼: 最新コミット975b3adと整理後の構成に合わせ、現行仕様書と.gitignoreを更新し、Mermaid/フローチャートで処理を見えるようにする。
+- 照合: GitHubの975b3ada96203675a6beee43917cde61b2a43461およびmainのarchitecture.mdを読み、ローカルmainと一致を確認。Web HTTP、TCP、MCP allowlist、相づち、VAD、TTS、Followerの実装を確認した。
+- 文書: docs/README.mdを仕様入口として追加。architecture.mdに全体・音声1往復・割込み/手動停止・送信復旧・MCP境界・保存の6図を追加。ServerSide/ClientSideのREQUIREMENTSを旧Pi/WebView中心の説明から現行構成へ整理し、既存要件IDを保持。現行頻度2ツールと将来の実機3操作、既定設定とこのPCの実測、サーバー対応と端末未対応を区別した。「おやすみ」後の自動終了が未完了であることも明記。
+- 契約: VOICE_APIの見出しと対象を現行Web/互換ファイル入力へ訂正。TAIL_FREQUENCY_APIにFollowerとは非互換であることを追加。VoiceTCP READMEの旧「生成中は入力認識除外」を訂正し、stream profile/割込みの端末未対応を明記。実行コード・API実装・設定値は変更しない。
+- Git除外: 共通の秘密情報・音声・モデル・キャッシュをルートに集約。ServerSideのdataを拡張子に依存せず除外、WhisperのREADME例外が働くよう修正。既存venv/Whisperのシンボリックリンクも除外を維持。Android全モジュールのbuild、Arduino/ESP-IDF固有生成物を各階層で管理。配布用心音・テンプレート・Gradle Wrapperを保持する。docs/development/gitignore.mdに方針と確認方法を追加。
+- 保全: 変更前の16ファイルをチェックアウト外の /home/nami/JPHACKSkz_2614/Original-specs-975b3ad-2026-10-25 に .Original付きで保存し、SHA256.jsonと一致を確認。ファイル削除、Git追跡解除、履歴書換えは行っていない。
+- 検証: 変更文書の相対ファイルリンク74件、Git除外72ケース（設定/音声/モデル/テンプレート/素材/通常ディレクトリ/シンボリックリンク）成功。追跡済みファイルに新たに除外されたものなし。Mermaid11.4.1で6図の構文成功、一時loopbackプレビューで6枚のSVG描画とエラーなしを確認。全体図は横長で読みにくかったため縦の概要図へ調整。git diff --check成功。
+- 実施範囲: Markdownと.gitignoreのみ。アプリの217件テストは今回再実行せず、既存結果を履歴として区別。モデル推論、ESP32通信、音声サーバー再起動、利用者の画面再読込・マイク停止は行っていない。構文確認用依存は/tmpだけに取得し、プロジェクト依存を変更していない。コミット・pushは未実施。
