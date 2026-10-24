@@ -14,3 +14,11 @@ whisper/*
 !whisper/README.md
 
 dashboard/data/acknowledgements/
+
+# External runtimes and model caches are obtained separately.
+models/
+STTLLMTTS/third_party/Irodori-TTS/*
+!STTLLMTTS/third_party/Irodori-TTS/.gitkeep
+STTLLMTTS/third_party/whisper/*
+!STTLLMTTS/third_party/whisper/.gitkeep
+!STTLLMTTS/third_party/whisper/README.md

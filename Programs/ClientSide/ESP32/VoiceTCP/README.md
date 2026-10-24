@@ -66,7 +66,7 @@ SSID・パスワードを含むsdkconfigやビルド成果物はGit除外。PC�
 
 ## サーバー側
 
-[VOICE_TCP.md](../../ServerSide/VOICE_TCP.md) に接続仕様と起動手順を記載。startに `audio_profile: "pcm_s16le_16000"` を指定すると既存TTSの音声イベントをサーバーがPCMへ変換する。Androidは指定を省略するので従来の音声形式を維持する。TCPの分割・結合を考慮して4バイト長と本文を読み切り、session_id・generationで古い応答を拒否する。
+[VOICE_TCP.md](../../../ServerSide/VOICE_TCP.md) に接続仕様と起動手順を記載。startに `audio_profile: "pcm_s16le_16000"` を指定すると既存TTSの音声イベントをサーバーがPCMへ変換する。Androidは指定を省略するので従来の音声形式を維持する。TCPの分割・結合を考慮して4バイト長と本文を読み切り、session_id・generationで古い応答を拒否する。
 
 現時点ではTCPサーバーは未起動（8766待受なし）、既存Webサーバーはactive。LAN公開の起動は以前の自動承認レビューで拒否され、今回も起動・再起動はしていない。
 

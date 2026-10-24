@@ -1,8 +1,8 @@
 # ESP32 2台・SG90 3台の連動制御
 
-> このフォルダは `main` から作成した `emori-ESP32` ブランチへ追加したESP32側の実装です。Reader・Followerのスケッチと設定テンプレート、実機の記録、API仕様、MCP提案Python、サーバー側Codexへの引き継ぎメモをまとめています。
+> 2026-10-25に `emori-ESP32` から `main` へ統合したESP32側の実装です。音声通信部品は [VoiceTCP](VoiceTCP/README.md)、引き継ぎ資料は [docs/esp32](../../../docs/esp32/README.md) に整理しました。Reader・Followerのスケッチと設定テンプレート、実機の記録、API仕様、MCP提案Python、サーバー側Codexへの引き継ぎメモをまとめています。
 >
-> MCP提案Pythonは `codex-memo/2026-10-25_0313_tail_mcp_server.py` にあります。既存の `Programs/ServerSide/` は変更していません。引き継ぎメモは開発ブランチ `codex/raspberry-pi-implementation` の `STTLLMTTS` 配置を想定しているため、サーバーへ反映する際は対象ブランチの実際の配置を確認してください。
+> MCP提案Pythonは `docs/esp32/history/2026-10-25_0313_tail_mcp_server.py` にあります。既存の `Programs/ServerSide/` は変更していません。引き継ぎメモは開発ブランチ `codex/raspberry-pi-implementation` の `STTLLMTTS` 配置を想定しているため、サーバーへ反映する際は対象ブランチの実際の配置を確認してください。
 >
 > Wi-Fiの実設定・端末ごとの `TailConfig.h`・ビルド生成物は含みません。Arduino IDEで使う際は各 `*.example.h` を対応する設定名へコピーしてください。
 
@@ -112,7 +112,7 @@ POST の入力は `application/x-www-form-urlencoded` 形式です。
 
 ## LLMしっぽMCPとの接続
 
-先輩の[`tail_mcp_server.py`](https://github.com/jphacks/kz_2614/blob/codex/raspberry-pi-implementation/Programs/ServerSide/STTLLMTTS/tail_mcp_server.py)が呼ぶHTTPパスに合わせ、Followerへ次の専用APIを追加しました。ユーザー指定により、プロトタイプではPython側・ESP32側ともトークン認証を削除しています。[提案Pythonファイル](codex-memo/2026-10-25_0313_tail_mcp_server.py)を先輩側の既存ファイルと置き換えて使用します。
+先輩の[`tail_mcp_server.py`](https://github.com/jphacks/kz_2614/blob/main/Programs/ServerSide/STTLLMTTS/tail_mcp_server.py)が呼ぶHTTPパスに合わせ、Followerへ次の専用APIを追加しました。ユーザー指定により、プロトタイプではPython側・ESP32側ともトークン認証を削除しています。[提案Pythonファイル](../../../docs/esp32/history/2026-10-25_0313_tail_mcp_server.py)は引き継ぎ用です。現行PCのMCPとはツール契約が異なるため、丸ごと置換せず橋渡し・停止連携を実装してから使用します。
 
 | MCPツール | FollowerのHTTP API | 内容 |
 | --- | --- | --- |
@@ -128,7 +128,7 @@ POST の入力は `application/x-www-form-urlencoded` 形式です。
 
 MCPサーバー側では`TAIL_DEVICE_URL`をFollowerのIP（例`http://192.168.100.111`）に設定します。現行MCPはRaspberry Pi向けの**旧パス**を呼び、設計資料の`/api/v1/tail/...`にはまだ対応していません。この互換APIもセッションID・停止世代・要求IDを受けないため、停止後に遅れて届く古い開始要求の拒否までは保証しません。LLM側で現行セッションの許可判定と独立した停止経路を実装・確認するまで、サーバー側の`TAIL_CONTROL_ENABLED`と`TAIL_MCP_ENABLED`は無効のままにしてください。新APIの`state`と`feedback:"command_only"`はESP32が指令を受けた状態であり、物理的な尾の位置検出ではありません。既存の認証なしAPIを残しているため、ESP32は信頼できる隔離LAN内でのみ使います。
 
-**2026-10-25の最初の5秒試験では、動作中の固定部ががたがた揺れて見えました。**PWMを止めて確認し、再試験ではユーザーが0°側から約177°までの動作と、HTTPによる途中停止・90°中立への復帰をいずれも異常なしと確認しました。その後、プロトタイプ向けにPythonとESP32のトークン認証を削除しました。現在の上限0.3回/秒を超える要求は400で拒否されます。受信側のローカル設定ではMCP専用APIが有効です。提案Pythonは3つの操作だけを公開し、先輩側では接続先URLと動作有効フラグを設定して接続します。配布用`TailConfig.example.h`は無効・未校正範囲の設定です。Followerは90°中立で保持します。**Followerを再起動すると従来どおり自動テレオペに戻り、つまみ位置へ追従します。**詳細は[統合調査メモ](codex-memo/2026-10-25-0222-LLMしっぽMCP統合調査.md)を参照してください。
+**2026-10-25の最初の5秒試験では、動作中の固定部ががたがた揺れて見えました。**PWMを止めて確認し、再試験ではユーザーが0°側から約177°までの動作と、HTTPによる途中停止・90°中立への復帰をいずれも異常なしと確認しました。その後、プロトタイプ向けにPythonとESP32のトークン認証を削除しました。現在の上限0.3回/秒を超える要求は400で拒否されます。受信側のローカル設定ではMCP専用APIが有効です。提案Pythonは3つの操作だけを公開し、先輩側では接続先URLと動作有効フラグを設定して接続します。配布用`TailConfig.example.h`は無効・未校正範囲の設定です。Followerは90°中立で保持します。**Followerを再起動すると従来どおり自動テレオペに戻り、つまみ位置へ追従します。**詳細は[統合調査メモ](../../../docs/esp32/history/2026-10-25-0222-LLMしっぽMCP統合調査.md)を参照してください。
 
 ## 現在の検証状態
 

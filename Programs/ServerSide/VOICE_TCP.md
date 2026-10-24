@@ -43,7 +43,7 @@ Android Studioで `Programs/ClientSide/androidVer` を開き、Debug APKをビ�
 
 ## ESP32クライアント向け追加（2026-10-24）
 
-ESP32の通信部品は [ESP32Voice](../ClientSide/ESP32Voice/README.md)。GPIO・音声機器制御はユーザー指定で対象外。
+ESP32の通信部品は [ESP32/VoiceTCP](../ClientSide/ESP32/VoiceTCP/README.md)。GPIO・音声機器制御はユーザー指定で対象外。
 
 最初の要求に `{"type":"start","version":1,"audio_profile":"pcm_s16le_16000"}` を指定する。session応答は同じaudio_profileを返す。既存Androidは省略可能で `original` と応答する。未知のprofileと不正versionはセッション作成前に拒否する。
 

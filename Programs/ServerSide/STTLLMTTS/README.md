@@ -113,7 +113,7 @@ dashboard /api/v1/tail/frequency → 希望頻度のJSON保存
 
 ### 旧機器操作と将来の接続
 
-互換用の `tap_tail`・`stop_tail`・`get_tail_status` はMCPサーバーに残っていますが、現在の会話へは公開しません。旧 `/api/tail/...` を呼ぶこれらの操作と、今回の頻度設定APIは別機能です。以前のPi 4デバイスAPI案は [Raspberry Pi 4 API仕様](../../ClientSide/Raspi4Ver/RASPBERRY_PI_API.md) に保持しています。
+互換用の `tap_tail`・`stop_tail`・`get_tail_status` はMCPサーバーに残っていますが、現在の会話へは公開しません。旧 `/api/tail/...` を呼ぶこれらの操作と、今回の頻度設定APIは別機能です。以前のPi 4デバイスAPI案は [Raspberry Pi 4 API仕様](../../../docs/archive/raspberry-pi/RASPBERRY_PI_API.md) に保持しています。
 
 Pi 4デバイスサービス、セッション／停止世代との連携、遅着開始の拒否、機構の制限と手元停止は未実装・未確認です。停止制御と実機安全確認が終わるまでは `TAIL_CONTROL_ENABLED=false` のままにします。
 
@@ -141,7 +141,7 @@ LM StudioのGUIでもMCPを使う場合に限り、リポジトリルートか�
 
 - 実装済み: PyAV復号と無音区間分割、faster-whisper STT・認識品質・声の高さ・話し方の分析、LM Studio同期応答とSSE差分取得、分析要約を含むLLM入力、Irodori-TTS文節合成、NDJSONイベント配信、Android Webの逐次再生キュー、相づちの事前生成・配信判断、同一設定モデルのプロセス内共有・推論直列化、段階時間と本文を記録しない失敗ログ、段階別期限・停止世代の破棄、限定ツール連携のリクエスト生成、MCPサーバー、旧クライアント向けJSON応答。
 - 同期STT・TTSの既定タイムアウトは各90秒、LLMは45秒、音声ターン全体は最大180秒です。タイムアウト後にネイティブ推論スレッドが動作を続ける場合がありますが、そのセッションは破棄し、後着結果を配信しません。実際に処理を強制中断できるとは扱いません。
-- 文書化済み・未実装: Raspberry Pi 4向けバージョン付きHTTP API契約（[RASPBERRY_PI_API.md](../../ClientSide/Raspi4Ver/RASPBERRY_PI_API.md)）。現在のクライアントのパス・応答形式、セッション停止世代との連携は未整合。
+- 文書化済み・未実装: Raspberry Pi 4向けバージョン付きHTTP API契約（[RASPBERRY_PI_API.md](../../../docs/archive/raspberry-pi/RASPBERRY_PI_API.md)）。現在のクライアントのパス・応答形式、セッション停止世代との連携は未整合。
 - 出力開始・完了・失敗通知APIはPCM経路に実装し、自動テストと実モデルHTTPで確認済みです。従来turn APIの個別通知は未実装です。Pi 4しっぽデバイスサービス、MCPとセッション停止世代の連携も未実装です。
 - 未確認: Android／ESP32端末での受け入れ、実サーボの強さ・速度・接触位置・騒音・発熱。PC上での実モデル確認はリポジトリルートの `LOCAL_SETUP.md` と `Programs/WORK_HISTORY.md` を参照してください。
 

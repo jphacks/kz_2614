@@ -782,3 +782,13 @@ Programs/
 - 除外：Wi-Fiの実設定、端末固有の `TailConfig.h`、ビルド生成物、Arduino CLI本体・ボードパッケージ、調査用リポジトリ。公開対象に実際のWi-Fi設定値がないことを検査した。
 - 既存の検証根拠：アップロードするArduinoスケッチは手元でビルド・書き込み・フラッシュ照合した版と同じソース。MCP提案Pythonは22テストに合格した版と同一。検証結果と限界は同梱メモに記載し、今回のGit追加作業で実機試験を行ったことにはしない。
 - サーバー側への統合は未実施。MCP提案は `ESP32/codex-memo/2026-10-25_0313_tail_mcp_server.py` として収録し、既存サーバーファイルを上書きしない。引き継ぎメモの `STTLLMTTS` 配置は開発ブランチ側の構成なので、適用時に対象ブランチの実際の配置を確認する。
+
+## 2026-10-25 PC音声とEMORI ESP32をmainへ統合・配置整理
+
+- 依頼: emori-ESP32とこのPCの最新変更をmainへ統合し、フォルダーとブランチを整理して公開する。今回の音声停止は利用者が許可。著作権・公開対象も確認する。
+- 307d900のmainへPCのf6b716e、EMORIの5d0daa4をmergeで統合。ClientSide/READMEとWORK_HISTORYの競合を両側保持で解消。別作業場所kz_2614-integrationで検証し、稼働フォルダーの設定・参照音声・モデルは上書きしない。
+- ESP32VoiceをESP32/VoiceTCPへ、codex-memoをdocs/esp32/historyへ、旧Pi案をdocs/archive/raspberry-piへ移動。旧Programs/READMEはdocs/archiveへ保存。現行のREADME・構成図・ブランチ移行案内を作成。ServerSide/STTLLMTTS・androidVer・起動スクリプトのパスは維持。
+- しっぽのファームウェア統合と、PC会話からの実機MCP接続は別。頻度2ツールを保持し、提案Pythonは資料として分離。実機に通信・動作指令を送っていない。
+- 全217件の自動テストが10.687秒、skip0で成功（/tmp/main-integration-tests.log）。相対リンク切れ0、ESP32スケッチと移動したVoiceTCPコードの元ブランチとのbyte一致を確認。Android/ESP32ビルドと実機確認は未実施。
+- 公開ファイルの確認: 心音199816Bは配布元CC BY 3.0、SHA-1 929e11379465ea6c181f0e0a5956b7baa46b55bdで一致。Gradle Wrapper内蔵LICENSEを抽出同梱、Android robotのGoogle由来・CC BY 3.0表示を追加。THIRD_PARTY_NOTICES.mdに出典と条件を整理。モデル・外部ランタイム・実録音・参照音声・生成音声・実Wi-Fi設定・.env・ビルド成果物は含めない。既存Git履歴は書き換えない。
+- ブランチ整理ではPC先端とEMORI先端をarchive/2026-10-25-*タグで残し、mainへの包含とリモート先端一致を確認してから統合済み2ブランチを削除する。稼働チェックアウトはmainへ移行し、外部モデルを保持する旧kz_2614・Original保管・stashは維持する。

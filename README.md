@@ -1,38 +1,23 @@
-# サンプル（プロダクト名）
+# ねんぎつね（仮）
 
-このPCで最新の開発版を起動する方法は [LOCAL_SETUP.md](LOCAL_SETUP.md) を参照してください。
+音声会話と、ESP32によるしっぽのトントン動作を組み合わせる添い寝ロボットのプロジェクトです。PC側の会話システムとESP32側のファームウェアを `main` に統合しています。
 
-[![IMAGE ALT TEXT HERE](https://jphacks.com/wp-content/uploads/2026/07/IMG_5316.png)](https://www.youtube.com/watch?v=piaNsc6ilBI)
+## まず読む
 
-## 製品概要
-### 背景(製品開発のきっかけ、課題等）
-### 製品説明（具体的な製品の説明）
-### 特長
-#### 1. 特長1
-#### 2. 特長2
-#### 3. 特長3
+- [現在の構成と確認状況](docs/architecture.md)
+- [このPCの起動手順](LOCAL_SETUP.md)
+- [Windows・Ubuntuのセットアップ](Programs/ServerSide/USAGE.md)
+- [ESP32 Reader・Followerの配線と起動](Programs/ClientSide/ESP32/README.md)
+- [フォルダー一覧](Programs/README.md)
+- [ブランチ運用と移行方法](docs/development/branches.md)
+- [外部素材・ライセンス](THIRD_PARTY_NOTICES.md)
 
-### 解決出来ること
-### 今後の展望
-### 注力したこと（こだわり等）
-* 
-* 
+## 現在できること
 
-## 開発技術
-### 活用した技術
-#### API・データ
-* 
-* 
+PCのWeb画面から連続音声入力、途中の文字起こし、Whisper → Gemma（LM Studio）→ Irodori-TTSによる返答音声の送信、話しかけ直したときの返答中断に対応します。VADと入力音量の適用はサーバー側です。
 
-#### フレームワーク・ライブラリ・モジュール
-* 
-* 
+ESP32 Reader/Followerのスケッチ、HTTPしっぽ制御API、AndroidとESP32の音声TCP通信コードも含みます。ただし、PC会話のMCPは現在も希望頻度の保存・取得のみです。ESP32実機を動かすMCPへの接続と、新しいAndroid/ESP32音声経路の実機確認は未完了です。ソース統合と実機連携の完了は区別しています。
 
-#### デバイス
-* 
-* 
+## 公開対象
 
-### 独自技術
-#### ハッカソンで開発した独自機能・技術
-* 独自で開発したものの内容をこちらに記載してください
-* 特に力を入れた部分をファイルリンク、またはcommit_idを記載してください。
+ソース、設定テンプレート、テスト、仕様、配布条件を確認した素材だけを管理します。モデル本体、録音、参照音声、生成音声、実Wi-Fi設定、`.env`、ビルド成果物は含めません。プロジェクトのコードは [MIT](LICENSE)、第三者素材は [個別の条件](THIRD_PARTY_NOTICES.md) に従います。
