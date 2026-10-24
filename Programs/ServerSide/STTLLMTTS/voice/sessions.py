@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from .pipeline import NoSpeechDetected, VoicePipeline
-from ..stt.whisper import AudioDurationExceeded
+from ..stt.whisper import AudioDurationExceeded, CudaUnavailableError
+from ..runtime import VoiceStageTimeout
 
 
 MAX_AUDIO_BYTES = 25_000_000
@@ -92,14 +93,15 @@ class VoiceSessions:
     async def _create_pipeline(self) -> VoicePipeline:
         return VoicePipeline()
 
-    def _retire_locked(self, session: VoiceSession) -> None:
+    def _retire_locked(self, session: VoiceSession, *, cancel_task: bool = True) -> None:
         session.active = False
         session.generation += 1
         session.speeches.clear()
         session.busy = False
         task = session.task
         if task is not None and self._loop is not None:
-            self._loop.call_soon_threadsafe(task.cancel)
+            if cancel_task:
+                self._loop.call_soon_threadsafe(task.cancel)
         elif session.pipeline is not None and self._loop is not None:
             self._loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(session.pipeline.close())
@@ -213,6 +215,24 @@ class VoiceSessions:
                 )
                 session.last_activity = time.monotonic()
             return response
+        except VoiceStageTimeout as exc:
+            with self._lock:
+                timed_out = session.active and session.generation == generation
+                if timed_out:
+                    self._retire_locked(session, cancel_task=False)
+            if not timed_out:
+                raise VoiceAPIError(
+                    409,
+                    "session_stopped",
+                    "会話は停止されました。",
+                ) from exc
+            stage_name = {"stt": "STT", "llm": "LLM", "tts": "TTS"}.get(exc.stage, exc.stage)
+            raise VoiceAPIError(
+                504,
+                f"{exc.stage}_timeout",
+                f"{stage_name}の処理がタイムアウトしました。",
+                True,
+            ) from exc
         finally:
             with self._lock:
                 session.busy = False
@@ -249,6 +269,13 @@ class VoiceSessions:
             raise VoiceAPIError(422, "no_speech", "音声から発話を認識できませんでした。") from exc
         except AudioDurationExceeded as exc:
             raise VoiceAPIError(413, "audio_too_long", "音声は60秒以内にしてください。") from exc
+        except CudaUnavailableError as exc:
+            raise VoiceAPIError(
+                503,
+                "cuda_unavailable",
+                "WhisperのCUDAを利用できません。NVIDIAドライバーとCUDA 12、cuBLAS、cuDNN 9を確認するか、ダッシュボードでCPUを選択してください。",
+                True,
+            ) from exc
         except Exception as exc:
             if not session.active:
                 raise VoiceAPIError(409, "session_stopped", "会話は停止されました。") from exc

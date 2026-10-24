@@ -3,6 +3,7 @@
 (() => {
   const API_SESSIONS = "/api/v1/voice/sessions";
   const TOKEN_KEY = "nen-gitsune-dashboard-token";
+  const ACCEPTED_AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/wav", "audio/mp4"]);
   const MAX_RECORDING_SECONDS = 60;
   const startButton = document.getElementById("voice-start-button");
   const recordButton = document.getElementById("voice-record-button");
@@ -23,6 +24,7 @@
   let micRequestPending = false;
   let turnRequest = null;
   let audioObjectUrl = null;
+  let pageIsHidden = document.visibilityState === "hidden";
 
   function setStatus(message, kind = "") {
     statusLine.textContent = message;
@@ -65,6 +67,26 @@
     return body;
   }
 
+  function baseAudioType(mimeType) {
+    return (mimeType || "").split(";", 1)[0].trim().toLowerCase();
+  }
+
+  function createTurnId() {
+    const cryptoApi = window.crypto;
+    if (cryptoApi && typeof cryptoApi.randomUUID === "function") return cryptoApi.randomUUID();
+    if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+      const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+      const value = Math.floor(Math.random() * 16);
+      return (character === "x" ? value : (value & 0x03) | 0x08).toString(16);
+    });
+  }
+
   async function startCall() {
     if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setStatus("マイクを使うにはHTTPSでこのWeb画面を開いてください。", "error");
@@ -82,6 +104,10 @@
       const body = await readJson(response);
       sessionId = body.session_id;
       generation = body.generation;
+      if (pageIsHidden) {
+        await stopCall({ silent: true, keepalive: true });
+        return;
+      }
       transcriptLine.textContent = "まだ発話はありません。";
       responseLine.textContent = "録音して話しかけてください。";
       setStatus("会話中です。録音ボタンを押して話してください。", "active");
@@ -112,6 +138,10 @@
 
   async function startRecording() {
     if (!sessionId || turnRequest || micRequestPending) return;
+    if (typeof window.MediaRecorder !== "function") {
+      setStatus("このブラウザーは音声録音に対応していません。Android WebViewを更新してください。", "error");
+      return;
+    }
     if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setStatus("マイクを使うにはHTTPSでこのWeb画面を開いてください。", "error");
       return;
@@ -126,14 +156,32 @@
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
       });
-      if (sessionId !== requestedSession) {
+      if (sessionId !== requestedSession || pageIsHidden) {
         for (const track of acquiredStream.getTracks()) track.stop();
+        if (sessionId === requestedSession && pageIsHidden) {
+          void stopCall({ silent: true, keepalive: true });
+        }
         return;
       }
       stream = acquiredStream;
-      const preferredType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]
-        .find((type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type));
+      const preferredType = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/wav",
+      ]
+        .find((type) => typeof MediaRecorder.isTypeSupported === "function" && MediaRecorder.isTypeSupported(type));
       recorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
+      const recordedMimeType = recorder.mimeType || preferredType || "";
+      const uploadType = baseAudioType(recordedMimeType);
+      if (!ACCEPTED_AUDIO_TYPES.has(uploadType)) {
+        recorder = null;
+        releaseStream();
+        setStatus("このブラウザーの録音形式は音声APIに対応していません。WebViewの音声録音機能を更新してください。", "error");
+        return;
+      }
       chunks = [];
       discardRecording = false;
       recorder.ondataavailable = (event) => {
@@ -160,7 +208,7 @@
           refreshButtons();
           return;
         }
-        const mediaType = (completedRecorder && completedRecorder.mimeType) || "audio/webm";
+        const mediaType = (completedRecorder && completedRecorder.mimeType) || recordedMimeType;
         const audio = new Blob(chunks, { type: mediaType });
         chunks = [];
         refreshButtons();
@@ -168,7 +216,7 @@
           setStatus("録音データがありません。もう一度お試しください。", "error");
           return;
         }
-        void sendTurn(audio);
+        void sendTurn(audio, uploadType);
       };
       recorder.start(250);
       setStatus(`録音中です。最大${MAX_RECORDING_SECONDS}秒で自動停止します。話し終えたらボタンを押してください。`, "active");
@@ -223,11 +271,15 @@
     }
   }
 
-  async function sendTurn(audio) {
+  async function sendTurn(audio, mediaType) {
     if (!sessionId) return;
+    if (!ACCEPTED_AUDIO_TYPES.has(mediaType)) {
+      setStatus("録音形式が音声APIの対応範囲外です。もう一度録音してください。", "error");
+      return;
+    }
     const submittedSession = sessionId;
     const submittedGeneration = generation;
-    const turnId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const turnId = createTurnId();
     const route = `${API_SESSIONS}/${encodeURIComponent(submittedSession)}/turns/${encodeURIComponent(turnId)}`;
     turnRequest = new AbortController();
     refreshButtons();
@@ -238,7 +290,7 @@
         method: "POST",
         cache: "no-store",
         credentials: "same-origin",
-        headers: authHeaders({ "Content-Type": audio.type || "audio/webm" }),
+        headers: authHeaders({ "Content-Type": mediaType }),
         body: audio,
         signal: turnRequest.signal,
       });
@@ -309,5 +361,11 @@
   audioPlayer.addEventListener("play", refreshButtons);
   audioPlayer.addEventListener("pause", refreshButtons);
   audioPlayer.addEventListener("ended", refreshButtons);
+  document.addEventListener("visibilitychange", () => {
+    pageIsHidden = document.visibilityState === "hidden";
+    if (pageIsHidden && !micRequestPending) {
+      void stopCall({ silent: true, keepalive: true });
+    }
+  });
   window.addEventListener("pagehide", () => void stopCall({ silent: true, keepalive: true }));
 })();

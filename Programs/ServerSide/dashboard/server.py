@@ -18,7 +18,7 @@ from urllib.parse import unquote, urlsplit
 
 from dotenv import load_dotenv
 
-from ..settings_store import (
+from .settings_store import (
     DEFAULT_SETTINGS,
     MAX_REFERENCE_WAV_BYTES,
     delete_reference_voice,
@@ -27,10 +27,10 @@ from ..settings_store import (
     save_reference_voice,
     save_settings,
 )
-from ..voice.sessions import MAX_AUDIO_BYTES, VoiceAPIError, VoiceSessions
+from ..STTLLMTTS.voice.sessions import MAX_AUDIO_BYTES, VoiceAPIError, VoiceSessions
 
 
-WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
+WEB_ROOT = Path(__file__).resolve().parent / "web"
 MAX_REQUEST_BYTES = 16_384
 LOGGER = logging.getLogger("nen_gitsune.dashboard")
 _VOICE_SESSIONS: VoiceSessions | None = None

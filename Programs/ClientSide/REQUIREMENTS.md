@@ -1,10 +1,10 @@
 # クライアント要件定義
 
-レビュー反映日: 2026-10-24。Android Web MVPではスマートフォンが音声入出力と設定・操作を担当し、アプリサーバーがSTT・LLM・TTSと会話セッションを担当する。Raspberry Pi 4のしっぽ制御は独立した機能であり、Androidの音声入出力には使わない。WebView・音声APIコードを追加したが、実機確認は未完了。
+レビュー反映日: 2026-10-24。Android Web MVPではスマートフォンが音声入出力と設定・操作を担当し、アプリサーバーがSTT・LLM・TTSと会話セッションを担当する。Raspberry Pi 4のしっぽ制御は独立した機能であり、Androidの音声入出力には使わない。Debug APKのHWV33への導入・起動とAndroid Studioのデバッガー接続を確認したが、WebView・音声機能の実機確認は未完了。
 
 ## 1. 役割と対象
 
-AndroidアプリはWebViewを基本とし、HTML・CSS・JavaScriptは `ServerSide/web/` に置いてサーバーから配信する。画面は設定、Irodori-TTSの参照WAV管理、会話開始／停止、スマートフォンでの録音・再生を担当する。アプリサーバーがSTT・LLM・TTSとセッション管理を行う。Raspberry Pi 4が担う場合は、しっぽ等の機器制御を別経路にする。
+AndroidアプリはWebViewを基本とし、HTML・CSS・JavaScriptは `ServerSide/dashboard/web/` に置いてサーバーから配信する。画面は設定、Irodori-TTSの参照WAV管理、会話開始／停止、スマートフォンでの録音・再生を担当する。アプリサーバーがSTT・LLM・TTSとセッション管理を行う。Raspberry Pi 4が担う場合は、しっぽ等の機器制御を別経路にする。
 
 ```text
 Android WebViewのマイク → アプリサーバーのSTT・LLM・TTS → Android WebViewのスピーカー
@@ -46,7 +46,7 @@ Android WebViewのマイク → アプリサーバーのSTT・LLM・TTS → Andr
 
 ## 5. ブラウザーと配信
 
-AndroidアプリのWebViewは、入力されたサーバーURLを開き、最後に使ったURLを次回起動時に復元する。マイク利用にはAndroidの録音権限とブラウザーの権限が必要で、`getUserMedia()` のためHTTPSなどの安全なコンテキストを使う。音声形式は `MediaRecorder.isTypeSupported()` で対応する形式を選ぶ。
+AndroidアプリのWebViewは、同一LocalNET内にあるServerSideのURLを開き、最後に使ったURLを次回起動時に復元する。具体的なURLは運用設定時に確定する。マイク利用にはAndroidの録音権限とブラウザーの権限が必要で、`getUserMedia()` のためHTTPSなどの安全なコンテキストを使う。音声形式は `MediaRecorder.isTypeSupported()` で対応する形式を選ぶ。
 
 画面ロック・バックグラウンドで会話を継続する要否は未確定。暫定運用は画面表示中とし、画面離脱時は端末の録音・再生とサーバー会話を停止する。復帰時は状態確認後に手動で再開する。
 
@@ -60,8 +60,8 @@ AndroidアプリのWebViewは、入力されたサーバーURLを開き、最後
 
 | 確認対象 | 現在の状態 | 残る確認 |
 | --- | --- | --- |
-| Android機種・OS・WebView | 対象端末は未確定 | WebViewで録音→送信→返答再生→停止を実機確認 |
-| 画面ロック・バックグラウンド | 暫定運用は画面表示中。継続要否は未確定 | 必要性を決め、必要な場合は継続・停止・復帰を実機確認 |
+| Android機種・OS・WebView | Windows上でDebug APKをビルドし、Android 10（API 29）のHWV33にインストールして`MainActivity`起動を確認。Android Studioから実行中プロセスへのデバッガー接続も確認 | WebViewでHTTPS接続、録音→送信→返答再生→停止を実機確認 |
+| 画面ロック・バックグラウンド | 暫定運用は画面表示中。画面非表示で端末音声を止め、セッション終了を要求するコードを追加 | 対象端末で画面ロック・アプリ切替時の停止と、復帰後に手動再開できることを確認 |
 | 録音操作 | 手動録音・停止と最大60秒のコードを実装 | 対象端末で権限、録音上限、録音中の再生回り込みを確認 |
 | 音声形式・容量 | API契約はWebM/Ogg/WAV/MP4、25MB・60秒 | 実端末の録音形式、サーバーデコード、TTS音声再生を確認 |
 | HTTPS・認証 | Android接続先はHTTPS限定、APIは管理Bearer tokenを使用 | HTTPS終端、設定・音声APIへの接続、認証の実端末確認 |
@@ -71,6 +71,8 @@ AndroidアプリのWebViewは、入力されたサーバーURLを開き、最後
 ## 8. 受け入れ条件
 
 以下は未実施。機能一覧や画面表示だけで合格にせず、対応するサーバー／実機結果を記録する。
+
+初期音声MVPでは音声経路を先に受け入れ確認する。CT-04のしっぽ条件はユーザー方針により後続フェーズで確認する。
 
 | ID | 確認内容 |
 | --- | --- |

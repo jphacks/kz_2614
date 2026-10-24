@@ -1,42 +1,41 @@
-# ServerSide のフォルダー分け
+# ServerSideの構成
 
-自分たちが書いたプログラムと、外部のプログラム／モデルを分けて管理します。
+Android Web MVPではスマートフォンが録音・再生を行い、サーバーがSTT・LLM・TTSと会話セッションを担当します。ダッシュボードはブラウザーで使うWeb画面です。`dashboard/` にはWeb画面とその配信・HTTP受付を置き、音声処理と会話制御は `STTLLMTTS/` に分けます。依存関係と環境設定例は `ServerSide/` 直下に置きます。
 
-必要な動作、未決事項、受け入れ条件、現行コードとの差分は [REQUIREMENTS.md](REQUIREMENTS.md) を参照してください。Android Web MVPではスマートフォンが録音・再生、サーバーがSTT・LLM・TTSとセッション管理を担当します。API契約は [VOICE_API.md](VOICE_API.md)、Raspberry Pi 4のハードウェア契約は [RASPBERRY_PI_API.md](RASPBERRY_PI_API.md) を参照してください。
+必要な動作、未決事項、受け入れ条件、現行コードとの差分は [REQUIREMENTS.md](REQUIREMENTS.md) を参照してください。音声API契約は [VOICE_API.md](VOICE_API.md)、Raspberry Pi 4のハードウェア契約は [ClientSide/Raspi4Ver/RASPBERRY_PI_API.md](../ClientSide/Raspi4Ver/RASPBERRY_PI_API.md) を参照してください。
 
 ```text
 ServerSide/
-├── app/
-│   ├── dashboard/       # HTTPサーバー
-│   │   └── server.py
-│   ├── stt/              # faster-whisper接続
-│   │   └── whisper.py
-│   ├── llm/              # LM Studio接続
-│   │   └── lm_studio.py
-│   ├── tts/              # Irodori-TTS接続
-│   │   └── irodori.py
-│   ├── voice/            # 音声処理の組み立て・会話状態
-│   │   ├── pipeline.py
-│   │   ├── sessions.py
-│   │   └── acknowledgements.py
-│   ├── settings_store.py # dashboard と voice が共有する設定・参照音声管理
+├── STTLLMTTS/             # STT・LLM・TTS・音声パイプライン・セッション
+│   ├── stt/
+│   ├── llm/
+│   ├── tts/
+│   ├── voice/
 │   ├── tail_mcp_server.py
-│   ├── requirements.txt
+│   ├── mcp.json.example
+│   ├── third_party/
+│   │   ├── setup_windows.ps1
+│   │   ├── setup_ubuntu.sh
+│   │   └── README.md
 │   └── README.md
-├── web/                 # サーバーから配信する設定・音声会話画面
-├── third_party/         # 外部プロジェクトのソースコード
-│   └── Irodori-TTS/     # 外部TTSソースを置く場所（現在は空）
-└── whisper/             # faster-whisperモデルのキャッシュ先
+├── dashboard/             # ブラウザー画面とWebアプリ用HTTPサーバー
+│   ├── server.py
+│   ├── settings_store.py   # 設定・参照WAV管理
+│   ├── web/
+│   ├── data/               # 設定JSON・参照音声（Git除外）
+│   └── README.md
+├── requirements.txt       # ServerSide共通のPython依存関係
+├── .env.example           # ServerSide共通の環境設定例
+└── whisper/               # faster-whisperモデルのキャッシュ先
 ```
 
-## 役割の分離
+## 開発領域
 
-- `app/stt/`、`app/llm/`、`app/tts/` は独立したモデル接続層です。STTは `stt/whisper.py`、LLMは `llm/lm_studio.py`、TTSは `tts/irodori.py` に置きます。
-- `app/voice/` はモデル接続を含めず、`pipeline.py` がSTT→LLM→TTSの一往復を組み立てます。`sessions.py` は会話セッション、`acknowledgements.py` は相づちを担当します。
-- `app/dashboard/` はHTTP入口です。`server.py` は設定APIと音声セッションAPIを受け、音声処理そのものは `app/voice/` に委譲します。ブラウザー画面は別の静的資産として `web/` に置きます。
-- `app/settings_store.py` はダッシュボードで編集した設定を音声処理も読むための共有層です。MCPしっぽ制御は `app/tail_mcp_server.py` に独立させています。
-- faster-whisperのPythonパッケージと `gradio_client` は `app/requirements.txt` から仮想環境へインストールし、Whisperモデル重みは既存の `whisper/` に保存します。外部パッケージのコードを `app/` にコピーしません。
-- 外部リポジトリはライセンスと依存関係を確認してから `third_party/` に置きます。`AI_Secretary-main` は参考として確認しましたが、そのプログラム一式はコピーしていません。
-- `Irodori-TTS/` は外部ソースを置くための場所です。現在は空で、`app/tts/irodori.py` は別途起動した互換Gradioサーバーへ接続します。モデル取得・起動・音声生成・Android実機再生は未確認です。
+- `dashboard/web/` がダッシュボードのWeb画面です。ダッシュボード自体はブラウザー上のUIを指し、音声処理や会話セッションのロジックは持ちません。
+- `dashboard/server.py` はWeb画面を配信し、設定・参照WAV・音声セッションに関するHTTPリクエストを受け付けます。音声処理とセッション制御は `STTLLMTTS/` に委譲します。
+- `dashboard/settings_store.py` は設定JSONと参照音声を `dashboard/data/` に保存します。STT・TTSが必要とする設定値を `STTLLMTTS/` から参照します。`requirements.txt` と `.env.example` はServerSide共通です。
+- `STTLLMTTS/tail_mcp_server.py` は後続フェーズ用の独立したMCPプロセスです。しっぽ制御は既定で無効にします。
+- 外部リポジトリはライセンスと依存関係を確認してから `STTLLMTTS/third_party/` に置きます。`AI_Secretary-main` は参考として確認しましたが、そのプログラム一式はコピーしていません。
+- `STTLLMTTS/third_party/Irodori-TTS/` は外部ソースの配置先です。音声処理コードは別途起動した互換Gradioサーバーへ接続します。モデル取得・起動・音声生成・Android実機再生は未確認です。
 
-起動方法、API、設定、未確認事項は [app/README.md](app/README.md) を参照してください。
+Web画面サーバーの起動・認証・保存先は [dashboardのREADME](dashboard/README.md)、音声処理の詳細は [STTLLMTTSのREADME](STTLLMTTS/README.md)、Windows・Ubuntuの環境セットアップは [third_partyのREADME](STTLLMTTS/third_party/README.md) を参照してください。

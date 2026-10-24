@@ -2,7 +2,9 @@
 
 寝る前の寂しさに寄り添う、きつね型の添い寝クッションを動かすソフトウェアの概要と実装方針です。名前・構成・モデルは検討中の案を含み、確定していない項目はその旨を記載しています。
 
-更新後のAndroid Web MVPではスマートフォンが音声入出力と操作画面、アプリサーバーがSTT・LLM・TTSと会話セッション管理を担当します。Raspberry Pi 4はMCP経由のしっぽ制御先として扱います。設定ダッシュボードと音声会話画面は `ServerSide/web/` に置き、サーバーから配信します。必須動作と現行コードとの差分は各要件書にまとめ、実装・受け入れ確認と区別します。
+更新後のAndroid Web MVPではスマートフォンが音声入出力と操作画面、アプリサーバーがSTT・LLM・TTSと会話セッション管理を担当します。Raspberry Pi 4はMCP経由のしっぽ制御先として扱います。ダッシュボードはブラウザーで使うWeb画面を指し、画面を `ServerSide/dashboard/web/` に置きます。`dashboard/server.py` はWeb画面とクライアント向けのHTTP窓口、音声処理と会話制御は `ServerSide/STTLLMTTS/` が担当します。必須動作と現行コードとの差分は各要件書にまとめ、実装・受け入れ確認と区別します。
+
+現フェーズの運用方針（2026-10-24に決定）: GPU搭載のローカルPCでWhisper・LM Studio・Irodori-TTSを使用し、Androidから同一LocalNET内のサーバーURLへ接続して音声入力・音声出力を行います。実際の接続先URL、HTTPS終端、モデル設定と実環境での動作は未確認です。しっぽ制御は音声会話の初期MVPの後に進めます。
 
 ## 目指す体験
 
@@ -24,20 +26,21 @@
 
 ## プログラムの構成案
 
-このリポジトリの `ClientSide` と `ServerSide` を、次の役割に分ける想定です。Android Web音声APIを [音声会話API仕様](ServerSide/VOICE_API.md)、Pi 4デバイスAPI案を [Raspberry Pi 4 API仕様](ServerSide/RASPBERRY_PI_API.md) にまとめました。音声会話APIコードはありますが実機確認は未完了です。Pi 4の音声API案はAndroid Web MVPの音声経路では使用しません。
+このリポジトリの `ClientSide` と `ServerSide` を、次の役割に分ける想定です。Android Web音声APIを [音声会話API仕様](ServerSide/VOICE_API.md)、Pi 4デバイスAPI案を [Raspberry Pi 4 API仕様](ClientSide/Raspi4Ver/RASPBERRY_PI_API.md) にまとめました。音声会話APIコードはありますが実機確認は未完了です。Pi 4の音声API案はAndroid Web MVPの音声経路では使用しません。
 
 ### 開発作業の担当分け
 
 | 作業 | 主な担当範囲 | 役割 |
 | --- | --- | --- |
 | Androidクライアント | `ClientSide/` | WebView、サーバーURL、マイク権限、録音・再生、停止操作 |
-| ダッシュボード／HTTP入口 | `ServerSide/app/dashboard/`、`ServerSide/web/` | 設定画面と配信、設定API、音声会話APIのHTTP受付 |
-| STT | `ServerSide/app/stt/` | faster-whisper接続と文字起こし |
-| LLM | `ServerSide/app/llm/` | LM Studio接続、質問本文と履歴の受け渡し |
-| TTS | `ServerSide/app/tts/` | Irodori-TTS接続と音声生成 |
-| 音声オーケストレーション | `ServerSide/app/voice/` | STT→LLM→TTSパイプライン、会話セッション、相づち |
-| 共有設定 | `ServerSide/app/settings_store.py` | ダッシュボードで保存した設定を音声処理から読む。参照WAVの検証・管理 |
-| Raspberry Pi 4・しっぽ | `ServerSide/app/tail_mcp_server.py`、`ServerSide/RASPBERRY_PI_API.md` | MCPから機器APIを呼ぶ。初期音声MVPの後に実装・統合 |
+| Webダッシュボード（画面） | `ServerSide/dashboard/web/` | ブラウザー上の設定・音声会話の操作画面 |
+| WebアプリのHTTP窓口 | `ServerSide/dashboard/server.py` | Web画面の配信と設定・音声会話APIの受付。音声処理は `STTLLMTTS/` に委譲 |
+| STT | `ServerSide/STTLLMTTS/stt/` | faster-whisper接続と文字起こし |
+| LLM | `ServerSide/STTLLMTTS/llm/` | LM Studio接続、質問本文と履歴の受け渡し |
+| TTS | `ServerSide/STTLLMTTS/tts/` | Irodori-TTS接続と音声生成 |
+| 音声オーケストレーション | `ServerSide/STTLLMTTS/voice/` | STT→LLM→TTSパイプライン、会話セッション、相づち |
+| 共有設定 | `ServerSide/dashboard/settings_store.py` | Web画面から保存した設定を音声処理へ提供し、参照WAVを検証・管理 |
+| Raspberry Pi 4・しっぽ | `ServerSide/STTLLMTTS/tail_mcp_server.py`、`ClientSide/Raspi4Ver/RASPBERRY_PI_API.md` | MCPから機器APIを呼ぶ。初期音声MVPの後に実装・統合 |
 
 ### ブランチ運用
 
@@ -46,14 +49,14 @@
 | ブランチ名の例 | 主な作業 |
 | --- | --- |
 | `codex/android-client` | Android WebView、マイク、録音・再生、端末側停止 |
-| `codex/server-dashboard` | ダッシュボード画面、HTTP入口、設定API |
+| `codex/server-dashboard` | Webダッシュボード画面とその配信 |
 | `codex/server-stt` | faster-whisper接続と文字起こし |
 | `codex/server-llm` | LM Studio接続と質問本文・履歴の連携 |
 | `codex/server-tts` | Irodori-TTS接続と音声生成 |
 | `codex/server-voice-pipeline` | モデル接続を組み合わせるパイプライン、セッション、相づち |
 | `codex/raspberry-pi-tail` | Pi 4デバイスサービス、MCP、しっぽ制御 |
 
-担当をまたぐ変更では、先に `VOICE_API.md` または `RASPBERRY_PI_API.md` と関連要件書を更新し、同じAPI契約に合わせます。作業ブランチで差分を確認してから `main` に統合します。`main` は統合先とし、個別作業を直接積み重ねません。
+担当をまたぐ変更では、先に `VOICE_API.md` または `ClientSide/Raspi4Ver/RASPBERRY_PI_API.md` と関連要件書を更新し、同じAPI契約に合わせます。作業ブランチで差分を確認してから `main` に統合します。`main` は統合先とし、個別作業を直接積み重ねません。
 
 ### ClientSide（Androidブラウザーを基本とするスマホ画面）
 
@@ -66,11 +69,12 @@
 - 声、キャラクター、話す頻度の設定（MVPでは後回しでもよい）
 - Androidスマートフォンを優先して動作確認
 
-設定・音声会話画面は `ServerSide/web/` に作成し、STT・TTS・会話のふるまいを保存できます。Irodori-TTS用の参照WAVもアップロード・保存・削除でき、サーバーが形式・長さ・容量を検証します。Android WebViewの録音・送信・返答再生とセッションAPIのコードを追加しました。HTTPS環境、相づち・再生完了通知、Pi 4のMCPしっぽデバイスサービス、Android実機確認は未完了です。
+設定・音声会話の操作を行うWeb画面は `ServerSide/dashboard/web/` に置きます。画面から設定やIrodori-TTS用の参照WAVをサーバーAPI経由で保存・削除でき、形式・長さ・容量の検証はサーバー側で行います。ダッシュボード画面自体は音声処理を行わず、STT・LLM・TTSと会話制御は `ServerSide/STTLLMTTS/` が担当します。Android WebViewの録音・送信・返答再生とセッションAPIのコードを追加しました。HTTPS環境、相づち・再生完了通知、Pi 4のMCPしっぽデバイスサービス、Android実機確認は未完了です。
 
 ### ServerSide（会話処理・連携の案）
 
-- `web/` の設定ダッシュボードと、サーバー側の設定保存API
+- `dashboard/web/` のブラウザー設定・会話操作画面
+- `dashboard/server.py` によるWeb画面の配信と設定・音声セッションAPIのHTTP受付。音声処理・会話制御は `STTLLMTTS/` に委譲
 
 - Android Webからの音声受信、STT→LLM→TTSの処理、返答音声の配信
 - 会話セッションの開始・終了、期限・停止世代の管理
@@ -79,9 +83,9 @@
 - MCPサーバーからRaspberry Pi 4への固定動作指示（HTTPS/JSON API）
 - 失敗・切断・タイムアウト時の停止処理
 
-自作コードは `ServerSide/app/` にまとめ、STT・LLM・TTS・音声オーケストレーション・ダッシュボードを別フォルダーに分けました。`voice/pipeline.py` が個別モデル接続をつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[自作ServerSideアプリの説明](ServerSide/app/README.md) を参照してください。
+サーバーコードは `ServerSide/STTLLMTTS/` とWebアプリ層の `ServerSide/dashboard/` に分けています。ダッシュボードはブラウザー画面を指し、`dashboard/server.py` はその配信とHTTP受付を行います。`STTLLMTTS/voice/pipeline.py` がモデル接続をつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[STTLLMTTS](ServerSide/STTLLMTTS/README.md)、[Web画面](ServerSide/dashboard/README.md) を参照してください。
 
-モデル候補として `faster-whisper-small`（STT）、`Gemma 4 26B-A4B（Q4_K_M）`（LLM）、`Irodori-TTS 600M v3 VoiceDesign`（TTS）をコードの初期設定にしています。接続先・デバイス設定とパイプラインは実装しましたが、モデルの準備、動作環境、応答速度は未確認です。
+モデル名は引き続きコードの初期設定・候補値です。ユーザー方針としてGPU搭載PC上でWhisperとLM Studioをローカル利用し、TTSにIrodori-TTSを使います。モデルの実配置、GPUデバイス設定、接続先、起動、応答速度は未確認です。
 
 ### Raspberry Pi 4・しっぽ機構
 
@@ -90,7 +94,7 @@
 - 電源を切れる手元停止と、Pi 4側の動作タイムアウトを設ける
 - 0〜12°はCAD上の表示例であり、実機の角度・押す強さ・騒音・発熱は実物で調整する
 
-Pi 4のデバイスサービス、サーボ信号回路、しっぽの動作上限と手元停止は未確定です。`RASPBERRY_PI_API.md` には将来の機器API案も記録していますが、Android Web MVPの音声はスマートフォンで録音・再生します。
+Pi 4のデバイスサービス、サーボ信号回路、しっぽの動作上限と手元停止は未確定です。[Raspberry Pi 4 API仕様](ClientSide/Raspi4Ver/RASPBERRY_PI_API.md) には将来の機器API案も記録していますが、Android Web MVPの音声はスマートフォンで録音・再生します。
 
 ## データの流れ（概念）
 
@@ -130,11 +134,12 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 
 ## 実装・確認の順序
 
-1. Android WebViewからSTT → LLM → TTSの音声1往復を確認し、返答時間を測る。
-2. Raspberry Pi 4のデバイスサービスにしっぽAPIを実装し、MCP Inspectorからタップ・停止・状態取得を確認する。
-4. LM StudioへMCPサーバーを登録し、明示的な「トントンして」でだけツールを呼ぶことを確認する。
-5. Android Webの会話経路とPi 4のしっぽ制御を接続し、1台で「開始 → 会話 → トントン → 終了」を統合する。
-6. 実機で停止・再起動・通信切断からの復帰を確認してから、2台連携を試す。
+1. GPU搭載ローカルPCでWhisper・LM Studio・Irodori-TTSを準備し、STT → LLM → TTSの音声1往復と返答時間を確認する。
+2. Android WebViewからLocalNET上のServerSide URLへ接続し、HTTPSで録音・送信・音声再生を確認する。
+3. 初期音声MVPとして、相づち、停止、無音・破損音声、切断・再接続を実機で確認する。
+4. 初期音声MVPの後にPi 4のデバイスサービスとしっぽAPIを実装し、MCP Inspectorからタップ・停止・状態取得を確認する。
+5. LM StudioへMCPサーバーを登録し、明示的な「トントンして」でだけツールを呼ぶことを確認する。
+6. 音声会話とPi 4のしっぽ制御を統合し、停止・再起動・通信切断からの復帰を確認してから、2台連携を検討する。
 
 ## 仕様を確定する項目
 
@@ -152,7 +157,7 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 
 ## デモの基本シナリオ
 
-「今日はちょっと寂しい」→Androidスマートフォンへ話す→短い返事→「トントンして」→Pi 4のしっぽが動く→「おやすみ」→短い返事のあと静かに停止する。
+音声会話の初期デモは「今日はちょっと寂しい」→Androidスマートフォンへ話す→短い返事を音声で再生→「おやすみ」→短い返事のあと静かに停止する、の流れとします。Pi 4のしっぽ制御は後続フェーズで追加します。
 
 入眠する場面はデモ上の演出です。会話と動作が使えない場合でも、枕として使える状態を保ちます。
 
@@ -162,28 +167,22 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 Programs/
 ├── ClientSide/   # Android Webクライアントの要件
 ├── ServerSide/
-│   ├── web/               # ダッシュボードと音声会話のブラウザー画面
-│   ├── app/
-│   │   ├── dashboard/     # HTTPサーバー
-│   │   │   └── server.py
-│   │   ├── stt/           # faster-whisper
-│   │   │   └── whisper.py
-│   │   ├── llm/           # LM Studio
-│   │   │   └── lm_studio.py
-│   │   ├── tts/           # Irodori-TTS
-│   │   │   └── irodori.py
-│   │   ├── voice/         # 音声処理の組み立て・会話状態
-│   │   │   ├── pipeline.py
-│   │   │   ├── sessions.py
-│   │   │   └── acknowledgements.py
-│   │   ├── settings_store.py # dashboard と voice の共有設定
-│   │   └── tail_mcp_server.py
-│   ├── third_party/       # 外部ソース（Irodori-TTS配置予定）
+│   ├── STTLLMTTS/         # STT・LLM・TTS・音声パイプライン・セッション
+│   │   ├── tail_mcp_server.py
+│   │   ├── mcp.json.example
+│   │   └── third_party/
+│   ├── dashboard/         # Web画面とWebアプリ用HTTPサーバー
+│   │   ├── server.py
+│   │   ├── settings_store.py
+│   │   ├── web/
+│   │   └── data/          # 設定JSON・参照WAV（Git除外）
+│   ├── requirements.txt
+│   ├── .env.example
 │   ├── whisper/           # Whisperモデルのキャッシュ先
 │   └── README.md          # 自作／外部の区分
 └── README.md     # 全体の目的、MVP、構成案、未決事項
 ```
 
-参照WAVと設定ファイルは `ServerSide/app/data/` 内に保存され、Gitには含まれません。
+参照WAVと設定ファイルは `ServerSide/dashboard/data/` 内に保存され、Gitには含まれません。
 
 この文書は2026年10月22日の企画メモをもとにした実装開始用の整理です。未確認の案は、実機・通信・モデルで確認するまで確定仕様として扱いません。

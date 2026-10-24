@@ -53,11 +53,18 @@ Raw audio bytes を本文として送ります。`Content-Type` は上記の対�
     "media_type": "audio/wav",
     "expires_in_seconds": 120
   },
-  "timings_seconds": {"stt": 0.0, "llm": 0.0, "tts": 0.0, "total": 0.0}
+  "timings_seconds": {
+    "stt": 0.0,
+    "llm": 0.0,
+    "acknowledgement_preparation": 0.0,
+    "acknowledgement": 0.0,
+    "tts": 0.0,
+    "total": 0.0
+  }
 }
 ```
 
-同じセッションの重複・並行発話は `409`、サイズ超過は `413`、無音は `422`、処理期限超過は `504` で拒否します。処理の全体期限は180秒です。各エラーは `{ "error", "message", "retryable" }` の形です。
+同じセッションの重複・並行発話は `409`、サイズ超過は `413`、無音は `422`、処理期限超過は `504` で拒否します。段階期限はSTT 90秒、LLM 45秒、TTS 90秒、全体期限は180秒です。段階期限超過のコードは `stt_timeout`、`llm_timeout`、`tts_timeout`、全体期限超過は `turn_timeout` です。CUDA設定時にNVIDIA GPUまたはCUDAランタイムが利用できない場合は `503 cuda_unavailable` を返します。段階期限超過ではセッションを無効化し、後着結果を配信しません。同期モデル処理のスレッドは期限超過後も動く場合があり、強制終了は保証しません。各エラーは `{ "error", "message", "retryable" }` の形です。
 
 ### `GET /api/v1/voice/sessions/{session_id}/turns/{turn_id}/audio`
 

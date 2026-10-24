@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Sequence
 
 import httpx
 from dotenv import load_dotenv
 
+from ..runtime import VoiceStageTimeout
 
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), override=False)
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
 COMPANION_SYSTEM_PROMPT = """あなたは、寝る前の寂しさに寄り添う短い会話相手です。
@@ -129,10 +131,13 @@ class VoiceLLMClient:
         if not user_text.strip():
             raise ValueError("user_text must not be empty")
 
-        response = await self.client.post(
-            "/api/v1/chat",
-            json=self._build_payload(user_text, history, system_prompt),
-        )
+        try:
+            response = await self.client.post(
+                "/api/v1/chat",
+                json=self._build_payload(user_text, history, system_prompt),
+            )
+        except httpx.TimeoutException as exc:
+            raise VoiceStageTimeout("llm", self.config.timeout_seconds) from exc
         response.raise_for_status()
         result = response.json()
         output = result.get("output", [])

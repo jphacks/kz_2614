@@ -157,6 +157,15 @@
 - 文書: `ServerSide/REQUIREMENTS.md` と `ClientSide/REQUIREMENTS.md` の統合前項目を「残作業・確認」に整理し、`Agent.md` の作業リストではAPI・クライアント・セッション制御を進行中、実環境確認を待ちとして維持。
 - 確認: ソースと文書の手動照合のみ。テスト、ビルド、サーバー起動、Android実機、モデル接続は実施していない。
 - 未完了: API契約の実端末接続、相づち・再生完了通知、実モデル接続、停止競合と切断・再接続の受け入れ確認。
+
+### 21. ローカル音声サーバーの運用方針を決定（2026-10-24）
+
+- 決定: GPU搭載のローカルPCでWhisper・LM Studio・Irodori-TTSを使用する。Androidは同一LocalNET内のServerSide URLへ接続し、スマートフォンで音声入力・音声出力を行う。
+- スコープ: 初期の音声会話MVPではしっぽ制御を扱わず、Pi 4連携は後続フェーズへ延期する。
+- 文書: `Agent.md`、`Programs/README.md`、`Programs/ServerSide/REQUIREMENTS.md`、`Programs/ServerSide/app/README.md`、`Programs/ClientSide/REQUIREMENTS.md` に運用方針を反映。
+- 確認: 文書差分を確認。サーバー起動、モデル接続、Android実機、LAN・HTTPS接続の検証は未実施。
+- 未完了: 対象PCと接続URL、HTTPS終端、実モデル・GPU設定、Androidからの音声往復確認。相づち配信・再生完了通知も未実装。
+
 ### ServerSideの音声処理とダッシュボードを分離（2026-10-24）
 - 対応: `app/voice/` にSTT・LLM・TTS、パイプライン、会話セッション、相づちを集約し、`app/dashboard/` にHTTPサーバーを配置。Web画面は `ServerSide/web/`、共有設定は `app/settings_store.py` に分けた。
 - 更新: パッケージimport、`.env` とWhisperモデルキャッシュの参照先、Android側の起動コマンド、README・要件書の構成図と担当分担を更新。READMEに担当領域ごとのブランチ運用例を記載。
@@ -179,49 +188,38 @@ Programs/
 ├── ClientSide/
 │   ├── README.md
 │   ├── REQUIREMENTS.md
+│   ├── Raspi4Ver/
+│   │   └── RASPBERRY_PI_API.md
 │   └── androidVer/
 │       ├── README.md
 │       ├── app/src/main/AndroidManifest.xml
 │       └── app/src/main/java/com/example/jphackskz2614androidver/MainActivity.java
 └── ServerSide/
     ├── README.md
-    ├── RASPBERRY_PI_API.md
     ├── VOICE_API.md
     ├── REQUIREMENTS.md
-    ├── web/
-    │   ├── index.html
-    │   ├── dashboard.css
-    │   ├── dashboard.js
-    │   └── voice_call.js
-    ├── .gitignore
-    ├── app/
-    │   ├── README.md
-    │   ├── __init__.py
-    │   ├── dashboard/
-    │   │   ├── __init__.py
-    │   │   └── server.py
-    │   ├── stt/
-    │   │   ├── __init__.py
-    │   │   └── whisper.py
-    │   ├── llm/
-    │   │   ├── __init__.py
-    │   │   └── lm_studio.py
-    │   ├── tts/
-    │   │   ├── __init__.py
-    │   │   └── irodori.py
-    │   ├── voice/
-    │   │   ├── __init__.py
-    │   │   ├── acknowledgements.py
-    │   │   ├── pipeline.py
-    │   │   └── sessions.py
-    │   ├── mcp.json.example
-    │   ├── requirements.txt
+    ├── dashboard/
+    │   ├── server.py
     │   ├── settings_store.py
-    │   ├── data/                 # 設定JSON・参照WAVの実行時保存先（Git除外）
-    │   └── tail_mcp_server.py
-    ├── third_party/
-    │   ├── README.md
-    │   └── Irodori-TTS/.gitkeep
+    │   ├── web/
+    │   │   ├── index.html
+    │   │   ├── dashboard.css
+    │   │   ├── dashboard.js
+    │   │   └── voice_call.js
+    │   ├── data/               # 設定JSON・参照WAVの実行時保存先（Git除外）
+    │   └── README.md
+    ├── STTLLMTTS/
+    │   ├── stt/
+    │   ├── llm/
+    │   ├── tts/
+    │   ├── voice/
+    │   ├── tail_mcp_server.py
+    │   ├── mcp.json.example
+    │   ├── third_party/
+    │   └── README.md
+    ├── requirements.txt
+    ├── .env.example
+    ├── .gitignore
     └── whisper/
         ├── README.md
         └── .gitkeep
@@ -230,10 +228,11 @@ Programs/
 ## 現在の決定事項
 
 - 更新後のAndroid Web MVPではスマートフォンが録音・再生、サーバーがSTT・LLM・TTSと会話セッションを担当する。Pi 4のしっぽ制御は別経路とする。
-- AndroidはWebViewでサーバーのWebアプリを開き、画面のHTMLなどは `ServerSide/web/` から配信する。
+- AndroidはWebViewでサーバーのWebアプリを開き、画面のHTMLなどは `ServerSide/dashboard/web/` から配信する。
 - STT・TTS・会話のふるまいはサーバーのダッシュボードから設定し、サーバー側に保存する。設定は新しい音声処理インスタンスから反映する。
 - Irodori-TTSの参照音声はダッシュボードからPCM WAVをアップロードし、サーバー内の固定パスに保存する。ユーザーは置換・削除できる。
 - サーバー側で STT、LLM、TTS と返答音声配信を行う。Android Webは1発話ごとに録音・送信・再生する。
+- GPU搭載ローカルPCでWhisper・LM Studio・Irodori-TTSを動かし、AndroidからLocalNET経由で接続する。実環境の確認は未完了。
 - 相づちは MVP 要件に含める。
 - しっぽ制御は MCP 経由とし、無効設定を既定値にする。動作にはユーザーの明示的な依頼や制御条件を必要とする。
 - 「おやすみ」の会話上の終了と、UI の即時停止を区別する。即時停止は LLM の応答完了を待たない。
@@ -245,11 +244,124 @@ Programs/
 - 設定ダッシュボード、設定保存API、PCM WAV管理、Android WebView、ターン制の録音・送信・再生UI、セッションAPIのコードを追加したが、起動・Android実機・HTTPS接続・モデル利用は未確認。
 - Irodori-TTS呼び出しクライアント、STT→LLM→TTSパイプライン、相づちキャッシュ、返答音声配信は実装コードがある。Android Webへの相づち配信と再生完了通知は未実装・未確認。
 - セッション停止・世代フェンス・期限を追加したが、外部モデル処理の実取消、切断・再接続、遅着LLM/MCP動作拒否は未確認。
-- `mcp.json.example` はこのPCの絶対パスを含む。別のPCで使う際にパスを変更する。
-- Raspberry Pi 4デバイスAPI案は `ServerSide/RASPBERRY_PI_API.md` に文書化済み。音声端点はAndroid Web MVPでは使わず、MCPしっぽ制御のAPI整合、セッション停止世代、デバイスサービス、モーターの電源・角度・速度制限は未解消・未検証。
+- `STTLLMTTS/mcp.json.example` はこのPCの絶対パスを含む。別のPCで使う際にパスを変更する。
+- Raspberry Pi 4デバイスAPI案は `ClientSide/Raspi4Ver/RASPBERRY_PI_API.md` に文書化済み。しっぽ制御は初期の音声会話MVP後へ延期。MCPしっぽ制御のAPI整合、セッション停止世代、デバイスサービス、モーターの電源・角度・速度制限は未解消・未検証。
 - Android Web APIの入力形式（WebM/Ogg/WAV/MP4）、25MB・60秒上限、サーバー総処理期限180秒は契約済み。個別段階の応答時間、相づちの待ち時間、画面ロック中の継続要否は未確定。
 - 実機、Whisper モデル、LM Studio、TTS、スマートフォンでの受け入れ試験は未実施。要件書にある受け入れ条件を実施済みとみなさない。
 
 ## 履歴の追記方法
 
 今後の作業では、依頼や重要な決定、変更したファイル、実施した確認、残作業を日付付きでこのファイルに追記する。未実施の確認を実施済みとして記録しない。
+
+### ServerSideをSTTLLMTTSとdashboardに分離（2026-10-24）
+
+- 依頼: `app/` を廃止し、音声処理とHTTP画面を開発単位ごとに分ける。
+- 対応: 音声処理・MCPを `ServerSide/STTLLMTTS/`、HTTPサーバー・画面・設定保存を `ServerSide/dashboard/` に配置。依存関係と環境設定例は `ServerSide/` 直下で共有する。
+- 更新: 新しいパッケージ配置に合わせてPython import、`.env` とWhisperキャッシュの参照先、設定保存先、起動設定、Git除外設定、README・要件・ClientSide案内・`Agent.md` を更新。
+- 確認: `ServerSide/app/` が存在しないこと、旧パス参照が現行コード・案内資料に残っていないこと、ファイル構成とimport記述を静的に確認。テスト、サーバー起動、モデル接続、Android実機確認は未実施。
+- 未完了: Python環境での起動、HTTP画面/API操作、Whisper・LM Studio・Irodori-TTS接続、AndroidからのLAN・HTTPS音声往復を確認する。
+
+### 現在ブランチのgit pull確認（2026-10-24）
+
+- 依頼: 現在ブランチで git pull を実行する。
+- 確認: codex/raspberry-pi-implementation の追跡先は origin/codex/raspberry-pi-implementation。git pull は Already up to date. を返し、リモートからの取り込みはなかった。ローカルは追跡先より2コミット先行。
+- 保持: 作業ツリーにある未コミットのサーバーディレクトリ構造変更はそのまま保持した。
+- 作業リスト: サーバー実装項目は引き続き進行中。pullだけでは起動・API・モデル接続確認の状態は変わらない。
+
+### ServerSide README の静的レビュー（2026-10-24）
+
+- 依頼: `Programs/ServerSide/` 配下のREADMEに誤記・不整合がないか確認する。
+- 確認: ServerSide直下と配下のREADME 5件を要件書・現行配置・関連コードと照合し、README内の相対リンクがすべて解決することを確認。
+- 指摘: `STTLLMTTS/third_party/whisper/README.md` はWhisperキャッシュを説明するが、実装の保存先は `ServerSide/whisper/`。`STTLLMTTS/README.md` は参考プロジェクトのユーザー固有絶対パスを掲載し、MCP設定例もPC固有の絶対パスを含むことを説明していない。使用例の `browser_player` は未定義で、実行可能な例に見える点も明確化が必要。
+- 変更: READMEは未編集。`Agent.md` の作業項目は本レビューで進捗変化がないため状態を維持。
+- 確認範囲: 静的な文書・パス・コード照合のみ。テスト、サーバー起動、モデル接続、実機確認は未実施。
+
+### STTLLMTTS の推論共有と段階タイムアウト（2026-10-24）
+
+- 依頼: AI_Secretaryを参考資料として、STTLLMTTSの開発を進める。
+- 参照: AI_Secretaryの`voice_service.py`にあるWhisperモデルの遅延ロード・推論ロックと、`voice_llm.py`のリクエスト期限を設計上の参考にした。外部コードの転載はしていない。
+- 対応: 同じ設定のWhisperモデルをプロセス内で共有し、推論を直列化する。Irodori-TTSはサーバーURLごとに生成要求を直列化する。同期STT/TTSは既定90秒、LLMは既定45秒で期限を設け、期限切れ時はセッションを破棄して遅着結果を返さない。段階時間と失敗種別を、発話本文を含めず記録する。相づち再生の待ち時間をTTS合成時間へ混ぜない。同期モデル処理のスレッド自体を強制停止できるとは扱わない。
+- 更新: `STTLLMTTS/runtime.py`、`stt/whisper.py`、`llm/lm_studio.py`、`tts/irodori.py`、`voice/acknowledgements.py`、`voice/pipeline.py`、`voice/sessions.py`、`VOICE_API.md`、ServerSideの環境例・要件書・README、`Agent.md`。
+- 確認: 実装・要件・参考資料を静的に確認し、`git diff --check`を実施。テストは実行していない。現在の作業環境で確認できた表示アダプターはAMD Radeon(TM) Graphicsとspacedesk Graphics Adapterで、CUDA推論と実モデル接続は確認できていない。
+- 未完了: GPU環境でのWhisper・LM Studio・Irodori-TTS起動、音声1往復、各段階の実測時間、Android実機での録音・再生・停止確認。
+
+### Android Webクライアントの音声API整合（2026-10-24）
+
+- 依頼: AndroidでWeb画面を表示し、音声の送受信をServerSideに合わせて作成する。
+- 対応: WebViewの録音形式をVOICE_API.mdで受け付けるWebM/Ogg/WAV/MP4に限定し、非対応形式は送信前に案内する。発話IDはUUID形式で生成し、`crypto.randomUUID()` が使えない環境にも対応する。
+- 停止動作: 画面が非表示になったときに録音・再生と進行中リクエストを止め、Bearer認証付きでサーバーへセッション終了を要求する。マイク権限要求中の一時的な画面非表示は区別し、取得後に隠れたままなら音声ストリームを解放する。
+- 文書: Android READMEのHTTP/HTTPS説明を実装と一致させ、端末での画面ロック・アプリ切替確認を残作業として記録。`Agent.md` のAndroid作業項目を更新。
+- 確認: Android、Web画面、サーバーAPIのコードと契約を静的に照合。テスト、ビルド、サーバー起動、Android実機確認は未実施。
+- 未完了: 対象Android端末でHTTPS接続、マイク権限、対応MediaRecorder形式、音声1往復、画面非表示時の停止を確認する。相づち配信と再生完了通知も残っている。
+
+### ServerSide README の不整合を修正（2026-10-24）
+
+- 依頼: READMEの指摘箇所を修正し、現在のディレクトリ構造を維持する。
+- 対応: Whisperキャッシュの実際の保存先を案内する説明、参考プロジェクトのローカル絶対パス削除、MCP設定例のPC固有パスに関する注意書きを更新。実装されていないブラウザー再生オブジェクトを使う使用例を、本返答の生成だけを示す例に修正し、用語を「しっぽ制御MCP」に統一。
+- 変更ファイル: `Programs/ServerSide/STTLLMTTS/README.md`、`Programs/ServerSide/STTLLMTTS/third_party/whisper/README.md`、本履歴。
+- 確認: READMEの相対リンクとWhisperキャッシュパスを静的に確認。ディレクトリの追加・削除・移動なし。テスト、サーバー起動、モデル接続、実機確認は未実施。
+- 作業リスト: `Agent.md` の既存実装・実機確認タスクの状態に変更なし。
+
+### Android Debug APKのビルドエラーを修正（2026-10-24）
+
+- 依頼: Androidアプリが動く状態か確認し、Android Studioで表示された非ASCIIパスのGradleエラーを解消する。
+- 原因: Android Gradle Pluginが日本語を含むWindowsプロジェクトパスを検出し、アプリプラグイン適用時に停止していた。
+- 対応: `Programs/ClientSide/androidVer/gradle.properties` に `android.overridePathCheck=true` を追加。ビルド手順とAPK出力先をAndroid READMEに記録。
+- 確認: `Programs/ClientSide/androidVer/gradlew.bat assembleDebug` が `BUILD SUCCESSFUL` で完了し、`app/build/outputs/apk/debug/app-debug.apk`（11,583,877 bytes）を生成。
+- 未完了: APKのAndroid端末／エミュレーターへのインストール、画面表示、HTTPS接続、マイク権限、音声送受信は未確認。パス検査設定はGradleの実験的オプションとして警告を出す。
+- 作業リスト: `Agent.md` のスマートフォンクライアントは実機確認と追加機能が残るため進行中を維持。
+
+### Webダッシュボードの役割を明確化（2026-10-24）
+
+- 依頼: ダッシュボードはWeb画面だけを指すことをREADMEに反映する。
+- 対応: `Programs/README.md`、`Programs/ServerSide/README.md`、`Programs/ServerSide/dashboard/README.md`、`Programs/ServerSide/STTLLMTTS/README.md` で、ブラウザーUIとWebアプリ用HTTP受付、音声処理・会話制御の責務を分けて記述。
+- 確認: 文書と現行コードのHTTP受付・音声処理の担当を静的に照合。ディレクトリ構造・実装コードは変更していない。テスト、サーバー起動、実機確認は未実施。
+
+### ダッシュボード設定の反映とWhisper CUDA既定値（2026-10-24）
+
+- 依頼: CUDAで使える設定にし、ダッシュボードの設定項目が処理へ反映されるか確認する。
+- 確認: 保存済み設定は新しい会話パイプラインで読み込まれ、STT設定、TTSモデル名・声の説明、会話のふるまい設定に使用される。保存設定は同項目の環境変数より優先し、進行中の会話には反映されない。現在の設定保存JSONは存在しなかった。
+- 対応: Whisperとダッシュボードの既定をCUDA / float16に変更。CTranslate2からCUDAデバイスを検出し、GPUまたはCUDAランタイムが使えない場合に明確なエラーを返す。CUDA依存・ランタイム要件、CPUへの切替方法、`cuda_unavailable` APIエラー、設定優先順位を環境例・README・要件・API資料に記録。
+- 変更ファイル: `Programs/ServerSide/dashboard/settings_store.py`、`Programs/ServerSide/dashboard/web/dashboard.js`、`Programs/ServerSide/dashboard/web/index.html`、`Programs/ServerSide/STTLLMTTS/stt/whisper.py`、`Programs/ServerSide/STTLLMTTS/voice/sessions.py`、`Programs/ServerSide/requirements.txt`、ServerSideのREADME・要件・API資料、`Agent.md`、本履歴。
+- 確認: 設定読込・保存・各クライアントの設定消費先を静的に追跡。実行テストは行っていない。現在のPCにはCUDA対応NVIDIA GPUが確認できないため、CUDA実行・モデル接続は未確認。
+- 作業リスト: サーバーAPIと設定は進行中を維持。Whisper CUDA・実モデル・対象PCでの確認を残す。
+
+### Android Studio同期とAndroid 10端末での起動確認（2026-10-24）
+
+- 依頼: Android Studioに表示されたビルドエラーを直し、アプリをデバッグできるようにする。
+- 同期: 以前の非ASCIIパスエラーがIDEのBuild欄に残っていたためGradle同期を再実行。`android.overridePathCheck=true` を読み込み、Android StudioのGradle同期は完了した。
+- 互換性修正: IDEからの端末起動で `INSTALL_FAILED_OLDER_SDK` を確認。接続端末HWV33はAndroid 10（API 29）だったため、`app/build.gradle.kts` の `minSdk` を34から29へ変更。
+- 確認: `gradlew.bat assembleDebug` が `BUILD SUCCESSFUL`。生成APKをHWV33へインストールし、`MainActivity` のプロセスと前面表示を確認。Android Studio上で `app` 実行構成が認識されている。
+- 確認: Android Studioの「Attach Debugger to Android Process」でHWV33上の `com.example.jphackskz2614androidver` を選び、デバッグコンソールに `Connected to the target VM` が表示された。
+- 未完了: サーバーHTTPS接続、マイク権限、録音・音声送受信は未確認。`android.overridePathCheck` は実験的設定の警告を出す。
+- 作業リスト: `Agent.md` のスマートフォンクライアントは音声往復と機能確認が残るため進行中を維持。
+
+### 音声通信経路の静的レビュー（2026-10-24）
+
+- 依頼: Android・ダッシュボード・STT/LLM/TTS間の通信経路を確認する。
+- 確認: Android WebViewはHTTPSと信頼済み証明書を要求し、同一オリジンAPIへBearerトークンを付ける。サーバーは既定 `127.0.0.1:8765` でHTTP待受。LM StudioとIrodori-TTSの既定先は同じPCの `127.0.0.1:1234`、`:7861`。リポジトリ内にリバースプロキシ設定はなく、実URL・DNS・証明書・ファイアウォールの実環境設定も確認できない。
+- 判断: サービスが同じPCにある前提では通信設計は成立する。LANで使う場合はAndroid HTTPS:443 → HTTPSリバースプロキシ → loopback HTTP:8765を構成し、loopbackをプロキシ経由で公開する場合も32文字以上のBearerトークンを必ず設定する。8765・1234・7861をインターネットへ直接公開しない。
+- 更新: `Programs/ServerSide/dashboard/README.md`、`Programs/ServerSide/REQUIREMENTS.md`、`Agent.md` に推奨経路と実環境未確認点を反映。
+- 確認範囲: AndroidのHTTPS限定・証明書拒否、同一オリジンAPI、Bearer認証、各サービスURLをコードと資料から静的に追跡。接続テスト、TLS証明書、リバースプロキシ、ポート疎通、実機確認は未実施。
+
+### ServerSideのWindows・Ubuntuセットアップスクリプト（2026-10-24）
+
+- 依頼: `STTLLMTTS/third_party/` にWindows・Ubuntu用のGit導入とPython依存関係セットアップ用スクリプトを追加する。
+- 対応: Windowsはwinget、UbuntuはaptでGitとPython 3.11〜3.13を用意し、ServerSide共通の `.venv/` を作成して `requirements.txt` をpip installするスクリプトを追加。既存の対応環境は再利用し、サポート範囲外の既存venvは削除せず案内して停止する。
+- 変更ファイル: `Programs/ServerSide/STTLLMTTS/third_party/setup_windows.ps1`、`Programs/ServerSide/STTLLMTTS/third_party/setup_ubuntu.sh`、関連README、本履歴。
+- 確認: スクリプトの配置・READMEの実行手順を静的に確認。インストーラー実行、pip install、テストは未実施。
+- 作業リスト: 受け入れタスクの状態に変更なし。
+
+### codexブランチのpull確認（2026-10-24）
+
+- 依頼: `kameyama` というブランチからpullできるか確認し、ユーザー指定後は現在のcodexブランチをpullする。
+- 確認: `origin` に `kameyama` はなく、リモートは `main` と `codex/raspberry-pi-implementation`。`git fetch origin` 後、`git pull origin codex/raspberry-pi-implementation` は `Already up to date.` を返した。
+- 保持: 未コミット変更はそのまま維持され、pullによる作業ツリー変更はなかった。
+- 作業リスト: 実装・受け入れ確認の状態に変更なし。
+
+### 現在のcodexブランチ変更をコミット・プッシュ（2026-10-24）
+
+- 依頼: 現在のcodexブランチにある未コミット変更をコミットし、originへプッシュする。
+- 対応: ServerSideの構成変更・Windows/Ubuntuセットアップ、Android設定・資料、要件・README・作業履歴を含む全変更を一括で記録する。
+- 確認: push前の追跡先は一致。`git diff --check` とステージ済み差分チェックは成功。設定例に実キーはなく、`.env` 本体はコミット対象外。テストと実機確認は未実施。
+- 作業リスト: 既存の受け入れ・実機確認タスクは未完了のまま維持する。

@@ -4,6 +4,8 @@
 
 既存のWhisper→LM Studio→Irodori-TTSパイプラインに、Android Web向けの音声アップロード、セッション、返答音声取得、停止世代のAPIコードを追加した。Web画面とAndroid WebViewも追加したが、モデル・HTTPS環境・Android実機での接続は未確認であり、MVP受け入れ完了とは扱わない。相づち配信・再生完了通知・Pi 4デバイスAPIとの統合は未実装。
 
+運用方針（ユーザー決定、2026-10-24）: GPU搭載のローカルPCでWhisper・LM Studio・Irodori-TTSを使用する。Androidは同一LocalNET内のサーバーURLへ接続し、スマートフォンで音声を録音・再生する。具体的なサーバーPC／URL、HTTPS終端、モデルの実設定と実環境接続は未確認。しっぽ制御は音声会話の初期MVP後に実施する。
+
 ## 1. 役割
 
 ```text
@@ -44,7 +46,7 @@ Whisper・LLM・TTSのモデル、デバイス、バージョンと設定を記�
 
 1. `WhisperSTT.transcribe_file()` が音声から認識した本文を `Transcription.text` に返す。
 2. `VoicePipeline.process_audio_file()` は空本文なら `NoSpeechDetected` とし、LLM・TTSへ進まない。
-3. 本文がある場合は `VoiceLLMClient.generate_response(transcription.text, history)` に渡す。`app/llm/lm_studio.py` がLM Studioの `input` 内に「今回のユーザー発話（質問・依頼）」として本文を配置する。
+3. 本文がある場合は `VoiceLLMClient.generate_response(transcription.text, history)` に渡す。`STTLLMTTS/llm/lm_studio.py` がLM Studioの `input` 内に「今回のユーザー発話（質問・依頼）」として本文を配置する。
 4. 直近の会話履歴は同じ `input` 内で「以前の会話」として分離し、今回の発話に答えるための文脈として使う。話し方や役割の指定は `system_prompt` に置き、質問本文はそこへ入れない。
 5. 生成された返答本文をTTSへ渡し、音声バイト列と形式を `VoiceTurnResult.speech` で返す。
 
@@ -54,11 +56,11 @@ Whisper・LLM・TTSのモデル、デバイス、バージョンと設定を記�
 
 | 段階 | 現行の初期設定 | 入出力・制約 | 未確認事項 |
 | --- | --- | --- | --- |
-| STT | `Systran/faster-whisper-small`、日本語、CPU / int8、モデルキャッシュ `ServerSide/whisper/` | Android WebからのWebM/Ogg/WAV/MP4音声を読み、既定25,000,000バイト・60秒以下を `Transcription` に返す。空結果はLLMへ渡さない | ブラウザーごとの録音形式、日本語の小声認識、実モデルの性能 |
+| STT | `Systran/faster-whisper-small`、日本語、CUDA / float16、モデルキャッシュ `ServerSide/whisper/` | Android WebからのWebM/Ogg/WAV/MP4音声を読み、既定25,000,000バイト・60秒以下を `Transcription` に返す。空結果はLLMへ渡さない。保存済みダッシュボード設定は新しい会話に使い、未保存時は `.env` を使う | NVIDIA GPU上のCUDA 12・cuBLAS・cuDNN 9接続、ブラウザーごとの録音形式、日本語の小声認識、実モデルの性能 |
 | LLM | `http://127.0.0.1:1234/api/v1/chat`、`google/gemma-4-26b-a4b`、最大160トークン、context 4096、履歴最大8メッセージ、45秒HTTP timeout | `reasoning=off`、`store=false`。現在の発話は `input`、役割指示は `system_prompt`。空本文とreasoning出力はエラー | 指定モデルの稼働、LM StudioのAPI互換性・実応答 |
 | TTS | `http://127.0.0.1:7861/`、`Aratako/Irodori-TTS-600M-v3-VoiceDesign`、model / codec は CUDA・fp16 | Gradio `/_run_generation` に返答本文を渡し、既定25,000,000バイト以下の音声とmedia typeを返す。一時結果ファイルはOS一時フォルダー内にある場合、読込後に削除 | サーバー・モデルの配置、GPU/CPU対応、応答時間、Android WebViewでの再生形式 |
 
-具体的な変更値は `ServerSide/app/.env.example` を参照する。WhisperとTTSには段階timeoutがなく、HTTP全体期限を超えた場合は会話セッションを破棄する。個別サービスの取消・時間測定は未完了。
+具体的な変更値は `ServerSide/.env.example` を参照する。保存済みのダッシュボード設定は `.env` の同項目より優先され、新しい会話パイプラインから反映する。進行中の会話には適用しない。Whisper・TTSは既定90秒、LLMは45秒の段階期限を持ち、音声ターン全体の期限は180秒です。STT/TTSの期限超過時はセッションを破棄して結果を配信しませんが、実行中のネイティブ推論スレッド自体を強制停止するものではありません。実モデルでの所要時間と停止競合は未確認です。
 
 ## 4. 相づち（MVP必須）
 
@@ -82,7 +84,7 @@ Whisper・LLM・TTSのモデル、デバイス、バージョンと設定を記�
 | SV-20 | HTTP成功、機器の受理、実動作／停止状態を区別する。不正JSON、未知の状態、接続失敗は機械判定可能な失敗として返し、成功を示す会話に使わない |
 | SV-21 | 機器用トークン、接続先と動作許可はサーバー設定で管理する。トントン設定の無効化は処理中の動作にも適用し、停止操作は開始許可が無効でも実行可能にする |
 
-既存の0.5〜5秒・毎秒0.3〜1.0回というMCP引数制限はソフトウェア側の暫定上限で、しっぽの重さ・力・接触位置・騒音・発熱の確認済み範囲を示さない。Pi 4との音声・制御APIのMVP契約は [Raspberry Pi 4 API仕様](RASPBERRY_PI_API.md) に定める。デバイスサービス、アプリセッション／停止世代の連携、遅着開始の拒否と実機確認は未完了であり、有効化条件として残す。
+既存の0.5〜5秒・毎秒0.3〜1.0回というMCP引数制限はソフトウェア側の暫定上限で、しっぽの重さ・力・接触位置・騒音・発熱の確認済み範囲を示さない。Pi 4との音声・制御APIのMVP契約は [Raspberry Pi 4 API仕様](../ClientSide/Raspi4Ver/RASPBERRY_PI_API.md) に定める。デバイスサービス、アプリセッション／停止世代の連携、遅着開始の拒否と実機確認は未完了であり、有効化条件として残す。
 
 ## 6. クライアントとの契約
 
@@ -104,17 +106,17 @@ Android Web向けの音声API契約は [VOICE_API.md](VOICE_API.md) に記録し
 
 ## 7. 設定・データ・起動
 
-- `web/` の設定ダッシュボードで、STTモデル・言語・デバイス・計算形式・VAD、TTSモデル・声の説明、会話の話し方・返答長・質問頻度を設定できる。設定読込・保存は `GET`／`PUT /api/v1/dashboard/settings` とし、値を検証して `app/data/dashboard_settings.json` に保存する。
-- TTSの参照音声としてPCM WAVを `PUT /api/v1/dashboard/reference-audio` でアップロードし、`GET` で状態確認、`DELETE` で削除できる。サーバー内の固定先 `app/data/reference_voice.wav` へ検証後に原子的に保存し、元のファイル名やクライアント指定パスは保存先に使わない。形式は16-bit PCM、mono/stereo、16〜48kHz、長さ1〜30秒、サイズ10MB以下に制限する。
+- `dashboard/web/` の設定画面で、STTモデル・言語・デバイス・計算形式・VAD、TTSモデル・声の説明、会話の話し方・返答長・質問頻度を設定できる。設定読込・保存は `GET`／`PUT /api/v1/dashboard/settings` とし、値を検証して `dashboard/data/dashboard_settings.json` に保存する。
+- TTSの参照音声としてPCM WAVを `PUT /api/v1/dashboard/reference-audio` でアップロードし、`GET` で状態確認、`DELETE` で削除できる。サーバー内の固定先 `dashboard/data/reference_voice.wav` へ検証後に原子的に保存し、元のファイル名やクライアント指定パスは保存先に使わない。形式は16-bit PCM、mono/stereo、16〜48kHz、長さ1〜30秒、サイズ10MB以下に制限する。
 - アップロードWAVは次に作る `IrodoriTTS` インスタンスの `ref_wav` として使う。インスタンス生成時に音声をメモリへ読み込み、保存音声の置換・削除後も進行中インスタンスは元の音声を使い続ける。音声は設定JSON・Git・ログに含めず、TTS生成時に設定されたIrodori-TTSサーバーへ送る。その他の音声形式は未対応。
 - 保存したSTT・TTS設定は、新しく作る音声処理インスタンスに反映する。会話のふるまい設定は安全ルールを変えない話し方の希望としてシステムプロンプトに加える。現在進行中の会話への動的変更は行わない。
 - 相づちは必須のため、画面・APIのどちらからも無効化できない。ダッシュボードからMCP制御を有効化しない。しっぽの制御許可と停止規則はサーバー側の既存ゲートに従う。
-- ダッシュボードサーバーは既定で `127.0.0.1` にだけbindする。loopback外で起動する場合は `NENGITSUNE_DASHBOARD_TOKEN` を必須とし、管理APIはBearer認証する。LAN公開には信頼できるネットワークとHTTPS終端が必要。
+- ダッシュボードサーバーは既定で `127.0.0.1` にだけbindする。LAN公開時は同一PC上のHTTPSリバースプロキシからloopbackへ転送する構成を推奨し、`NENGITSUNE_DASHBOARD_TOKEN`（32文字以上）を設定する。loopback外で直接bindする場合もトークンを必須とし、ファイアウォールで接続元を制限する。管理APIはBearer認証し、8765番ポートをインターネットへ直接公開しない。
 - APIキーや機器トークンはサーバーの環境設定で管理し、ブラウザー、Git、ログ本文へ出さない。Android Web音声APIは管理Bearer tokenで保護し、端末接続にはHTTPSを使う。Pi 4との制御APIは別途HTTPSとデバイス認証を使う。
 - 音声アップロードの一時データは必要最小限とし、成功・失敗後に削除する。返答音声はメモリ内で最大2分、停止・期限切れで削除する。履歴はセッションのメモリ内で上限を持ち、終了時に消去する。本文をログへ残す場合は明示的な設定を必要とする。
 - `store=false` はLM Studioへの保存無効の要求であり、関連サービスのログ・一時データ管理も確認する。
 - 起動時にモデル・実ファイルパス・LM Studio・TTS・MCP・機器の準備を確認し、利用不可の機能をスマホへ返す。再起動だけで動作を自動再開しない。
-- 自作は `app/`、外部ソースは `third_party/`、モデルの配置はコード設定と実ディレクトリが一致するよう管理する。
+- 自作コードは `STTLLMTTS/` と `dashboard/` に分ける。設定は `dashboard/settings_store.py`、依存関係・環境設定はServerSide直下、外部ソースは `STTLLMTTS/third_party/`、Whisperモデルは `whisper/` に配置する。
 - ダッシュボード設定はサーバーにのみ保存し、秘密情報、録音音声、会話本文は設定JSONへ含めない。ユーザー入力は長さ・選択肢を検証する。
 - 参照音声ファイルはユーザーが明示的に登録したWAVだけを保存する。置換・削除できるようにし、保存ファイルをGitやログへ含めない。
 
@@ -126,13 +128,16 @@ Android Web音声APIの入力形式・容量・長さ・総処理期限・HTTPS�
 | --- | --- | --- |
 | Android Web音声API | WebM/Ogg/WAV/MP4、25MB、60秒、最大180秒、管理Bearer tokenを実装 | HTTPS終端とAndroid WebViewからの接続・録音・再生を対象端末で確認 |
 | 返答再生・相づち | 最終返答の期限付き配信とWeb再生を実装 | 相づちのWeb配信・本返答との調停、再生開始／完了／失敗通知 |
-| STT・LLM・TTS | 各クライアントと1往復パイプラインを実装 | 実モデル・サービスへの接続、各段階の時間と失敗の記録 |
+| STT・LLM・TTS | 各クライアントと1往復パイプライン、段階時間・失敗種別の記録コードを実装 | 対象環境での実モデル・サービス接続、各段階の時間と失敗記録の実測確認 |
+| ローカル運用環境 | GPU搭載PCでWhisper・LM Studio・Irodori-TTSを使い、AndroidからLocalNET経由で接続する方針 | 対象PCと接続URL、HTTPS終端、モデル・GPU設定、実接続を確認 |
 | 停止と並行処理 | 停止要求、世代フェンス、全体期限、タスクへの取消通知を実装 | 停止競合・切断・再接続を確認する。スレッド内で実行中の外部モデル処理は取消通知だけでは即時中断できないため、停止後に結果を返さないことも確認 |
 | Raspberry Pi 4連携 | 機器API案とMCP側の既存部品がある。Android音声経路からは独立 | セッション許可、連続動作上限、機器サービス、切断時停止と手元停止の実装・実機確認 |
 
 ## 9. 受け入れ条件
 
-以下は未実施。合意済みのAPI制限と、未確定の個別段階時間・機器条件を区別し、実測結果とともに記録する。
+以下は未実施。合意済みのAPI制限と設定した段階タイムアウトを、未確認の実測段階時間・機器条件と区別し、実測結果とともに記録する。
+
+初期音声MVPではAndroidの音声会話・相づち・停止・異常系を先に確認する。ST-03のMCP部分とST-04は、ユーザー方針により後続のしっぽ連携フェーズで確認する。
 
 | ID | 確認内容 |
 | --- | --- |
@@ -150,14 +155,14 @@ Android Web音声APIの入力形式・容量・長さ・総処理期限・HTTPS�
 
 | 現行部品 | あるもの | 不足するもの |
 | --- | --- | --- |
-| `app/stt/whisper.py` | faster-whisper接続、既存ファイルのSTT、25MB・60秒上限、無音時の空結果 | STT個別の処理期限、日本語の小声認識の実機確認 |
-| `app/voice/pipeline.py` | STT→LLM→TTS、質問本文の受渡し、インスタンス内履歴、直列化、遅延相づちの通知と本返答との順序制御 | Android Webへの相づち配信・再生完了連携 |
-| `app/llm/lm_studio.py` | LM Studio呼出し、今回の質問・依頼と履歴の分離、出力上限、限定MCP指定 | アプリセッションと停止許可の連携、音声完了までの全体制御 |
-| `app/tts/irodori.py` | Irodori-TTS Gradio API呼出し、生成音声サイズ制限、音声バイト列返却、固定先の参照WAVをインスタンス内に保持 | TTSサーバー／モデル接続、段階タイムアウト／取消、音声設定・参照音声・Android再生の実機確認 |
-| `app/voice/acknowledgements.py` | 2種類の相づち音声をメモリ内に事前生成して交互に選択 | Android Web配信・再生完了通知との接続、実機での待ち時間・声・音量確認 |
-| `app/voice/sessions.py` | Android音声APIのセッション・発話・停止世代と期限付き音声管理 | 実端末の接続・停止競合・切断再接続確認 |
-| `app/dashboard/server.py` と `web/` | 設定画面、検証付き設定API、PCM WAV API、音声セッション／発話／返答音声／停止API、loopback既定と管理トークン | 起動とAPI操作、HTTPS終端、Android端末からの接続確認、モデル応答と停止競合の受け入れ確認 |
-| `app/tail_mcp_server.py` | ツール3種、引数上限、環境設定、HTTP送信 | 現在セッションの許可確認、連続動作制限、構造化した失敗／機器確認、Raspberry Pi 4との実機検証 |
+| `STTLLMTTS/stt/whisper.py` | faster-whisper接続、同一設定モデルのプロセス内共有と推論直列化、既存ファイルのSTT、25MB・60秒上限、90秒段階期限、無音時の空結果 | GPU設定と実モデル接続、日本語の小声認識の実機確認 |
+| `STTLLMTTS/voice/pipeline.py` | STT→LLM→TTS、質問本文の受渡し、インスタンス内履歴、直列化、段階別期限、期限後セッションの破棄、発話本文を含めない段階時間・失敗種別ログ、遅延相づちの通知と本返答との順序制御 | Android Webへの相づち配信・再生完了連携、外部ネイティブ処理の強制中断 |
+| `STTLLMTTS/llm/lm_studio.py` | LM Studio呼出し、今回の質問・依頼と履歴の分離、出力上限、45秒HTTP期限、限定MCP指定 | 実モデル応答、アプリセッションと停止許可の連携、音声完了までの全体制御 |
+| `STTLLMTTS/tts/irodori.py` | Irodori-TTS Gradio API呼出し、同一サーバー要求の直列化、生成音声サイズ制限、90秒段階期限、音声バイト列返却、固定先の参照WAVをインスタンス内に保持 | TTSサーバー／モデル接続、実モデル速度、音声設定・参照音声・Android再生の実機確認 |
+| `STTLLMTTS/voice/acknowledgements.py` | 2種類の相づち音声をメモリ内に事前生成して交互に選択 | Android Web配信・再生完了通知との接続、実機での待ち時間・声・音量確認 |
+| `STTLLMTTS/voice/sessions.py` | Android音声APIのセッション・発話・停止世代と期限付き音声管理 | 実端末の接続・停止競合・切断再接続確認 |
+| `dashboard/server.py` と `dashboard/web/` | 設定画面、検証付き設定API、PCM WAV API、音声セッション／発話／返答音声／停止API、loopback既定と管理トークン | 起動とAPI操作、HTTPS終端、Android端末からの接続確認、モデル応答と停止競合の受け入れ確認 |
+| `STTLLMTTS/tail_mcp_server.py` | ツール3種、引数上限、環境設定、HTTP送信 | 現在セッションの許可確認、連続動作制限、構造化した失敗／機器確認、Raspberry Pi 4との実機検証 |
 | Whisperの配置 | コードと既存フォルダーを `ServerSide/whisper/` に統一 | 実モデルのダウンロード・読み込みと配置確認 |
 
 この表に残る確認と受け入れ条件が未完了の間は、実装コードがあることだけでサーバーの動作確認済み・合格とは報告しない。

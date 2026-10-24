@@ -10,8 +10,8 @@ const DEFAULTS = {
   stt: {
     model_id: "Systran/faster-whisper-small",
     language: "ja",
-    device: "cpu",
-    compute_type: "int8",
+    device: "cuda",
+    compute_type: "float16",
     vad_filter: true,
   },
   tts: {

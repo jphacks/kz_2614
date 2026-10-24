@@ -29,8 +29,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stt": {
         "model_id": "Systran/faster-whisper-small",
         "language": "ja",
-        "device": "cpu",
-        "compute_type": "int8",
+        "device": "cuda",
+        "compute_type": "float16",
         "vad_filter": True,
     },
     "tts": {
@@ -239,9 +239,14 @@ def validate_settings(payload: dict[str, Any]) -> dict[str, Any]:
     stt = values["stt"]
     stt["model_id"] = _string(stt.get("model_id"), "stt.model_id", maximum=200, default=DEFAULT_SETTINGS["stt"]["model_id"])
     stt["language"] = _choice(stt.get("language"), "stt.language", {"ja", "auto", "en"}, "ja")
-    stt["device"] = _choice(stt.get("device"), "stt.device", {"cpu", "cuda"}, "cpu")
+    stt["device"] = _choice(
+        stt.get("device"), "stt.device", {"cpu", "cuda"}, DEFAULT_SETTINGS["stt"]["device"]
+    )
     stt["compute_type"] = _choice(
-        stt.get("compute_type"), "stt.compute_type", {"int8", "int8_float16", "float16", "float32"}, "int8"
+        stt.get("compute_type"),
+        "stt.compute_type",
+        {"int8", "int8_float16", "float16", "float32"},
+        DEFAULT_SETTINGS["stt"]["compute_type"],
     )
     stt["vad_filter"] = _boolean(stt.get("vad_filter"), "stt.vad_filter", True)
 

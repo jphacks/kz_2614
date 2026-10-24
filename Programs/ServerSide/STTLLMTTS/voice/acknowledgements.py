@@ -50,7 +50,7 @@ class VoiceAcknowledgementSystem:
                 return
             generated = []
             for phrase in self.phrases:
-                speech = await asyncio.to_thread(self.tts.synthesize, phrase)
+                speech = await self.tts.synthesize_async(phrase)
                 generated.append(VoiceAcknowledgement(text=phrase, speech=speech))
             self._cache = tuple(generated)
             self._next_index = 0

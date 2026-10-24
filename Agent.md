@@ -24,13 +24,13 @@
 上から依存関係を確認して進めます。詳細な合格条件は各要件定義を参照してください。状態は `未着手`、`進行中`、`確認待ち`、`完了` で管理し、完了項目には日付と根拠となる確認内容を添えてください。
 
 1. **サーバーとスマートフォンのAPI契約を決める** — Android Webの音声形式（WebM/Ogg/WAV/MP4）・25MB・60秒、認証、セッション／発話／停止世代、期限付き音声返却、エラー形式を `Programs/ServerSide/VOICE_API.md` に定義し、コードにも反映した。再生結果通知は未実装。状態: 進行中。
-2. **スマートフォンクライアントを作る** — Android WebViewでサーバーURLを開き、Web画面で録音・送信・返答再生・停止を行うコードを追加した。相づち、再生完了通知、アプリ内音量、Pi 4状態表示、Android実機確認は残っている。状態: 進行中。
-3. **サーバーAPIとセッション制御を作る** — 開始・状態・終了、入力検証、1往復処理、二重要求／過負荷、停止世代による遅着結果の破棄、15分期限を実装した。起動・モデル接続・実環境確認は残っている。状態: 進行中。
-4. **STT → LLM → TTS を実環境で接続する** — 部品コードはある。Whisper、LM Studio、Irodori-TTSの実モデル・デバイス設定を確認し、各段階の時間と失敗を記録する。状態: 確認待ち。
+2. **スマートフォンクライアントを作る** — Android WebViewでHTTPSサーバー画面を開き、Web側からサーバー契約に合うMIME形式で録音送信し、返答音声を再生するコードを追加した。発話IDをUUID形式に統一し、画面非表示時に端末音声を止めてセッション終了を要求する。日本語を含むWindowsパスで `assembleDebug` が成功するようAndroid Gradleのパス検査設定を追加。最小SDKをAndroid 10（API 29）へ合わせ、Android StudioのGradle同期、Debug APKビルド、HWV33へのインストールと`MainActivity`起動を確認した。Android Studioから実行中プロセスへデバッガーを接続できることも確認した。HTTPS・音声往復、相づち、再生完了通知、アプリ内音量、Pi 4状態表示は残っている。状態: 進行中。
+3. **サーバーAPIとセッション制御を作る** — 開始・状態・終了、入力検証、1往復処理、二重要求／過負荷、停止世代による遅着結果の破棄、15分期限を実装した。STT同一設定モデルのプロセス内共有、推論直列化、STT・LLM・TTS段階別期限、期限後セッション破棄、発話本文を記録しない段階時間・失敗種別ログを追加した。ダッシュボードの保存値は次の会話パイプラインからSTT・TTS・会話設定に反映し、保存後は同項目の `.env` より優先する。STTはCUDA / float16を既定とし、利用できない場合はエラーを返す。サーバーコードは `Programs/ServerSide/STTLLMTTS/` と `Programs/ServerSide/dashboard/` に分け、設定管理は `dashboard/settings_store.py`、依存関係と環境設定例はServerSide直下に置く。起動・モデル接続・実環境確認は残っている。状態: 進行中。
+4. **STT → LLM → TTS を実環境で接続する** — ユーザー方針: GPU搭載のローカルPCでWhisper・LM Studio・Irodori-TTSを使い、Androidは同一LocalNET上のサーバーURLへ接続して音声入力・音声出力を行う。推奨通信経路はAndroid HTTPS:443 → HTTPSリバースプロキシ → loopback HTTP:8765のダッシュボードAPI、そこから同じGPU PCのloopback LM Studio:1234・Irodori-TTS:7861。Whisper CUDAはCUDA 12・cuBLAS・cuDNN 9を前提に設定したが、実モデル・GPU接続、証明書・HTTPS終端、実測した各段階の時間と失敗の記録は未確認。この作業ツリーにHTTPSプロキシ設定はない。現在の作業環境で確認できた表示アダプターはAMD Radeon(TM) Graphicsとspacedesk Graphics Adapterで、CUDA推論環境は確認できていない。状態: 確認待ち。
 5. **返答音声の配信と相づちを実装する** — 最終返答を期限付きバイナリURLでAndroid Webへ配信するコードを追加した。相づち配信、再生完了通知、実端末再生は残っている。状態: 進行中。
 6. **停止・異常時の動作を統合する** — 録音／再生のローカル停止、サーバーセッション停止、世代フェンス、処理タスクの取消通知、最大180秒の全体期限を追加した。実際のサービス中断・切断・復帰確認は未実施。状態: 進行中。
-7. **MCPしっぽ制御をRaspberry Pi 4へ接続する** — [Raspberry Pi 4 API仕様](Programs/ServerSide/RASPBERRY_PI_API.md) に機器API案を記録済み。Android Webの音声入出力はスマートフォンで行い、Pi 4の音声API案は現行経路で使わない。MCP実装との整合、セッション／停止世代による遅着拒否、しっぽデバイスサービス、連続動作上限、手元停止、状態確認を実装し、実機で確認する。状態: 進行中（デバイス実装・実機確認は未完了）。
-8. **MVP受け入れ条件を確認する** — `ServerSide/REQUIREMENTS.md` と `ClientSide/REQUIREMENTS.md` の条件に沿い、正常系・停止・無音・破損音声・切断・再接続を確認し、証跡と未実施項目を記録する。状態: 未着手。
+7. **初期音声MVPの受け入れ条件を確認する** — `Programs/ServerSide/REQUIREMENTS.md` と `Programs/ClientSide/REQUIREMENTS.md` に沿い、音声1往復・相づち・停止・無音・破損音声・切断・再接続を確認する。Pi 4・しっぽ固有の条件は後続フェーズで確認する。状態: 未着手。
+8. **MCPしっぽ制御をRaspberry Pi 4へ接続する** — [Raspberry Pi 4 API仕様](Programs/ClientSide/Raspi4Ver/RASPBERRY_PI_API.md) に機器API案を記録済み。Android Webの音声入出力はスマートフォンで行い、Pi 4の音声API案は現行経路で使わない。MCP実装との整合、セッション／停止世代による遅着拒否、しっぽデバイスサービス、連続動作上限、手元停止、状態確認を実装し、実機で確認する。ユーザー方針により初期音声MVP後へ延期。状態: 未着手（後続）。
 
 ## 完了の扱い
 

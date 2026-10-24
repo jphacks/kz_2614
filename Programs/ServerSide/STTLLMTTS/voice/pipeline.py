@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, TypeVar
 
 from .acknowledgements import VoiceAcknowledgement, VoiceAcknowledgementSystem
 from ..llm.lm_studio import COMPANION_SYSTEM_PROMPT, VoiceLLMClient, VoiceLLMReply
 from ..stt.whisper import Transcription, WhisperSTT
 from ..tts.irodori import IrodoriTTS, SynthesizedSpeech
-from ..settings_store import build_behavior_guidance, get_dashboard_settings
+from ...dashboard.settings_store import build_behavior_guidance, get_dashboard_settings
 
 
 class NoSpeechDetected(RuntimeError):
@@ -30,6 +31,39 @@ class VoiceTurnResult:
 
 
 AcknowledgementHandler = Callable[[VoiceAcknowledgement], Awaitable[None]]
+StageResult = TypeVar("StageResult")
+logger = logging.getLogger(__name__)
+
+
+async def _measure_stage(
+    stage: str,
+    operation: Awaitable[StageResult],
+) -> tuple[StageResult, float]:
+    """測定値だけを記録し、発話本文や音声データはログへ出さない。"""
+    started = time.perf_counter()
+    try:
+        result = await operation
+    except asyncio.CancelledError:
+        elapsed = time.perf_counter() - started
+        logger.info(
+            "voice_stage_cancelled stage=%s elapsed_seconds=%.3f",
+            stage,
+            elapsed,
+        )
+        raise
+    except Exception as exc:
+        elapsed = time.perf_counter() - started
+        logger.warning(
+            "voice_stage_failed stage=%s elapsed_seconds=%.3f error_type=%s",
+            stage,
+            elapsed,
+            type(exc).__name__,
+        )
+        raise
+
+    elapsed = time.perf_counter() - started
+    logger.info("voice_stage_succeeded stage=%s elapsed_seconds=%.3f", stage, elapsed)
+    return result, elapsed
 
 
 class VoicePipeline:
@@ -85,10 +119,15 @@ class VoicePipeline:
         async with self._turn_lock:
             turn_started = time.perf_counter()
             acknowledgement_preparation_seconds = 0.0
-            stt_started = time.perf_counter()
-            transcription = await asyncio.to_thread(self.stt.transcribe_file, audio_path)
-            stt_seconds = time.perf_counter() - stt_started
+            transcription, stt_seconds = await _measure_stage(
+                "stt",
+                self.stt.transcribe_file_async(audio_path),
+            )
             if not transcription.text.strip():
+                logger.info(
+                    "voice_turn_rejected stage=stt reason=no_speech elapsed_seconds=%.3f",
+                    stt_seconds,
+                )
                 raise NoSpeechDetected("Whisper did not detect speech in the audio file")
 
             acknowledgement_allowed = (
@@ -96,18 +135,25 @@ class VoicePipeline:
                 and not self.acknowledgements.is_goodnight_or_stop_request(transcription.text)
             )
             if acknowledgement_allowed and not self.acknowledgements.ready:
-                preparation_started = time.perf_counter()
-                await self.prepare_acknowledgements()
-                acknowledgement_preparation_seconds = time.perf_counter() - preparation_started
+                _, acknowledgement_preparation_seconds = await _measure_stage(
+                    "acknowledgement_preparation",
+                    self.prepare_acknowledgements(),
+                )
 
-            llm_started = time.perf_counter()
             # STTの文字起こしを、今回の質問・依頼としてLLM入力へ渡す。
             llm_task = asyncio.create_task(
-                self.llm.generate_response(transcription.text, self._history, system_prompt=self.system_prompt)
+                _measure_stage(
+                    "llm",
+                    self.llm.generate_response(
+                        transcription.text,
+                        self._history,
+                        system_prompt=self.system_prompt,
+                    ),
+                )
             )
             acknowledgement: VoiceAcknowledgement | None = None
-            acknowledgement_task: asyncio.Task[None] | None = None
-            speech_task: asyncio.Task[SynthesizedSpeech] | None = None
+            acknowledgement_task: asyncio.Task[tuple[None, float]] | None = None
+            speech_task: asyncio.Task[tuple[SynthesizedSpeech, float]] | None = None
             acknowledgement_seconds = 0.0
             try:
                 if acknowledgement_allowed:
@@ -118,24 +164,25 @@ class VoicePipeline:
                         )
                     except TimeoutError:
                         acknowledgement = self.acknowledgements.next()
-                        acknowledgement_started = time.perf_counter()
                         assert on_acknowledgement is not None
                         acknowledgement_task = asyncio.create_task(
-                            self._deliver_acknowledgement(on_acknowledgement, acknowledgement)
+                            _measure_stage(
+                                "acknowledgement_playback",
+                                self._deliver_acknowledgement(
+                                    on_acknowledgement,
+                                    acknowledgement,
+                                ),
+                            )
                         )
 
-                response = await llm_task
-                llm_seconds = time.perf_counter() - llm_started
+                response, llm_seconds = await llm_task
 
-                tts_started = time.perf_counter()
-                speech_task = asyncio.create_task(asyncio.to_thread(self.tts.synthesize, response.text))
+                speech_task = asyncio.create_task(
+                    _measure_stage("tts", self.tts.synthesize_async(response.text))
+                )
                 if acknowledgement_task:
-                    try:
-                        await acknowledgement_task
-                    finally:
-                        acknowledgement_seconds = time.perf_counter() - acknowledgement_started
-                speech = await speech_task
-                tts_seconds = time.perf_counter() - tts_started
+                    _, acknowledgement_seconds = await acknowledgement_task
+                speech, tts_seconds = await speech_task
             except BaseException:
                 for task in (llm_task, acknowledgement_task, speech_task):
                     if task is not None and not task.done():
@@ -157,6 +204,8 @@ class VoicePipeline:
             else:
                 self._history.clear()
 
+            total_seconds = time.perf_counter() - turn_started
+            logger.info("voice_turn_succeeded total_seconds=%.3f", total_seconds)
             return VoiceTurnResult(
                 transcription=transcription,
                 response=response,
@@ -168,7 +217,7 @@ class VoicePipeline:
                     "acknowledgement_preparation": round(acknowledgement_preparation_seconds, 3),
                     "acknowledgement": round(acknowledgement_seconds, 3),
                     "tts": round(tts_seconds, 3),
-                    "total": round(time.perf_counter() - turn_started, 3),
+                    "total": round(total_seconds, 3),
                 },
             )
 

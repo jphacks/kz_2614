@@ -19,7 +19,7 @@ from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 
 
-load_dotenv(Path(__file__).with_name(".env"), override=False)
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 logging.basicConfig(level=os.getenv("TAIL_MCP_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("nen_gitsune.tail_mcp")
 

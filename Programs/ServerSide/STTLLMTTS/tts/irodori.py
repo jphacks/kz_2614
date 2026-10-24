@@ -12,9 +12,10 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from ..settings_store import get_saved_settings, reference_voice_path
+from ...dashboard.settings_store import get_saved_settings, reference_voice_path
+from ..runtime import run_blocking_stage
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 MAX_REFERENCE_AUDIO_BYTES = 10 * 1024 * 1024
 
@@ -35,6 +36,7 @@ class TTSConfig:
     seed: str = "1696307816543752105"
     reference_audio_path: str = ""
     max_audio_bytes: int = 25_000_000
+    timeout_seconds: float = 90.0
 
     @classmethod
     def from_env(cls) -> "TTSConfig":
@@ -57,6 +59,10 @@ class TTSConfig:
             seed=os.getenv("VOICE_TTS_SEED", cls.seed),
             reference_audio_path=reference_audio_path,
             max_audio_bytes=max(1_024, int(os.getenv("VOICE_TTS_MAX_AUDIO_BYTES", str(cls.max_audio_bytes)))),
+            timeout_seconds=min(
+                180.0,
+                max(1.0, float(os.getenv("VOICE_TTS_TIMEOUT_SECONDS", str(cls.timeout_seconds)))),
+            ),
         )
 
 
@@ -72,11 +78,18 @@ class SynthesizedSpeech:
 class IrodoriTTS:
     """ローカルの Irodori-TTS Gradio サーバーから音声を生成する。"""
 
+    _server_locks: dict[str, threading.Lock] = {}
+    _server_locks_guard = threading.Lock()
+
     def __init__(self, config: TTSConfig | None = None) -> None:
         self.config = config or TTSConfig.from_env()
         self._client: Any | None = None
         self._client_lock = threading.Lock()
-        self._synthesis_lock = threading.Lock()
+        with self._server_locks_guard:
+            self._synthesis_lock = self._server_locks.setdefault(
+                self.config.server_url,
+                threading.Lock(),
+            )
         self._reference_audio_bytes: bytes | None = None
         self._reference_audio_suffix = ".wav"
         if self.config.reference_audio_path:
@@ -96,7 +109,7 @@ class IrodoriTTS:
                     from gradio_client import Client
                 except ImportError as exc:
                     raise SpeechSynthesisError(
-                        "gradio_client is not installed; install app/requirements.txt"
+                        "gradio_client is not installed; install Programs/ServerSide/requirements.txt"
                     ) from exc
                 try:
                     self._client = Client(self.config.server_url)
@@ -186,7 +199,7 @@ class IrodoriTTS:
                     from gradio_client import handle_file
                 except ImportError as exc:
                     raise SpeechSynthesisError(
-                        "gradio_client is not installed; install app/requirements.txt"
+                        "gradio_client is not installed; install Programs/ServerSide/requirements.txt"
                     ) from exc
                 if self._reference_audio_bytes is not None:
                     with tempfile.NamedTemporaryFile(suffix=self._reference_audio_suffix, delete=False) as temporary_file:
@@ -247,3 +260,12 @@ class IrodoriTTS:
                 except OSError:
                     pass
         return self._read_audio(result)
+
+    async def synthesize_async(self, text: str) -> SynthesizedSpeech:
+        """TTSをイベントループ外で実行し、設定した期限内に結果を返す。"""
+        return await run_blocking_stage(
+            "tts",
+            self.config.timeout_seconds,
+            self.synthesize,
+            text,
+        )
