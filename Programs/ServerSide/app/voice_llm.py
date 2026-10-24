@@ -76,23 +76,27 @@ class VoiceLLMClient:
         history: Sequence[dict[str, str]] = (),
         system_prompt: str = COMPANION_SYSTEM_PROMPT,
     ) -> dict[str, Any]:
-        turns = [
+        recent_history = [
             {"role": item["role"], "content": str(item["content"])}
             for item in history
             if item.get("role") in {"user", "assistant"} and item.get("content")
         ]
         if self.config.max_history_messages:
-            turns = turns[-self.config.max_history_messages :]
+            recent_history = recent_history[-self.config.max_history_messages :]
         else:
-            turns = []
-        turns.append({"role": "user", "content": user_text.strip()})
+            recent_history = []
 
-        user_input = turns[-1]["content"]
-        if len(turns) > 1:
+        current_utterance = user_text.strip()
+        if recent_history:
             user_input = (
-                "以下は直近の会話です。最後のユーザー発言に短く返答してください。\n"
-                + json.dumps(turns, ensure_ascii=False)
+                "以前の会話は文脈として参照してください。回答対象は、最後に記載する今回のユーザー発話です。\n"
+                "以前の会話:\n"
+                + json.dumps(recent_history, ensure_ascii=False)
+                + "\n\n今回のユーザー発話（質問・依頼）:\n"
+                + current_utterance
             )
+        else:
+            user_input = "今回のユーザー発話（質問・依頼）:\n" + current_utterance
 
         payload: dict[str, Any] = {
             "model": self.config.model,
@@ -121,6 +125,7 @@ class VoiceLLMClient:
         history: Sequence[dict[str, str]] = (),
         system_prompt: str = COMPANION_SYSTEM_PROMPT,
     ) -> VoiceLLMReply:
+        """STTで得た現在のユーザー発話を質問・依頼としてLM Studioへ送る。"""
         if not user_text.strip():
             raise ValueError("user_text must not be empty")
 

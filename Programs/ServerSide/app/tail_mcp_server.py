@@ -1,6 +1,6 @@
-"""LM Studioから呼ばれる、上限付きのESP32しっぽ制御MCPサーバー。
+"""LM Studioから呼ばれる、上限付きのRaspberry Pi 4しっぽ制御MCPサーバー。
 
-ESP32側のHTTP APIは本ファイルで定義する暫定契約です。実機ファームウェアが
+Pi 4側のデバイスAPIは別途定義する契約です。デバイスサービスが
 このAPIを実装するまでは、動作確認済みの機構として扱わないでください。
 """
 
@@ -90,7 +90,7 @@ async def tap_tail(
 ) -> str:
     """Start gentle tail tapping for at most five seconds at a bounded rate.
 
-    Use only when the user clearly requests tapping. The ESP32 must enforce its own
+    Use only when the user clearly requests tapping. The Raspberry Pi service must enforce its own
     movement-angle limits and watchdog; this MCP limit is an additional guard.
     """
     try:
@@ -122,7 +122,7 @@ async def stop_tail() -> str:
 
 @mcp.tool()
 async def get_tail_status() -> str:
-    """Read whether the ESP32 reports that the tail is moving."""
+    """Read whether the Raspberry Pi service reports that the tail is moving."""
     try:
         result = await _request("GET", "api/tail/status")
         return f"tail_status={result.get('state', 'unknown')}"

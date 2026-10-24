@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f5f0">
+    <title>ねんぎつね | 音声・会話ダッシュボード</title>
+    <link rel="stylesheet" href="/dashboard.css">
+  </head>
+  <body>
+    <div class="dashboard-shell">
+      <aside class="sidebar" aria-label="メインメニュー">
+        <a class="brand" href="#top" aria-label="ねんぎつね ダッシュボード">
+          <span class="brand-mark" aria-hidden="true">狐</span>
+          <span><strong>ねんぎつね</strong><small>VOICE DASHBOARD</small></span>
+        </a>
+        <nav class="side-nav">
+          <a class="nav-link active" href="#overview"><span class="nav-dot"></span>ダッシュボード</a>
+          <a class="nav-link" href="#voice-call"><span class="nav-dot"></span>音声で話す</a>
+          <a class="nav-link" href="#stt"><span class="nav-dot"></span>音声認識 STT</a>
+          <a class="nav-link" href="#tts"><span class="nav-dot"></span>音声合成 TTS</a>
+          <a class="nav-link" href="#behavior"><span class="nav-dot"></span>会話のふるまい</a>
+        </nav>
+        <div class="sidebar-note">
+          <span class="note-icon" aria-hidden="true">i</span>
+          <p>音声モデルと会話の設定を、このサーバーに保存します。</p>
+        </div>
+        <div class="sidebar-footer">MVP · Android Web 対応</div>
+      </aside>
+
+      <main id="top" class="main-content">
+        <header class="topbar">
+          <div class="breadcrumbs">ねんぎつね <span>/</span> 設定</div>
+          <div id="connection-status" class="connection-status pending" role="status" aria-live="polite">
+            <span class="status-dot"></span><span id="connection-label">サーバーを確認中</span>
+          </div>
+        </header>
+
+        <section id="overview" class="welcome-row">
+          <div>
+            <p class="eyebrow">VOICE & BEHAVIOR</p>
+            <h1>音声と会話の設定</h1>
+            <p class="welcome-copy">ねんぎつねの声や、話しかけられたときのふるまいを整えます。</p>
+          </div>
+          <div class="fox-orb" aria-hidden="true"><span>✦</span></div>
+        </section>
+
+        <section class="status-card" aria-label="設定の反映状態">
+          <div class="status-card-icon" aria-hidden="true">✓</div>
+          <div class="status-card-copy">
+            <strong id="settings-state-title">サーバー設定を読み込みます</strong>
+            <span id="settings-state-copy">保存した設定は、新しく開始する会話に反映されます。</span>
+          </div>
+          <button id="reload-button" class="button button-quiet" type="button">再読み込み</button>
+        </section>
+
+        <section id="voice-call" class="voice-call-card" aria-labelledby="voice-call-title">
+          <div class="voice-call-heading">
+            <div class="section-title-row">
+              <div class="section-icon voice-icon" aria-hidden="true">話</div>
+              <div><p class="eyebrow">PUSH TO TALK</p><h2 id="voice-call-title">音声で話す</h2></div>
+            </div>
+            <span class="voice-mode-tag">1往復ずつ</span>
+          </div>
+          <p class="section-description">会話を始めてから録音ボタンを押し、話し終えたらもう一度押してください。返答音声はこのスマートフォンで再生します。</p>
+          <div class="voice-call-actions">
+            <button id="voice-start-button" class="button button-primary" type="button">会話を始める</button>
+            <button id="voice-record-button" class="button button-record" type="button" disabled>録音して話す</button>
+            <button id="voice-stop-button" class="button button-quiet" type="button" disabled>すぐに停止</button>
+          </div>
+          <p id="voice-call-status" class="voice-call-status" role="status" aria-live="polite">HTTPSのページを開くと、マイクを使った音声会話を開始できます。</p>
+          <div class="voice-turn" aria-live="polite">
+            <div><span class="field-label">聞き取った内容</span><p id="voice-transcript" class="voice-turn-text">まだ発話はありません。</p></div>
+            <div><span class="field-label">返事</span><p id="voice-response" class="voice-turn-text">会話を始めると、ここに返事が表示されます。</p></div>
+            <audio id="voice-audio" controls preload="none" hidden></audio>
+          </div>
+          <p class="voice-privacy-note">録音は返答の生成中だけサーバーの一時領域で扱い、処理後に削除します。音声会話にはHTTPS接続とマイク許可が必要です。</p>
+        </section>
+
+        <div class="settings-layout">
+          <form id="settings-form" class="settings-form" autocomplete="off">
+            <section id="stt" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon stt-icon" aria-hidden="true">聞</div>
+                <div><p class="eyebrow">INPUT · STT</p><h2>音声認識</h2></div>
+                <span class="section-number">01</span>
+              </div>
+              <p class="section-description">スマートフォンから届く音声を、どのモデルと言語で文字にするかを設定します。</p>
+
+              <div class="field-grid">
+                <label class="field field-wide">
+                  <span class="field-label">認識モデル</span>
+                  <input name="stt.model_id" type="text" maxlength="200" required value="Systran/faster-whisper-small" autocomplete="off">
+                  <span class="field-hint">モデルを変更すると、サーバー側で初回ロードや取得が発生する場合があります。</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">認識する言語</span>
+                  <select name="stt.language">
+                    <option value="ja">日本語</option>
+                    <option value="auto">自動判定</option>
+                    <option value="en">英語</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">実行デバイス</span>
+                  <select name="stt.device">
+                    <option value="cpu">CPU</option>
+                    <option value="cuda">CUDA GPU</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">計算形式</span>
+                  <select name="stt.compute_type">
+                    <option value="int8">int8 · CPU向け</option>
+                    <option value="int8_float16">int8 + float16</option>
+                    <option value="float16">float16 · GPU向け</option>
+                    <option value="float32">float32</option>
+                  </select>
+                </label>
+                <div class="field field-toggle">
+                  <div><span class="field-label">無音区間を除外</span><span class="field-hint">発話のない部分を認識処理から除きます。</span></div>
+                  <label class="switch"><input name="stt.vad_filter" type="checkbox"><span class="switch-track"></span><span class="sr-only">無音区間を除外</span></label>
+                </div>
+              </div>
+            </section>
+
+            <section id="tts" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon tts-icon" aria-hidden="true">声</div>
+                <div><p class="eyebrow">OUTPUT · TTS</p><h2>音声合成</h2></div>
+                <span class="section-number">02</span>
+              </div>
+              <p class="section-description">返事を作る音声モデルと、声の雰囲気を設定します。</p>
+
+              <div class="field-grid">
+                <label class="field field-wide">
+                  <span class="field-label">音声モデル</span>
+                  <input name="tts.checkpoint" type="text" maxlength="200" required value="Aratako/Irodori-TTS-600M-v3-VoiceDesign" autocomplete="off">
+                </label>
+                <label class="field field-wide">
+                  <span class="field-label">声の説明</span>
+                  <textarea name="tts.caption" rows="3" maxlength="500" required>落ち着いて親しみやすく、聞き取りやすい自然な日本語で話す。話者の声質を一定に保つ。</textarea>
+                  <span class="field-hint">例: やわらかく静かな声で、ゆっくり話す。声質は会話中に一貫させる。</span>
+                </label>
+              </div>
+              <div class="reference-audio-box">
+                <div class="reference-audio-heading">
+                  <div><span class="field-label">参照音声 WAV</span><span class="field-hint">Irodori-TTSの声づくりに使う音声をサーバーへ保存します。</span></div>
+                  <span id="reference-audio-state" class="file-state">未設定</span>
+                </div>
+                <div id="reference-audio-info" class="reference-audio-info" role="status" aria-live="polite">参照音声はまだ登録されていません。</div>
+                <div class="reference-audio-controls">
+                  <label class="file-picker button button-quiet" for="reference-audio-file">WAVを選択</label>
+                  <input id="reference-audio-file" type="file" accept=".wav,audio/wav,audio/x-wav">
+                  <button id="upload-reference-audio" class="button button-primary" type="button" disabled>サーバーに保存</button>
+                  <button id="delete-reference-audio" class="button button-quiet" type="button" disabled>削除</button>
+                </div>
+                <span class="field-hint">PCM WAV、16-bit、モノラル／ステレオ、16〜48kHz、1〜30秒、最大10MB。保存音声は次の音声処理インスタンスからTTSへ渡されます。</span>
+              </div>
+              <div class="inline-note"><span aria-hidden="true">♪</span> 参照音声はサーバーに保存され、TTS生成時にIrodori-TTSへ送信されます。不要になったら削除してください。</div>
+            </section>
+
+            <section id="behavior" class="settings-card">
+              <div class="section-title-row">
+                <div class="section-icon behavior-icon" aria-hidden="true">心</div>
+                <div><p class="eyebrow">PERSONALITY</p><h2>会話のふるまい</h2></div>
+                <span class="section-number">03</span>
+              </div>
+              <p class="section-description">話し方や返答の長さを選びます。安全や停止の決まりは、これらの好み設定より優先されます。</p>
+
+              <div class="field-grid">
+                <label class="field">
+                  <span class="field-label">基本の話し方</span>
+                  <select name="behavior.persona">
+                    <option value="gentle">やさしく寄り添う</option>
+                    <option value="quiet">静かで控えめ</option>
+                    <option value="cheerful">親しみやすく明るめ</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">返答の長さ</span>
+                  <select name="behavior.response_length">
+                    <option value="short">短め · 1〜2文</option>
+                    <option value="medium">少し詳しく · 3〜4文</option>
+                  </select>
+                </label>
+                <label class="field field-wide">
+                  <span class="field-label">質問の頻度</span>
+                  <select name="behavior.question_frequency">
+                    <option value="rarely">必要なときだけ聞く</option>
+                    <option value="sometimes">自然な流れでときどき聞く</option>
+                  </select>
+                </label>
+                <label class="field field-wide">
+                  <span class="field-label">追加の話し方の希望 <small>任意</small></span>
+                  <textarea name="behavior.custom_instruction" rows="3" maxlength="400" placeholder="例: まず気持ちを受け止めてから、短く返事をする"></textarea>
+                  <span class="field-hint"><span id="instruction-count">0</span>/400文字。停止・安全・しっぽ制御の設定は変更できません。</span>
+                </label>
+              </div>
+
+              <div class="behavior-rules">
+                <div class="rule-row">
+                  <span class="rule-check" aria-hidden="true">✓</span>
+                  <div><strong>相づちを使う</strong><span>MVPの必須機能です。返答と重ねず、最大1回にします。</span></div>
+                  <span class="required-tag">必須</span>
+                </div>
+                <div class="rule-row">
+                  <span class="rule-shield" aria-hidden="true">◇</span>
+                  <div><strong>しっぽの安全設定</strong><span>この画面から動作許可は変更できません。明確なトントン要求が必要です。</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="access-card">
+              <div><p class="eyebrow">SERVER ACCESS</p><h2>管理アクセス</h2><p>ネットワーク越しに開く場合、サーバー起動時に設定した管理トークンを入力します。</p></div>
+              <label class="field token-field"><span class="field-label">管理トークン <small>必要な場合のみ</small></span><input id="dashboard-token" type="password" autocomplete="current-password" placeholder="トークンはこのタブ内だけに保存"></label>
+            </section>
+
+            <div class="form-actions">
+              <span id="save-message" role="status" aria-live="polite">設定はまだ保存されていません。</span>
+              <div class="action-buttons">
+                <button id="reset-button" class="button button-quiet" type="button">既定値に戻す</button>
+                <button id="save-button" class="button button-primary" type="submit"><span aria-hidden="true">✓</span> サーバーに保存</button>
+              </div>
+            </div>
+          </form>
+
+          <aside class="side-summary">
+            <div class="summary-card">
+              <p class="eyebrow">QUICK GUIDE</p>
+              <h3>設定の反映について</h3>
+              <ol>
+                <li><span>1</span><p>STT・TTSと話し方を調整します。</p></li>
+                <li><span>2</span><p>「サーバーに保存」を押します。</p></li>
+                <li><span>3</span><p>新しい会話から設定が使われます。</p></li>
+              </ol>
+              <div class="summary-divider"></div>
+              <p class="summary-footnote">モデルやGPUの変更は、環境に合わないと読み込みに失敗することがあります。</p>
+            </div>
+            <div class="privacy-card">
+              <span class="privacy-icon" aria-hidden="true">⌑</span>
+              <div><strong>音声は保存しません</strong><p>この設定画面は録音音声やAPIキーを保存しません。設定値はサーバー内に保存されます。</p></div>
+            </div>
+          </aside>
+        </div>
+
+        <footer class="page-footer">ねんぎつね · 音声会話の設定 <span>Settings are stored on this server</span></footer>
+      </main>
+    </div>
+    <script src="/dashboard.js" defer></script>
+    <script src="/voice_call.js" defer></script>
+  </body>
+</html>

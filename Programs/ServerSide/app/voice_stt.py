@@ -10,10 +10,13 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from .settings_store import get_saved_settings
 
 load_dotenv(Path(__file__).with_name(".env"), override=False)
 
-WHISPER_MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "whisper"
+# ServerSide/whisper is the existing model-cache folder and is ignored by Git.
+WHISPER_MODEL_DIR = Path(__file__).resolve().parent.parent / "whisper"
+DEFAULT_MAX_AUDIO_BYTES = 25_000_000
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -30,15 +33,22 @@ class WhisperConfig:
     compute_type: str = "int8"
     language: str = "ja"
     local_files_only: bool = False
+    max_audio_bytes: int = DEFAULT_MAX_AUDIO_BYTES
+    vad_filter: bool = True
 
     @classmethod
     def from_env(cls) -> "WhisperConfig":
+        saved = get_saved_settings().get("stt", {})
         return cls(
-            model_id=os.getenv("WHISPER_MODEL_ID", cls.model_id),
-            device=os.getenv("WHISPER_DEVICE", cls.device),
-            compute_type=os.getenv("WHISPER_COMPUTE_TYPE", cls.compute_type),
-            language=os.getenv("WHISPER_LANGUAGE", cls.language),
+            model_id=saved.get("model_id", os.getenv("WHISPER_MODEL_ID", cls.model_id)),
+            device=saved.get("device", os.getenv("WHISPER_DEVICE", cls.device)),
+            compute_type=saved.get("compute_type", os.getenv("WHISPER_COMPUTE_TYPE", cls.compute_type)),
+            language=saved.get("language", os.getenv("WHISPER_LANGUAGE", cls.language)),
             local_files_only=_env_bool("WHISPER_LOCAL_FILES_ONLY"),
+            max_audio_bytes=max(1_024, int(os.getenv("WHISPER_MAX_AUDIO_BYTES", str(cls.max_audio_bytes)))),
+            vad_filter=saved.get(
+                "vad_filter", _env_bool("WHISPER_VAD_FILTER", default=cls.vad_filter)
+            ),
         )
 
 
@@ -83,6 +93,14 @@ class WhisperSTT:
         path = Path(audio_path).expanduser()
         if not path.is_file():
             raise FileNotFoundError(f"Audio file does not exist: {path}")
+        try:
+            file_size = path.stat().st_size
+        except OSError as exc:
+            raise ValueError("Audio file cannot be accessed") from exc
+        if file_size <= 0:
+            raise ValueError("Audio file is empty")
+        if file_size > self.config.max_audio_bytes:
+            raise ValueError("Audio file exceeds WHISPER_MAX_AUDIO_BYTES")
 
         model = self._load_model()
         language = self.config.language.strip().lower()
@@ -91,7 +109,7 @@ class WhisperSTT:
             language=None if language in {"", "auto"} else language,
             beam_size=3,
             condition_on_previous_text=False,
-            vad_filter=True,
+            vad_filter=self.config.vad_filter,
         )
         text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
         duration = getattr(info, "duration", None)

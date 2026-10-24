@@ -3,6 +3,9 @@ app/.venv/
 app/__pycache__/
 app/*.py[cod]
 app/data/recorded_speech/
-models/whisper/*
-!models/whisper/.gitkeep
-!models/whisper/README.md
+app/data/dashboard_settings.json
+app/data/reference_voice.wav
+app/data/reference_voice.wav
+whisper/*
+!whisper/.gitkeep
+!whisper/README.md
