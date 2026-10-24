@@ -4,7 +4,7 @@ AndroidアプリはサーバーのWeb画面を開くWebViewラッパーです。
 
 ## 接続と音声会話
 
-1. `Programs/ServerSide/app/dashboard_server.py` をサーバー側で起動します。
+1. リポジトリルートで `python -m Programs.ServerSide.app.dashboard.server` を実行してサーバーを起動します。
 2. スマートフォンから到達できるHTTPS URLを用意します。LANで管理トークンを使う場合は、32文字以上の `NENGITSUNE_DASHBOARD_TOKEN` とHTTPSリバースプロキシを設定します。
 3. アプリへ `https://サーバー名/` を入力してWeb画面を開きます。
 4. Web画面で会話を開始し、録音時にAndroidのマイク許可を与えます。ボタンで1発話を録音して送信し、返答音声を再生します。

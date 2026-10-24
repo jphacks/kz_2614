@@ -26,6 +26,29 @@
 
 このリポジトリの `ClientSide` と `ServerSide` を、次の役割に分ける想定です。Android Web音声APIを [音声会話API仕様](ServerSide/VOICE_API.md)、Pi 4デバイスAPI案を [Raspberry Pi 4 API仕様](ServerSide/RASPBERRY_PI_API.md) にまとめました。音声会話APIコードはありますが実機確認は未完了です。Pi 4の音声API案はAndroid Web MVPの音声経路では使用しません。
 
+### 開発作業の担当分け
+
+| 作業 | 主な担当範囲 | 役割 |
+| --- | --- | --- |
+| Androidクライアント | `ClientSide/` | WebView、サーバーURL、マイク権限、録音・再生、停止操作 |
+| ダッシュボード／HTTP入口 | `ServerSide/app/dashboard/`、`ServerSide/web/` | 設定画面と配信、設定API、音声会話APIのHTTP受付 |
+| STT・LLM・TTS | `ServerSide/app/voice/` | 各モデル接続、STT→LLM→TTSパイプライン、セッション、相づち |
+| 共有設定 | `ServerSide/app/settings_store.py` | ダッシュボードで保存した設定を音声処理から読む。参照WAVの検証・管理 |
+| Raspberry Pi 4・しっぽ | `ServerSide/app/tail_mcp_server.py`、`ServerSide/RASPBERRY_PI_API.md` | MCPから機器APIを呼ぶ。初期音声MVPの後に実装・統合 |
+
+### ブランチ運用
+
+作業は `main` から用途ごとの `codex/<担当>-<作業>` ブランチを作って進めます。次の名称は作業単位の例であり、事前にブランチが存在することを示すものではありません。
+
+| ブランチ名の例 | 主な作業 |
+| --- | --- |
+| `codex/android-client` | Android WebView、マイク、録音・再生、端末側停止 |
+| `codex/server-dashboard` | ダッシュボード画面、HTTP入口、設定API |
+| `codex/server-voice-pipeline` | STT、LLM、TTS、音声セッションと相づち |
+| `codex/raspberry-pi-tail` | Pi 4デバイスサービス、MCP、しっぽ制御 |
+
+担当をまたぐ変更では、先に `VOICE_API.md` または `RASPBERRY_PI_API.md` と関連要件書を更新し、同じAPI契約に合わせます。作業ブランチで差分を確認してから `main` に統合します。`main` は統合先とし、個別作業を直接積み重ねません。
+
 ### ClientSide（Androidブラウザーを基本とするスマホ画面）
 
 - 接続先と接続状態の表示
@@ -50,7 +73,7 @@
 - MCPサーバーからRaspberry Pi 4への固定動作指示（HTTPS/JSON API）
 - 失敗・切断・タイムアウト時の停止処理
 
-自作コードは `ServerSide/app/` にまとめました。`voice_pipeline.py` が音声ファイルから文字起こし・返答生成・音声合成を行い、音声会話APIがセッションと返答音声を扱います。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[自作ServerSideアプリの説明](ServerSide/app/README.md) を参照してください。
+自作コードは `ServerSide/app/` にまとめ、音声処理を `voice/`、HTTPサーバーを `dashboard/` に分けました。`voice/pipeline.py` がSTT・LLM・TTSをつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[自作ServerSideアプリの説明](ServerSide/app/README.md) を参照してください。
 
 モデル候補として `faster-whisper-small`（STT）、`Gemma 4 26B-A4B（Q4_K_M）`（LLM）、`Irodori-TTS 600M v3 VoiceDesign`（TTS）をコードの初期設定にしています。接続先・デバイス設定とパイプラインは実装しましたが、モデルの準備、動作環境、応答速度は未確認です。
 
@@ -133,15 +156,18 @@ Android WebViewマイク → サーバー(STT → LLM → TTS) → Android WebVi
 Programs/
 ├── ClientSide/   # Android Webクライアントの要件
 ├── ServerSide/
-│   ├── web/               # STT・TTS・参照WAV・会話設定のダッシュボード
-│   ├── app/               # 自作コード
-│   │   ├── voice_acknowledgements.py
-│   │   ├── dashboard_server.py
-│   │   ├── settings_store.py
-│   │   ├── voice_llm.py
-│   │   ├── voice_stt.py
-│   │   ├── voice_tts.py
-│   │   ├── voice_pipeline.py
+│   ├── web/               # ダッシュボードと音声会話のブラウザー画面
+│   ├── app/
+│   │   ├── dashboard/     # HTTPサーバー
+│   │   │   └── server.py
+│   │   ├── voice/         # STT・LLM・TTSと会話セッション
+│   │   │   ├── stt.py
+│   │   │   ├── llm.py
+│   │   │   ├── tts.py
+│   │   │   ├── pipeline.py
+│   │   │   ├── sessions.py
+│   │   │   └── acknowledgements.py
+│   │   ├── settings_store.py # dashboard と voice の共有設定
 │   │   └── tail_mcp_server.py
 │   ├── third_party/       # 外部ソース（Irodori-TTS配置予定）
 │   ├── whisper/           # Whisperモデルのキャッシュ先

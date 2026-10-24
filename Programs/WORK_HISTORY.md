@@ -157,6 +157,11 @@
 - 文書: `ServerSide/REQUIREMENTS.md` と `ClientSide/REQUIREMENTS.md` の統合前項目を「残作業・確認」に整理し、`Agent.md` の作業リストではAPI・クライアント・セッション制御を進行中、実環境確認を待ちとして維持。
 - 確認: ソースと文書の手動照合のみ。テスト、ビルド、サーバー起動、Android実機、モデル接続は実施していない。
 - 未完了: API契約の実端末接続、相づち・再生完了通知、実モデル接続、停止競合と切断・再接続の受け入れ確認。
+### ServerSideの音声処理とダッシュボードを分離（2026-10-24）
+- 対応: `app/voice/` にSTT・LLM・TTS、パイプライン、会話セッション、相づちを集約し、`app/dashboard/` にHTTPサーバーを配置。Web画面は `ServerSide/web/`、共有設定は `app/settings_store.py` に分けた。
+- 更新: パッケージimport、`.env` とWhisperモデルキャッシュの参照先、Android側の起動コマンド、README・要件書の構成図と担当分担を更新。READMEに担当領域ごとのブランチ運用例を記載。
+- 確認: ファイル参照と差分を手動確認。テスト、サーバー起動、モデル接続は未実施。
+- 未完了: 起動とHTTP画面/APIの動作、Whisper・LM Studio・Irodori-TTS接続の確認。
 
 ## 現在のファイル構成
 
@@ -187,18 +192,22 @@ Programs/
     ├── app/
     │   ├── README.md
     │   ├── __init__.py
-    │   ├── dashboard_server.py
-    │   ├── voice_sessions.py
+    │   ├── dashboard/
+    │   │   ├── __init__.py
+    │   │   └── server.py
+    │   ├── voice/
+    │   │   ├── __init__.py
+    │   │   ├── acknowledgements.py
+    │   │   ├── llm.py
+    │   │   ├── pipeline.py
+    │   │   ├── sessions.py
+    │   │   ├── stt.py
+    │   │   └── tts.py
     │   ├── mcp.json.example
     │   ├── requirements.txt
     │   ├── settings_store.py
     │   ├── data/                 # 設定JSON・参照WAVの実行時保存先（Git除外）
-    │   ├── voice_acknowledgements.py
-    │   ├── tail_mcp_server.py
-    │   ├── voice_llm.py
-    │   ├── voice_pipeline.py
-    │   ├── voice_stt.py
-    │   └── voice_tts.py
+    │   └── tail_mcp_server.py
     ├── third_party/
     │   ├── README.md
     │   └── Irodori-TTS/.gitkeep

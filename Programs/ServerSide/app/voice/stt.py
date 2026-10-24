@@ -10,12 +10,12 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from .settings_store import get_saved_settings
+from ..settings_store import get_saved_settings
 
-load_dotenv(Path(__file__).with_name(".env"), override=False)
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 # ServerSide/whisper is the existing model-cache folder and is ignored by Git.
-WHISPER_MODEL_DIR = Path(__file__).resolve().parent.parent / "whisper"
+WHISPER_MODEL_DIR = Path(__file__).resolve().parents[2] / "whisper"
 DEFAULT_MAX_AUDIO_BYTES = 25_000_000
 DEFAULT_MAX_AUDIO_SECONDS = 60.0
 

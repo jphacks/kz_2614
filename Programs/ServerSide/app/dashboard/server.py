@@ -18,7 +18,7 @@ from urllib.parse import unquote, urlsplit
 
 from dotenv import load_dotenv
 
-from .settings_store import (
+from ..settings_store import (
     DEFAULT_SETTINGS,
     MAX_REFERENCE_WAV_BYTES,
     delete_reference_voice,
@@ -27,10 +27,10 @@ from .settings_store import (
     save_reference_voice,
     save_settings,
 )
-from .voice_sessions import MAX_AUDIO_BYTES, VoiceAPIError, VoiceSessions
+from ..voice.sessions import MAX_AUDIO_BYTES, VoiceAPIError, VoiceSessions
 
 
-WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
+WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
 MAX_REQUEST_BYTES = 16_384
 LOGGER = logging.getLogger("nen_gitsune.dashboard")
 _VOICE_SESSIONS: VoiceSessions | None = None
@@ -401,7 +401,7 @@ class DashboardHTTPServer(ThreadingHTTPServer):
 
 
 def main() -> None:
-    load_dotenv(Path(__file__).with_name(".env"), override=False)
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
     parser = argparse.ArgumentParser(description="Start the NenGitsune settings dashboard")
     parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: loopback only)")
     parser.add_argument("--port", type=int, default=8765, help="HTTP port (default: 8765)")

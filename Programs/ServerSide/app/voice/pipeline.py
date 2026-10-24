@@ -9,11 +9,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from .voice_acknowledgements import VoiceAcknowledgement, VoiceAcknowledgementSystem
-from .voice_llm import COMPANION_SYSTEM_PROMPT, VoiceLLMClient, VoiceLLMReply
-from .voice_stt import Transcription, WhisperSTT
-from .voice_tts import IrodoriTTS, SynthesizedSpeech
-from .settings_store import build_behavior_guidance, get_dashboard_settings
+from .acknowledgements import VoiceAcknowledgement, VoiceAcknowledgementSystem
+from .llm import COMPANION_SYSTEM_PROMPT, VoiceLLMClient, VoiceLLMReply
+from .stt import Transcription, WhisperSTT
+from .tts import IrodoriTTS, SynthesizedSpeech
+from ..settings_store import build_behavior_guidance, get_dashboard_settings
 
 
 class NoSpeechDetected(RuntimeError):

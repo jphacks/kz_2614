@@ -6,7 +6,7 @@ import asyncio
 import os
 from dataclasses import dataclass
 
-from .voice_tts import IrodoriTTS, SynthesizedSpeech
+from .tts import IrodoriTTS, SynthesizedSpeech
 
 
 DEFAULT_ACKNOWLEDGEMENT_PHRASES = (

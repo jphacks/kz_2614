@@ -1,6 +1,6 @@
 # 自作ServerSideアプリ
 
-このフォルダーには、自作の音声会話クライアントと、しっぽ制御用 MCP サーバーを置きます。外部ソースは親フォルダーの `third_party/`、Whisper モデルは `../whisper/` に分けます。
+このフォルダーでは機能ごとに自作コードを分けます。`voice/` はSTT・LLM・TTSと音声セッション、`dashboard/` はHTTPサーバーとブラウザー画面、`tail_mcp_server.py` はしっぽ制御用MCPサーバーです。ダッシュボードと音声処理が使う共通設定は `settings_store.py` に置きます。外部ソースは親フォルダーの `third_party/`、Whisperモデルは `../whisper/` に分けます。
 
 サーバーの要件と現行コードとの差分は [要件定義](../REQUIREMENTS.md) を参照してください。`VoicePipeline` は入力音声を STT → LLM → TTS で処理し、文字起こし・返答・再生用音声バイト列・各段階の所要時間を返します。Android Web向けセッションAPIも追加しました。遅延時の相づち音声キャッシュと通知はありますが、ブラウザー再生経路にはまだつながっていません。
 
@@ -9,7 +9,7 @@
 HTML・CSS・JavaScript は親フォルダーの `../web/` にあります。リポジトリのルートで次を実行すると、既定ではこのPC内だけで `http://127.0.0.1:8765/` に設定画面を配信します。
 
 ```powershell
-python -m Programs.ServerSide.app.dashboard_server
+python -m Programs.ServerSide.app.dashboard.server
 ```
 
 画面ではSTTモデル・言語・実行デバイス・計算形式・無音除外、TTSモデル・声の説明、話し方・返答の長さ・質問頻度・追加の話し方を設定できます。設定は `app/data/dashboard_settings.json` に保存され、Gitには含まれません。設定の反映先は新しい `VoicePipeline` インスタンスです。進行中の会話へは反映されません。相づちはMVP必須のため無効化できません。ダッシュボードからしっぽ制御の許可状態は変更できません。
@@ -26,11 +26,11 @@ APIコードの追加まで完了し、起動、モデル接続、Android実機�
 
 ## Whisper → LM Studio → Irodori-TTS
 
-`voice_stt.py` は `faster-whisper` で音声ファイルを日本語文字起こしし、モデルを `../whisper/` に保存します。`voice_pipeline.py` は文字起こしを `voice_llm.py` に渡し、LLMの返答を `voice_tts.py` から Irodori-TTS へ送り、返却された音声をメモリ上のバイト列として返します。会話履歴は `VoicePipeline` インスタンス内に保持します。
+`voice/` の `stt.py` は `faster-whisper` で音声ファイルを日本語文字起こしし、モデルを `../whisper/` に保存します。`pipeline.py` は文字起こしを `llm.py` に渡し、LLMの返答を `tts.py` から Irodori-TTS へ送り、返却された音声をメモリ上のバイト列として返します。`sessions.py` は会話セッションを管理し、会話履歴は `VoicePipeline` インスタンス内に保持します。
 
-`voice_tts.py` は `gradio_client` を使い、`IRODORI_URL` の Gradio API `/_run_generation` を呼び出します。取得した一時音声ファイルは音声バイト列へ読み込んだあと、OSの一時フォルダー内にある場合だけ削除します。Irodori-TTS のモデル一式はここには含めず、互換サーバーを別途起動してください。GPUのない環境では、`.env` でモデルとcodecのデバイスを `cpu`、精度を `fp32` に変更します。モデル、デバイス、速度、Android WebViewでの再生形式は実機確認が必要です。
+`voice/tts.py` は `gradio_client` を使い、`IRODORI_URL` の Gradio API `/_run_generation` を呼び出します。取得した一時音声ファイルは音声バイト列へ読み込んだあと、OSの一時フォルダー内にある場合だけ削除します。Irodori-TTS のモデル一式はここには含めず、互換サーバーを別途起動してください。GPUのない環境では、`.env` でモデルとcodecのデバイスを `cpu`、精度を `fp32` に変更します。モデル、デバイス、速度、Android WebViewでの再生形式は実機確認が必要です。
 
-`voice_acknowledgements.py` は「うん、聞いてるよ。」「そっか、話してくれてありがとう。」の音声を会話開始前に同じTTS設定で生成し、メモリにキャッシュします。LLMの返答が `VOICE_ACK_DELAY_SECONDS`（既定0.9秒）を超える場合だけ1つを交互に選びます。「おやすみ」や停止要求には相づちを出しません。本返答と重ねないため、Android Webの再生完了通知を相づち配信経路へ接続する必要がありますが、現在は未実装です。
+`voice/acknowledgements.py` は「うん、聞いてるよ。」「そっか、話してくれてありがとう。」の音声を会話開始前に同じTTS設定で生成し、メモリにキャッシュします。LLMの返答が `VOICE_ACK_DELAY_SECONDS`（既定0.9秒）を超える場合だけ1つを交互に選びます。「おやすみ」や停止要求には相づちを出しません。本返答と重ねないため、Android Webの再生完了通知を相づち配信経路へ接続する必要がありますが、現在は未実装です。
 
 ```text
 音声ファイル → WhisperSTT → 文字起こし → VoiceLLMClient → LM Studio → IrodoriTTS
@@ -40,7 +40,7 @@ APIコードの追加まで完了し、起動、モデル接続、Android実機�
 
 初回は `Systran/faster-whisper-small` をダウンロードします。モデルは `ServerSide/whisper/` に保存し、CPU / int8 を初期値にしています。変更する値は `.env` の `WHISPER_MODEL_ID`、`WHISPER_DEVICE`、`WHISPER_COMPUTE_TYPE`、`WHISPER_LANGUAGE` です。入力ファイルは `WHISPER_MAX_AUDIO_BYTES`（既定25MB）で制限します。モデルの取得時はインターネット接続が必要です。
 
-呼び出し側からは、リポジトリのルートで `from Programs.ServerSide.app.voice_pipeline import VoicePipeline` として使います。
+呼び出し側からは、リポジトリのルートで `from Programs.ServerSide.app.voice.pipeline import VoicePipeline` として使います。
 
 ```python
 async def handle_recording():
@@ -70,7 +70,7 @@ async def handle_recording():
 
 ### 質問・依頼本文をLLMへ渡す場所
 
-Whisperが認識した現在の発話は `turn.transcription.text` に入ります。`VoicePipeline` はこの本文を `VoiceLLMClient.generate_response()` へ渡し、`voice_llm.py` がLM Studioのリクエスト `input` に「今回のユーザー発話（質問・依頼）」として設定します。直近の会話履歴は「以前の会話」として別に含め、話し方の指定を置く `system_prompt` には質問本文を入れません。空の文字起こしはLLMへ送りません。
+Whisperが認識した現在の発話は `turn.transcription.text` に入ります。`VoicePipeline` はこの本文を `VoiceLLMClient.generate_response()` へ渡し、`voice/llm.py` がLM Studioのリクエスト `input` に「今回のユーザー発話（質問・依頼）」として設定します。直近の会話履歴は「以前の会話」として別に含め、話し方の指定を置く `system_prompt` には質問本文を入れません。空の文字起こしはLLMへ送りません。
 
 ## AI_Secretary から活用した点
 
@@ -91,13 +91,13 @@ Discord Gateway、DAVE、Opus デコード、Discord 専用音声再生はこの
 
 ## LLM クライアント
 
-`voice_llm.py` は、テキストと直近の会話履歴を LM Studio に送り、短い返答を返します。応答本文に加え、呼び出されたツール名と生成統計を `VoiceLLMReply` で返します。会話本文をこのクライアントがログやファイルへ保存する処理はありません。`store=false` で要求し、LM Studio のAPI設定に従って処理します。
+`voice/llm.py` は、テキストと直近の会話履歴を LM Studio に送り、短い返答を返します。応答本文に加え、呼び出されたツール名と生成統計を `VoiceLLMReply` で返します。会話本文をこのクライアントがログやファイルへ保存する処理はありません。`store=false` で要求し、LM Studio のAPI設定に従って処理します。
 
 MCP を有効にすると、LM Studio へ登録した `mcp/nen-gitsune-tail` のうち、`tap_tail`、`stop_tail`、`get_tail_status` だけを許可します。既定では `TAIL_MCP_ENABLED=false` です。
 
 ## 相づちの音声設計
 
-相づちはMVPの必須要件です。`voice_acknowledgements.py` が短い相づち音声を事前生成してメモリにキャッシュし、LLMの返答を設定時間だけ待ってから最大1回通知します。候補をターンごとに交互に使い、音声ファイルとして保存しません。
+相づちはMVPの必須要件です。`voice/acknowledgements.py` が短い相づち音声を事前生成してメモリにキャッシュし、LLMの返答を設定時間だけ待ってから最大1回通知します。候補をターンごとに交互に使い、音声ファイルとして保存しません。
 
 STT後のLLM待機中のみ通知し、本返答が先に届いた場合は省略します。「おやすみ」や停止要求には追加の相づちを出しません。Android Webへの相づち配信と再生完了通知は未実装のため、実機再生・停止との統合は未確認です。待ち時間、声、音量は実機で調整します。
 
@@ -106,7 +106,7 @@ STT後のLLM待機中のみ通知し、本返答が先に届いた場合は省�
 `tail_mcp_server.py` は LM Studio が stdio で起動するローカル MCP サーバーです。MCP と Raspberry Pi 4 は別の接続区間です。
 
 ```text
-LM Studio / voice_llm.py
+LM Studio / app.voice.llm
         │ MCP (stdio; LM Studio がローカルサーバーを起動)
         ▼
 tail_mcp_server.py
@@ -147,7 +147,7 @@ Copy-Item .env.example .env
 
 stdioサーバーはMCPクライアントが起動して接続するため、このコマンドを手動実行した場合は入力待ちになります。
 
-LM Studioの `mcp.json` に `mcp.json.example` のサーバー項目を登録し、LM Studioのサーバー設定で `mcp.json` のサーバー呼び出しとAPI認証を有効にします。API認証用に発行したトークンは `.env` の `LM_STUDIO_API_KEY` に設定してください。`voice_llm.py` 側の `TAIL_MCP_ENABLED=true` も設定すると、APIリクエストで `mcp/nen-gitsune-tail` を利用します。
+LM Studioの `mcp.json` に `mcp.json.example` のサーバー項目を登録し、LM Studioのサーバー設定で `mcp.json` のサーバー呼び出しとAPI認証を有効にします。API認証用に発行したトークンは `.env` の `LM_STUDIO_API_KEY` に設定してください。`voice/llm.py` 側の `TAIL_MCP_ENABLED=true` も設定すると、APIリクエストで `mcp/nen-gitsune-tail` を利用します。
 
 ## 現在の実装境界
 

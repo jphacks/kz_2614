@@ -12,9 +12,9 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from .settings_store import get_saved_settings, reference_voice_path
+from ..settings_store import get_saved_settings, reference_voice_path
 
-load_dotenv(Path(__file__).with_name(".env"), override=False)
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 MAX_REFERENCE_AUDIO_BYTES = 10 * 1024 * 1024
 

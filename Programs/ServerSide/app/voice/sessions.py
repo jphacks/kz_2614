@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .voice_pipeline import NoSpeechDetected, VoicePipeline
-from .voice_stt import AudioDurationExceeded
+from .pipeline import NoSpeechDetected, VoicePipeline
+from .stt import AudioDurationExceeded
 
 
 MAX_AUDIO_BYTES = 25_000_000

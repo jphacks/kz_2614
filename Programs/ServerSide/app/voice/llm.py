@@ -11,7 +11,7 @@ import httpx
 from dotenv import load_dotenv
 
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=False)
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), override=False)
 
 
 COMPANION_SYSTEM_PROMPT = """あなたは、寝る前の寂しさに寄り添う短い会話相手です。
