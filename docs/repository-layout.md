@@ -28,9 +28,9 @@ kz_2614/
 └── docs/
     ├── api/                  # 共有する通信仕様
     ├── setup/                # 環境構築とこのPCの記録
-    ├── requirements/         # 要件・受け入れ条件
+    ├── requirements/         # 統合仕様・サーバー・端末・ESP32
     ├── development/          # 分担・ブランチ・検証・作業履歴
-    ├── esp32/                # 機器の引き継ぎと当時の記録
+    ├── esp32/                # MCP統合案内・引き継ぎ・当時の記録
     ├── archive/              # 旧Pi案・旧構成案
     └── licenses/             # 同梱ライセンス原文
 ```
@@ -52,3 +52,33 @@ kz_2614/
 Pythonは `server.api` / `server.ai` に統一。Webファイルはserver/api/server.pyがルートのapps/webから配信します。Arduinoはスケッチ名とフォルダー名の一致を保ちます。Androidはapps/androidをAndroid Studioで開きます。
 
 個別環境の移行は [移行手順](development/layout-migration.md) を参照してください。Gitに入っていない設定・モデルはソース移動だけでは移りません。
+
+
+## 仕様書の配置
+
+```text
+docs/
+├── README.md                   # 全資料の入口
+├── architecture.md             # 全体のMermaid処理図
+├── requirements/
+│   ├── README.md
+│   ├── system.md               # 統合仕様書
+│   ├── server.md               # PCサーバー
+│   ├── clients.md              # 音声端末
+│   └── esp32.md                # Reader/Follower・サーボ
+├── api/
+│   ├── README.md
+│   ├── voice-http.md
+│   ├── voice-tcp.md
+│   ├── tail-frequency.md       # PCの希望値保存
+│   └── esp32-http.md           # Followerの実機HTTP
+└── esp32/
+    ├── README.md               # 機器担当向けの入口
+    ├── mcp-integration.md      # 現行MCPと実機統合の条件
+    ├── integration-review.md   # PC側の引き継ぎ調査
+    ├── specification.md        # 移動先の案内のみ
+    ├── http-api.md             # 移動先の案内のみ
+    └── history/                # 過去の試験と提案原本
+```
+
+EMORIの仕様整理 `a786078` を取り込み、機器仕様と機器HTTPを共通分類へ移しました。旧パスは案内だけを残し、本文・図の二重管理を避けています。実行ソース、非公開設定・音声・モデルの配置は今回変更しません。

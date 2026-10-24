@@ -2,6 +2,18 @@
 
 このファイルは、このリポジトリで作業するエージェント向けの指示と、引き継ぐ作業リストです。新しい作業を始めるときは、依頼内容に加えてこのファイル、関連する `docs/repository-layout.md`・要件定義・`docs/development/work-history.md` を確認してください。
 
+## このPCの作業ブランチ（2026-10-25）
+
+- 利用者の指定により、稼働チェックアウトkz_2614-latestの作業ブランチを `kameyama` にした。取得したorigin/main 9036cceは既に履歴へ含まれ、EMORI文書更新a786078と統合仕様の整理も保持している。
+- 旧kz_2614チェックアウトの未コミット変更・共有モデル・venvは触らない。mainの追加更新を取り込む際も、ローカル変更と非公開設定を保全してから比較する。
+- 219件の自動テストがskipなしで成功。ソース・非公開設定・音声は変更せず、サービス再起動・マイク停止・実機操作は行っていない。kameyamaの公開pushは未実施。
+
+## 統合仕様の正本（2026-10-25）
+
+- 製品全体は [docs/requirements/system.md](docs/requirements/system.md)。要件・機器仕様はdocs/requirements、通信契約はdocs/api、MCP統合と引き継ぎはdocs/esp32へ分類する。
+- EMORIの文書更新a786078はローカルmainへ取り込み済み。機器仕様は [docs/requirements/esp32.md](docs/requirements/esp32.md)、実機HTTPは [docs/api/esp32-http.md](docs/api/esp32-http.md)。旧specification.md/http-api.mdは移動先案内のみで、本文を追加しない。
+- 図は全体6枚とEMORI6枚を保持。仕様の統合と、会話MCPからサーボへの実機接続完了を混同しない。最新の取り込み状況・確認は作業履歴へ残す。
+
 ## JPHACKS公開向けの現行配置（2026-10-25）
 
 - AI担当kameyama: server/aiとserver/api。Web担当HOSSy: apps/web。ESP32担当EMORI: firmware/esp32。Androidはapps/android、担当者名未指定。
@@ -287,3 +299,10 @@
 - 状態: 完了。docs/esp32を正本の入口とし、システム・HTTP API・MCP統合の3仕様へ分割。機器READMEを導入案内へ整理し、旧READMEの検証記録と日時付きメモは履歴として保持した。全体の既存6図と要件を維持し、新たにESP32の6図を追加した。
 - 現行会話の頻度2操作と提案の実機3操作、速度の単位、停止・中立・脱力、NVS既定値と実機記録値、PC設定保存と機器動作を区別した。ソース・実設定・サービス・マイク・実機は変更しない。
 - 文書検証: 相対リンク切れ0、Mermaid CLI 12.0.0で全12図のSVG描画成功。構成・受付・状態遷移図はPNGでも確認した。プログラムや実機の過去のテストを今回の検証として数えない。
+
+
+### EMORI仕様のmain取り込みと統合仕様書（2026-10-25）
+
+- 状態: 文書整理・検証完了。ローカルmainへa786078をfast-forwardで取り込み、docs/requirements/system.mdに全体仕様をまとめた。詳細はrequirements、契約はapi、機器統合と履歴はesp32へ分類。旧2パスは移動案内だけにする。
+- 確認: 相対ファイルリンク281件、Mermaid12図の構文、移動2仕様の本文保持、Original原本110件のhash、Markdown以外の変更なし、diff check成功。プログラム試験・実機・描画の過去結果は今回の試験とは区別する。
+- 実行コードと稼働環境は未変更。追加の整理は未コミット、pushは未実施。後続で公開を依頼された場合は他作業の差分を確認してから行う。

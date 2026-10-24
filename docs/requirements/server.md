@@ -1,10 +1,8 @@
 # サーバー要件定義
 
-ESP32 Reader/Followerの配線・校正・状態遷移・機器HTTP APIと、MCPの現行/提案の差分は[ESP32詳細仕様](../esp32/README.md)を参照する。
+更新日: 2026-10-25。公開用配置とEMORI側の仕様整理を反映しています。[統合仕様書](system.md) / [構成図](../architecture.md) / [ESP32機器仕様](esp32.md)。
 
-2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](../development/ownership.md) を参照してください。
-
-更新日: 2026-10-25。統合main `975b3ad` の実装を照合。[全体図と処理フロー](../architecture.md) / [仕様書一覧](../README.md)。旧Pi 4設計は [アーカイブ](../archive/raspberry-pi/RASPBERRY_PI_API.md) を参照します。
+実装済み・実機確認済み・未実装を区別します。旧Pi案とWebView時代の実績は履歴として扱い、現在の受け入れ結果に置き換えません。
 
 ## 1. 対象と実装状況
 

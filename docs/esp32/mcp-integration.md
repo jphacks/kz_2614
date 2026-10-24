@@ -1,6 +1,6 @@
 # MCPの現状とESP32統合仕様
 
-更新日：2026-10-25。実装基準：`9036cce`。 [入口](README.md) / [機器仕様](specification.md) / [Follower HTTP API](http-api.md)
+更新日：2026-10-25。実装基準：`9036cce`。 [入口](README.md) / [機器仕様](../requirements/esp32.md) / [Follower HTTP API](../api/esp32-http.md)
 
 ## 1. 現在のサーバーと提案を区別する
 
@@ -31,7 +31,7 @@ sequenceDiagram
     S->>M: 頻度2ツールの定義を取得
     S->>L: 会話と限定ツール定義
     L-->>S: set_tail_frequencyを選択
-    S->>S: allowlist・引数・会話状態を検査
+    S->>S: allowlist・引数を検査
     S->>M: set_tail_frequency(rate_hz)
     M->>D: PUT /api/v1/tail/frequency
     D-->>M: 保存値 / device_confirmed=false

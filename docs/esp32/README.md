@@ -7,13 +7,13 @@
 | 目的 | 文書 |
 | --- | --- |
 | Arduino IDEで準備する | [機器側README](../../firmware/esp32/README.md) |
-| 配線・角度変換・校正・モードを理解する | [システム仕様](specification.md) |
-| ESP32へHTTPを送る | [HTTP API仕様と操作例](http-api.md) |
+| 配線・角度変換・校正・モードを理解する | [システム仕様](../requirements/esp32.md) |
+| ESP32へHTTPを送る | [HTTP API仕様と操作例](../api/esp32-http.md) |
 | PCのMCPと実機を接続する担当者 | [MCPの現状と統合仕様](mcp-integration.md) |
 | ESP32音声通信を扱う | [VoiceTCP](../../firmware/esp32/voice_tcp/README.md) |
 | 過去の測定・判断を確認する | [日時付きの実機記録](history/2026-10-25-0222-LLMしっぽMCP統合調査.md) |
 
-現行仕様の参照先はこのフォルダの3仕様書とする。`history/`は当時の実験・引き継ぎ記録で、古いIP、COM番号、認証の有無、配置、MCPの公開ツールを現行設定として使わない。
+機器仕様は `docs/requirements/esp32.md`、HTTP契約は `docs/api/esp32-http.md`、MCP統合はこのフォルダーの `mcp-integration.md` を正本とする。`history/`は当時の実験・引き継ぎ記録で、古いIP、COM番号、認証の有無、配置、MCPの公開ツールを現行設定として使わない。
 
 ## 構成と接続状況
 

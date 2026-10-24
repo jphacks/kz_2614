@@ -1,18 +1,16 @@
-# クライアント・機器要件定義
+# クライアント・音声端末要件定義
 
-ESP32 Reader/Followerの配線・校正・状態遷移・機器HTTP APIと、MCPの現行/提案の差分は[ESP32詳細仕様](../esp32/README.md)を参照する。
+更新日: 2026-10-25。公開用配置とEMORI側の仕様整理を反映しています。[統合仕様書](system.md) / [構成図](../architecture.md) / [ESP32機器仕様](esp32.md)。
 
-2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](../development/ownership.md) を参照してください。
-
-更新日: 2026-10-25。統合main `975b3ad` の実装を照合。[全体フロー](../architecture.md) / [サーバー要件](server.md)。旧Pi 4案とAndroid WebView時代の実績は履歴として扱います。
+実装済み・実機確認済み・未実装を区別します。旧Pi案とWebView時代の実績は履歴として扱い、現在の受け入れ結果に置き換えません。
 
 ## 1. 対象と責務
 
 | 対象 | 現行方式 | 対応状況 |
 | --- | --- | --- |
 | Web | AudioWorklet入力 → HTTP PCM、NDJSON → AudioWorklet出力 | 途中STT表示、連続送受信、返答割込み、再送、設定画面を実装 |
-| Android `androidVer` | AudioRecord / MediaPlayer、PCへ直接TCP | ソースあり。最新APKビルド・実機通話未確認。旧WebView APKの導入実績を流用しない |
-| ESP32 `VoiceTCP` | ESP-IDF通信コンポーネント | マイク・スピーカー・GPIOなし。文節PCM profile対応。ビルド・実機未確認 |
+| Android `apps/android` | AudioRecord / MediaPlayer、PCへ直接TCP | ソースあり。最新APKビルド・実機通話未確認。旧WebView APKの導入実績を流用しない |
+| ESP32 `firmware/esp32/voice_tcp` | ESP-IDF通信コンポーネント | マイク・スピーカー・GPIOなし。文節PCM profile対応。ビルド・実機未確認 |
 | ESP32 Reader/Follower | 可変抵抗器 → Wi-Fi → SG90 × 3 | 機器側ソース・EMORI実機記録あり。PC会話MCPとの接続は未完了 |
 
 端末は音声入力・転送・出力・利用者操作を担当します。VAD、発話分割、STT、LLM、TTS、相づち選択、MCP呼出しはPC側です。TCP音声用ESP32部品と、サーボ用Reader/Followerは別の実装です。

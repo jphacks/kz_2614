@@ -67,14 +67,14 @@ ESP32 Reader ─Wi-Fi→ ESP32 Follower → SG90 × 3
 | --- | --- | --- |
 | **kameyama** | AI・音声パイプライン、サーバー側の会話・MCP連携 | `server/ai/`、`server/api/`、`docs/api/` |
 | **HOSSy** | Web画面、マイク入力・音声出力、操作・設定UI | `apps/web/`、`tests/web/` |
-| **EMORI** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、`docs/esp32/` |
+| **EMORI** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、機器仕様・API、`docs/esp32/` |
 | 担当者名未指定 | Android音声クライアント | `apps/android/` |
 
 APIや音声形式の変更は双方の担当で確認します。詳細は [担当範囲と連携ルール](docs/development/ownership.md) を参照してください。
 
 ## 起動・開発
 
-- [仕様書・処理フロー図の一覧](docs/README.md)
+- [統合仕様書](docs/requirements/system.md) / [仕様書・処理フロー図の一覧](docs/README.md)
 - [Git管理・除外方針](docs/development/gitignore.md)
 
 - [Windows・Ubuntuのセットアップ](docs/setup/server.md)

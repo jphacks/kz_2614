@@ -14,7 +14,7 @@ Readerが可変抵抗器を読み、Wi-Fi経由でFollowerのSG90 3台へ共通�
 
 1. ボードを従来の`ESP32 Dev Module`に合わせる。既存の確認環境はArduino-ESP32 3.3.12。追加サーボライブラリは不要。
 2. [Readerのテンプレート](ESP32-Reader/WiFiConfig.example.h)を`ESP32-Reader/WiFiConfig.h`、[Followerのテンプレート](ESP32-Follower/WiFiConfig.example.h)を`ESP32-Follower/WiFiConfig.h`へコピーし、同じ2.4 GHz Wi-Fiを設定する。
-3. [TailConfig.example.h](ESP32-Follower/TailConfig.example.h)を`ESP32-Follower/TailConfig.h`へコピーする。配布テンプレートはタップ無効・90～90の未設定範囲なので、[実機設定と校正の仕様](../../docs/esp32/specification.md)を確認する。
+3. [TailConfig.example.h](ESP32-Follower/TailConfig.example.h)を`ESP32-Follower/TailConfig.h`へコピーする。配布テンプレートはタップ無効・90～90の未設定範囲なので、[実機設定と校正の仕様](../../docs/requirements/esp32.md)を確認する。
 4. Followerを書き込み、115200 bpsのシリアルで役割、パルス設定、`Servo ESP32 IP:`を確認する。
 5. Readerを書き込む。`RECEIVER_IP`が空なら`esp32-servo.local`を探索し、設定されていればそのIPを使う。
 6. Followerは初期1500 µsの後、Readerのつまみへ追従する。保持したい場合はFollowerへ`n`、テレオペ再開は`t`、PWM停止は`d`を送る。
@@ -32,8 +32,8 @@ Readerが可変抵抗器を読み、Wi-Fi経由でFollowerのSG90 3台へ共通�
 
 ## APIとMCP
 
-- [HTTP APIとcurl/PowerShell例](../../docs/esp32/http-api.md)
-- [モード・校正・タイミング](../../docs/esp32/specification.md)
+- [HTTP APIとcurl/PowerShell例](../../docs/api/esp32-http.md)
+- [モード・校正・タイミング](../../docs/requirements/esp32.md)
 - [現在のPC側MCPと実機向け提案の違い](../../docs/esp32/mcp-integration.md)
 - [過去の実機記録](../../docs/esp32/history/2026-10-25-0222-LLMしっぽMCP統合調査.md)
 

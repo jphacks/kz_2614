@@ -1,33 +1,38 @@
-# 仕様書・図の入口
+# 仕様書・開発資料
 
-2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](development/ownership.md) を参照してください。
+PC/WebとEMORIの仕様を、現在のmainの構成で整理しています。まず [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
 
-2026-10-25更新。`975b3ad`で統合したmainのコードを基準に、現行の仕様と未完了の接続を整理しています。文書の「実装済み」「確認記録あり」「未実装」を区別してください。
+## 読む順序
 
-ESP32の詳細仕様は公開用配置へ移行した`9036cce`を照合して再編しました。全体・音声の既存仕様と履歴も保持しています。
+1. [統合仕様書](requirements/system.md)：何をするシステムか、どこまで接続できているか。
+2. [構成と処理フロー](architecture.md)：音声・割込み・通信復旧・MCP・保存をMermaidで確認。
+3. [要件一覧](requirements/README.md) / [API一覧](api/README.md)：担当する機能の詳細な契約と受け入れ条件。
+4. [環境構築](setup/server.md) / [ESP32導入](../firmware/esp32/README.md)：実行環境を準備。
 
-| 読みたい内容 | 参照先 |
+## 目的別の入口
+
+| 目的 | 参照先 |
 | --- | --- |
-| 全体構成・会話・割込み・通信復旧・MCP・保存の図 | [構成と処理フロー](architecture.md) |
-| サーバーの責務・制約・受け入れ条件 | [サーバー要件](requirements/server.md) |
-| Web・Android・ESP32の担当と対応状況 | [端末要件](requirements/clients.md) |
-| HTTP PCM・NDJSON・停止・再生結果通知 | [Web音声API](api/voice-http.md) |
-| TCPのフレーム形式・profile・端末対応 | [TCP音声API](api/voice-tcp.md) |
-| 現在のMCPが保存する希望頻度 | [頻度設定API](api/tail-frequency.md) |
-| ESP32の配線・校正・PWM・モード遷移 | [しっぽ制御システム仕様](esp32/specification.md) |
-| ESP32へ送る8 API・入力・応答・操作例 | [機器HTTP API](esp32/http-api.md) |
-| 現在のMCPと実機用提案・未接続箇所 | [MCP統合仕様](esp32/mcp-integration.md) |
-| ESP32の導入・資料の読み順・検証履歴 | [ESP32仕様の入口](esp32/README.md) |
-| 管理するファイルと除外するファイル | [Git除外方針](development/gitignore.md) |
-| 起動・設定・実測の記録 | [このPC](setup/local-pc.md) / [利用手順](setup/server.md) |
-| ソースの配置と共同作業 | [配置](repository-layout.md) / [ブランチ運用](development/branches.md) |
-| 検証の経緯・ライセンス | [作業履歴](development/work-history.md) / [第三者素材](../THIRD_PARTY_NOTICES.md) |
+| PCのAI・会話・停止の要件 | [サーバー仕様](requirements/server.md) |
+| Web・Android・ESP32音声の役割 | [端末仕様](requirements/clients.md) |
+| サーボの配線・校正・PWM・モード | [ESP32機器仕様](requirements/esp32.md) |
+| 音声HTTP/TCPと機器HTTPの通信 | [API一覧](api/README.md) |
+| LLM/MCPとESP32を接続する | [MCP統合仕様](esp32/mcp-integration.md) |
+| ESP32の実機記録・引き継ぎ | [ESP32担当者向け入口](esp32/README.md) |
+| フォルダー・担当・作業方法 | [配置](repository-layout.md) / [分担](development/ownership.md) / [ブランチ](development/branches.md) |
+| このPCの起動・実測・移行 | [ローカル環境](setup/local-pc.md) / [移行手順](development/layout-migration.md) |
+| デモ・公開するデータ | [デモ](demo.md) / [Git除外](development/gitignore.md) / [ライセンス](../THIRD_PARTY_NOTICES.md) |
+| 過去の検証と変更理由 | [開発履歴](development/work-history.md) |
 
-## 更新する順序
+## 文書の置き場所
 
-1. 動作を変えたら対応するAPI契約・要件を更新する。
-2. 経路や責務が変わったらMermaid図を更新する。未接続の経路を実線へ変えるのは実装後とする。
-3. 検証した環境と未確認事項を作業履歴へ残す。自動テストの成功を実機成功と置き換えない。
-4. 配置変更では相対リンクと `.gitignore` の適用先も検査する。
+| フォルダー | 置くもの |
+| --- | --- |
+| `requirements/` | 統合仕様とサーバー・端末・ESP32の要件/機器仕様 |
+| `api/` | 通信形式、エンドポイント、制限、エラーの正本 |
+| `esp32/` | 機器担当向けの案内、MCP統合、引き継ぎ。`history/`は当時の記録 |
+| `setup/` | 環境構築、運用手順、個別環境の記録 |
+| `development/` | 担当、ブランチ、Git除外、移行、変更履歴 |
+| `archive/` | 採用を終了したPi案や旧構成。現行仕様には使わない |
 
-`archive/` と `esp32/history/` は当時の設計・担当者の記録です。そこにあるIP、COM番号、旧パス、旧Pi案を現在の稼働設定として扱いません。現在のコードと文書が食い違う場合は、差分を確認し、未実装を実装済みに書き換えないでください。
+ESP32の旧 `specification.md` / `http-api.md` は移動先案内だけを残しています。本文の更新は `requirements/esp32.md` / `api/esp32-http.md` に一本化します。実装済み・実測済み・未確認を区別し、履歴にあるIP・COM・古いパスを現行設定として扱わないでください。

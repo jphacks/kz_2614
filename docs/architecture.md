@@ -1,5 +1,7 @@
 # 現在の構成と処理フロー
 
+[統合仕様書](requirements/system.md) / [ESP32機器仕様](requirements/esp32.md) / [機器HTTP API](api/esp32-http.md)。EMORIの6図は機器仕様・MCP統合・API側に保持しています。
+
 2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](development/ownership.md) を参照してください。
 
 更新日: 2026-10-25。照合した実装は [`975b3ad`](https://github.com/jphacks/kz_2614/commit/975b3ada96203675a6beee43917cde61b2a43461) の統合済み `main`。この文書更新でプログラムの動作は変更していません。

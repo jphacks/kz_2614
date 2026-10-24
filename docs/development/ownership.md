@@ -13,10 +13,15 @@
 ## 変更をまたぐ場所
 
 - 音声形式・イベント・停止: [HTTP仕様](../api/voice-http.md) / [TCP仕様](../api/voice-tcp.md) を先に揃え、AIとWeb/端末の双方を確認する。
-- トントン: [PC内の頻度API](../api/tail-frequency.md) と [ESP32実機API](../../firmware/esp32/README.md) は別契約。保存成功を機器動作成功と扱わない。
+- トントン: [PC内の頻度API](../api/tail-frequency.md) と [ESP32実機API](../api/esp32-http.md) は別契約。保存成功を機器動作成功と扱わない。
 - 入力音量と発話検出: HOSSyが操作UI、kameyamaがサーバー適用・VADを担当。ブラウザー独自のVADを追加しない。
 - ライセンス・動画・写真: 公開する担当が出典・許諾を確認し、THIRD_PARTY_NOTICES.mdへ記録する。個別の声や実設定は公開しない。
 
 ## 作業単位
 
 mainから `feature/voice-...`、`feature/web-...`、`feature/android-...`、`feature/esp32-...` または `fix/...` を作ります。人名単位の長期ブランチには戻さず、小さい変更を統合します。担当者だけが変更できるという制限ではありません。境界の変更は関係担当に確認できる説明とテストを残します。
+
+
+## 仕様書の共同管理
+
+全体の境界は [統合仕様書](../requirements/system.md)、通信契約は [API一覧](../api/README.md) を参照します。EMORIの機器仕様は [requirements/esp32.md](../requirements/esp32.md)、機器HTTPは [api/esp32-http.md](../api/esp32-http.md)。文書を置くフォルダーの分類と担当者の責務は別であり、API側へ移しても機器仕様の担当は変わりません。

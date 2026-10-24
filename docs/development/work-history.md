@@ -836,3 +836,23 @@ Programs/
 - 機器READMEを導入案内へ短縮。旧READMEの検証部分をhistory/2026-10-25-readme-validation-record.mdへ保存し、過去メモへ現行入口への案内を追加。受け取り側レビュー、全体入口、API一覧、サーバー/端末要件からも現行仕様を参照できるようにした。
 - 図: ESP32構成、Reader処理、Follower状態遷移、有限タップ受付、現在のMCPシーケンス、提案MCP処理の6図を追加。既存の全体・音声6図を含む計12図をMermaid CLI 12.0.0と既存ChromeでSVG描画し、構成・受付・状態遷移のPNGも確認した。Markdownの相対ファイルリンク切れ0、git diff --check成功。
 - 実行コード・実設定は9036cceから変更しない。今回、Arduino/Pythonの機能試験、過去の219/22テストの再実行、機器へのHTTP要求・書き込み、サービス再起動、マイク・実モデル操作は行わない。現在のIP・姿勢・NVS値、統合後の実会話から機器までの受け入れは未確認として扱う。
+
+
+## 2026-10-25 EMORI仕様をmainへ取り込み統合仕様書へ整理
+
+- 依頼: emoriブランチの仕様整理をmainへ取り込み、フォルダーを整えて仕様書をまとめる。
+- 取り込み: originをfetchし、main 9036cceの直後にあるemori-ESP32のa786078（文書のみ）を確認。クリーンなローカルmainへfast-forwardで取り込み、担当者のコミット履歴を保持した。競合なし。リモートブランチの削除やpushは行わない。
+- 保全: main 9036cceとEMORI a786078の全Markdown原本110件をチェックアウト外のOriginal-docs-unification-9036cce-a786078-2026-10-25へ.Original付きで保存し、SHA256.jsonと全件一致を確認。日本語ファイル名はNUL区切りで取得して保持。
+- 整理: docs/requirements/system.mdに製品・責務・動作・通信境界・保存・確認状況・正本一覧をまとめた。requirements/README.mdを追加し、docs/README.mdを読む順序と目的別入口へ再構成。機器仕様をdocs/requirements/esp32.md、機器HTTPをdocs/api/esp32-http.mdへ移し、旧パスは案内だけを保持。MCP統合・引き継ぎ・日時付き記録はdocs/esp32に残した。
+- 案内更新: API一覧、配置図、担当表、ルートREADME、機器README、サーバー/端末要件、Agentを更新。現行MCP図の会話状態の検査という表記を、確認できるallowlist/引数検査へ訂正。実機開始の許可と世代検査は未実装の統合条件として維持する。
+- 検証: リポジトリの相対ファイルリンク281件が存在、Mermaid11.4.1で全12図の構文確認成功。移動した2仕様の本文・表・コード例・図が、相対リンク先以外はEMORI原本と一致。基点9036cceからの追跡差分はMarkdownのみ、既存ignore6ファイルもbyte一致。git diff --check成功。今回の検証は文書構文と内容保全で、既存のSVG描画・219件のアプリ試験・機器試験は今回再実行した結果に数えない。
+- 稼働: ソース配置・起動スクリプト・.env・音声・モデル・実機は変更しない。サービス操作、推論、マイク/画面操作、ESP32への通信は行っていない。追加の文書整理は未コミット、リモートmainへのpushは未実施。
+
+
+## 2026-10-25 このPCのkameyamaブランチへmainを取り込む
+
+- 依頼の方向を確認: このPCの作業側へ最新mainを取り込み、ローカル変更を保持して合わせる。2つのチェックアウトを調べた結果、既存のkameyamaはなく、利用者が「最新版にkameyamaを作る」を選択した。
+- 最新originをfetch。稼働チェックアウトkz_2614-latestはa786078で、origin/main 9036cceを既に包含していた。ここにkameyamaを作り、origin/mainのff-only mergeはAlready up to date。旧チェックアウトの変更・モデル参照には触れていない。
+- 保全: 直前の仕様整理19ファイルと差分をOriginal-before-main-sync-2026-10-25-0iq9_i21へ退避。非公開のserver/.envとserver/api/dataの計7ファイルは内容を表示せずhashを記録し、最後に一致を確認。資料原本110件の以前の保管も保持。
+- 検証: NODEを明示して新配置の全219 unittestが11.718秒で成功、skipなし。モデルはモックで、ローカルHTTP/TCP試験・Web/AudioWorklet試験を含む。文書の相対リンク281件、Mermaid12図の構文、移動した2仕様の本文保持、diff checkを再確認。アプリのソース・起動スクリプト・ignore規則は未変更なので同一コードの試験を繰り返さない。
+- 仕様整理とこの引き継ぎをkameyamaのローカルコミットへ保存する。リモートmainの更新・kameyamaのpush・ブランチ削除は行わない。稼働サービス再起動、マイク停止、実モデル推論、ESP32への通信は行っていない。

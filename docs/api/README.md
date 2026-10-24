@@ -1,10 +1,14 @@
-# 共有する通信仕様
+# API仕様一覧
 
-| 仕様 | 関係担当 |
-| --- | --- |
-| [HTTP音声・連続PCM](voice-http.md) | kameyama / HOSSy |
-| [直接TCP音声](voice-tcp.md) | kameyama / Android・ESP32音声担当 |
-| [PC内のトントン頻度](tail-frequency.md) | kameyama / HOSSy |
-| [ESP32実機のHTTP API](../esp32/http-api.md) | EMORI / kameyama |
+HTTP音声、TCP音声、PCの保存設定、ESP32機器のAPIは別契約です。同じ「しっぽ」の設定でも接続先と成功の意味を区別してください。
 
-音声形式、メッセージ、番号、停止、エラーの契約を先に揃え、それぞれの実装を更新します。旧Pi案はarchiveにあり現行機器の仕様ではありません。
+| 仕様 | 接続する相手 | 成功が示す範囲 | 関係担当 |
+| --- | --- | --- | --- |
+| [HTTP音声・連続PCM](voice-http.md) | Web ↔ PC HTTPサーバー | 入力受理・イベント配信・出力通知 | kameyama / HOSSy |
+| [直接TCP音声](voice-tcp.md) | Android/ESP32音声 ↔ PC TCPサーバー | 接続・入力受理・音声転送 | kameyama / 端末担当 |
+| [PC内のトントン希望頻度](tail-frequency.md) | MCP ↔ PC設定API | 希望値の保存・取得。実機反映ではない | kameyama / HOSSy |
+| [ESP32 Follower HTTP](esp32-http.md) | Reader/機器操作側 ↔ Follower | 機器の指令状態。物理位置の実測ではない | EMORI / kameyama |
+
+会話MCPからFollowerへの実接続は未完了です。[MCP統合仕様](../esp32/mcp-integration.md) で現行2ツールと提案3ツールの差、独立停止、遅着拒否を確認してください。
+
+関連: [統合仕様書](../requirements/system.md) / [機器仕様](../requirements/esp32.md) / [処理フロー](../architecture.md)。旧Pi APIはarchive内の過去案です。
