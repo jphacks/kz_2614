@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .voice_pipeline import NoSpeechDetected, VoicePipeline
+from .voice_stt import AudioDurationExceeded
 
 
 MAX_AUDIO_BYTES = 25_000_000
@@ -229,16 +230,25 @@ class VoiceSessions:
         turn_id: str,
         audio_path: Path,
     ) -> dict[str, Any]:
-        future = self._submit(self._process_turn(session, generation, turn_id, audio_path))
+        try:
+            future = self._submit(self._process_turn(session, generation, turn_id, audio_path))
+        except VoiceAPIError:
+            self.abandon_turn(session)
+            raise
         try:
             return future.result(timeout=TURN_TIMEOUT_SECONDS)
         except FutureTimeoutError as exc:
             future.cancel()
+            with self._lock:
+                if session.active:
+                    self._retire_locked(session)
             raise VoiceAPIError(504, "turn_timeout", "音声処理がタイムアウトしました。もう一度お試しください。", True) from exc
         except VoiceAPIError:
             raise
         except NoSpeechDetected as exc:
             raise VoiceAPIError(422, "no_speech", "音声から発話を認識できませんでした。") from exc
+        except AudioDurationExceeded as exc:
+            raise VoiceAPIError(413, "audio_too_long", "音声は60秒以内にしてください。") from exc
         except Exception as exc:
             if not session.active:
                 raise VoiceAPIError(409, "session_stopped", "会話は停止されました。") from exc

@@ -17,6 +17,11 @@ load_dotenv(Path(__file__).with_name(".env"), override=False)
 # ServerSide/whisper is the existing model-cache folder and is ignored by Git.
 WHISPER_MODEL_DIR = Path(__file__).resolve().parent.parent / "whisper"
 DEFAULT_MAX_AUDIO_BYTES = 25_000_000
+DEFAULT_MAX_AUDIO_SECONDS = 60.0
+
+
+class AudioDurationExceeded(ValueError):
+    """Audio decoded by faster-whisper exceeds the accepted turn length."""
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -34,6 +39,7 @@ class WhisperConfig:
     language: str = "ja"
     local_files_only: bool = False
     max_audio_bytes: int = DEFAULT_MAX_AUDIO_BYTES
+    max_duration_seconds: float = DEFAULT_MAX_AUDIO_SECONDS
     vad_filter: bool = True
 
     @classmethod
@@ -46,6 +52,10 @@ class WhisperConfig:
             language=saved.get("language", os.getenv("WHISPER_LANGUAGE", cls.language)),
             local_files_only=_env_bool("WHISPER_LOCAL_FILES_ONLY"),
             max_audio_bytes=max(1_024, int(os.getenv("WHISPER_MAX_AUDIO_BYTES", str(cls.max_audio_bytes)))),
+            max_duration_seconds=max(
+                1.0,
+                float(os.getenv("WHISPER_MAX_AUDIO_SECONDS", str(cls.max_duration_seconds))),
+            ),
             vad_filter=saved.get(
                 "vad_filter", _env_bool("WHISPER_VAD_FILTER", default=cls.vad_filter)
             ),
@@ -111,8 +121,10 @@ class WhisperSTT:
             condition_on_previous_text=False,
             vad_filter=self.config.vad_filter,
         )
-        text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
         duration = getattr(info, "duration", None)
+        if duration is not None and float(duration) > self.config.max_duration_seconds:
+            raise AudioDurationExceeded("Audio file exceeds WHISPER_MAX_AUDIO_SECONDS")
+        text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
         language_probability = getattr(info, "language_probability", None)
         return Transcription(
             text=text,
