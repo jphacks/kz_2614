@@ -27,6 +27,8 @@ SESSION_TTL_SECONDS = 15 * 60
 SPEECH_TTL_SECONDS = 2 * 60
 TURN_TIMEOUT_SECONDS = 180
 logger = logging.getLogger(__name__)
+PREVIEW_TIMEOUT_SECONDS = 15
+MAX_PROGRESS_TRANSCRIPT_CHARS = 16_384
 
 
 class VoiceAPIError(RuntimeError):
@@ -47,6 +49,15 @@ class StoredSpeech:
 
 
 @dataclass
+class TurnProgress:
+    turn_id: str
+    generation: int
+    stage: str
+    transcript: str
+    expires_at: float
+
+
+@dataclass
 class VoiceSession:
     session_id: str
     pipeline: VoicePipeline | None = None
@@ -57,6 +68,8 @@ class VoiceSession:
     turn_ids: set[str] = field(default_factory=set)
     speeches: dict[str, StoredSpeech] = field(default_factory=dict)
     task: asyncio.Task[Any] | None = None
+    progress: TurnProgress | None = None
+    preview_busy: bool = False
 
 
 class VoiceSessions:
@@ -65,6 +78,8 @@ class VoiceSessions:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._sessions: dict[str, VoiceSession] = {}
+        # One preview worker globally; timed-out native inference retains this slot.
+        self._preview_inflight = 0
         self._loop_ready = threading.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_thread = threading.Thread(
@@ -96,15 +111,13 @@ class VoiceSessions:
         return asyncio.run_coroutine_threadsafe(coroutine, loop)
 
     async def _create_pipeline(self) -> VoicePipeline:
-        pipeline = VoicePipeline()
-        if pipeline.behavior.get("backchannel_enabled", True):
-            pipeline.start_acknowledgement_preparation()
-        return pipeline
+        return VoicePipeline()
 
     def _retire_locked(self, session: VoiceSession, *, cancel_task: bool = True) -> None:
         session.active = False
         session.generation += 1
         session.speeches.clear()
+        session.progress = None
         session.busy = False
         task = session.task
         if task is not None and self._loop is not None:
@@ -119,6 +132,8 @@ class VoiceSessions:
     def _expire_locked(self) -> None:
         now = time.monotonic()
         for session in tuple(self._sessions.values()):
+            if session.progress is not None and session.progress.expires_at <= now:
+                session.progress = None
             expired_speeches = [
                 turn_id
                 for turn_id, speech in session.speeches.items()
@@ -161,6 +176,21 @@ class VoiceSessions:
             "expires_in_seconds": SESSION_TTL_SECONDS,
         }
 
+    def get_active_session(
+        self, session_id: str, generation: int, *, touch: bool = False,
+    ) -> VoiceSession:
+        """Validate stream ownership without making status polling renew the session."""
+        with self._lock:
+            self._expire_locked()
+            session = self._sessions.get(session_id)
+            if session is None or not session.active:
+                raise VoiceAPIError(404, "session_not_found", "会話が見つからないか、期限切れです。")
+            if session.generation != generation:
+                raise VoiceAPIError(409, "generation_mismatch", "会話の状態が変わりました。")
+            if touch:
+                session.last_activity = time.monotonic()
+            return session
+
     def begin_turn(self, session_id: str, turn_id: str) -> tuple[VoiceSession, int]:
         with self._lock:
             self._expire_locked()
@@ -178,7 +208,178 @@ class VoiceSessions:
             session.turn_ids.add(turn_id)
             session.busy = True
             session.last_activity = time.monotonic()
+            session.progress = TurnProgress(
+                turn_id=turn_id,
+                generation=session.generation,
+                stage="stt",
+                transcript="",
+                expires_at=session.last_activity + TURN_TIMEOUT_SECONDS,
+            )
             return session, session.generation
+
+    def transcribe_preview(
+        self, session_id: str, generation: int, audio_path: Path,
+    ) -> dict[str, Any]:
+        """Own a temporary recording until the native STT worker actually finishes."""
+        session: VoiceSession | None = None
+        dispatched = False
+        try:
+            with self._lock:
+                self._expire_locked()
+                candidate = self._sessions.get(session_id)
+                if candidate is None or not candidate.active:
+                    raise VoiceAPIError(404, "session_not_found", "会話が見つからないか、期限切れです。")
+                if candidate.generation != generation:
+                    raise VoiceAPIError(409, "generation_mismatch", "会話の状態が変わりました。")
+                if candidate.pipeline is None:
+                    raise VoiceAPIError(503, "voice_unavailable", "音声処理を準備できません。", True)
+                if candidate.busy:
+                    raise VoiceAPIError(409, "session_busy", "返答の処理中です。", True)
+                if candidate.preview_busy or self._preview_inflight:
+                    raise VoiceAPIError(409, "preview_busy", "前の文字起こしを処理しています。", True)
+                session = candidate
+                session.preview_busy = True
+                session.last_activity = time.monotonic()
+                self._preview_inflight += 1
+                accepted_turn_count = len(session.turn_ids)
+
+            coroutine = self._process_preview(session, generation, accepted_turn_count, audio_path)
+            try:
+                future = self._submit(coroutine)
+            except BaseException:
+                coroutine.close()
+                raise
+            dispatched = True
+            try:
+                return future.result(timeout=PREVIEW_TIMEOUT_SECONDS)
+            except FutureTimeoutError as exc:
+                # Do not cancel or release the slot: a native decoder can still be using
+                # this file. The worker's completion callback owns the eventual cleanup.
+                raise VoiceAPIError(504, "transcription_timeout", "文字起こしを待っています。", True) from exc
+        finally:
+            if not dispatched:
+                try:
+                    audio_path.unlink(missing_ok=True)
+                finally:
+                    if session is not None:
+                        with self._lock:
+                            session.preview_busy = False
+                            self._preview_inflight -= 1
+
+    async def _process_preview(
+        self, session: VoiceSession, generation: int, accepted_turn_count: int, audio_path: Path,
+    ) -> dict[str, Any]:
+        worker_finished = threading.Event()
+        worker_dispatched = False
+        try:
+            with self._lock:
+                if (
+                    self._sessions.get(session.session_id) is not session
+                    or not session.active or session.generation != generation
+                ):
+                    raise VoiceAPIError(409, "session_stopped", "停止後の文字起こしは破棄しました。")
+                pipeline = session.pipeline
+            if pipeline is None:
+                raise VoiceAPIError(503, "voice_unavailable", "音声処理を準備できません。", True)
+            worker_dispatched = True
+            try:
+                transcription = await pipeline.stt.transcribe_file_async(
+                    audio_path, on_worker_finished=worker_finished.set,
+                )
+                transcript = transcription.text
+            except NoSpeechDetected:
+                transcript = ""
+            with self._lock:
+                if (
+                    self._sessions.get(session.session_id) is not session
+                    or not session.active or session.generation != generation
+                ):
+                    raise VoiceAPIError(409, "session_stopped", "停止後の文字起こしは破棄しました。")
+                if len(session.turn_ids) != accepted_turn_count:
+                    raise VoiceAPIError(409, "transcription_superseded", "確定した発話の文字起こしを優先します。")
+            return {
+                "session_id": session.session_id,
+                "generation": generation,
+                "transcript": transcript,
+            }
+        except VoiceAPIError:
+            raise
+        except Exception as exc:
+            with self._lock:
+                if not session.active or session.generation != generation:
+                    raise VoiceAPIError(409, "session_stopped", "会話は停止されました。") from exc
+            if isinstance(exc, AudioDurationExceeded):
+                raise VoiceAPIError(413, "audio_too_long", "音声は60秒以内にしてください。") from exc
+            if isinstance(exc, CudaUnavailableError):
+                raise VoiceAPIError(503, "cuda_unavailable", "WhisperのCUDAを利用できません。", True) from exc
+            if isinstance(exc, VoiceStageTimeout):
+                raise VoiceAPIError(504, "transcription_timeout", "文字起こしがタイムアウトしました。", True) from exc
+            if isinstance(exc, (ValueError, EOFError)) or type(exc).__module__.startswith("av."):
+                raise VoiceAPIError(400, "invalid_audio", "音声をまだ読み取れません。次の音声で再試行します。", True) from exc
+            raise VoiceAPIError(503, "stt_unavailable", "文字起こしを利用できません。", True) from exc
+        finally:
+            if worker_dispatched:
+                while not worker_finished.is_set():
+                    await asyncio.sleep(0.05)
+            try:
+                audio_path.unlink(missing_ok=True)
+            finally:
+                with self._lock:
+                    session.preview_busy = False
+                    self._preview_inflight -= 1
+
+    def _update_turn_progress(
+        self,
+        session: VoiceSession,
+        generation: int,
+        turn_id: str,
+        stage: str,
+        transcript: str | None = None,
+    ) -> None:
+        """Keep only the current turn; stopped, expired and late callbacks are ignored."""
+        with self._lock:
+            progress = session.progress
+            if (
+                self._sessions.get(session.session_id) is not session
+                or not session.active
+                or not session.busy
+                or session.generation != generation
+                or progress is None
+                or progress.generation != generation
+                or progress.turn_id != turn_id
+                or progress.expires_at <= time.monotonic()
+                or progress.stage in {"complete", "failed"}
+            ):
+                return
+            if stage not in {"stt", "llm", "tts", "complete", "failed"}:
+                return
+            progress.stage = stage
+            if transcript is not None:
+                progress.transcript = transcript[:MAX_PROGRESS_TRANSCRIPT_CHARS]
+            if stage in {"complete", "failed"}:
+                progress.expires_at = time.monotonic() + SPEECH_TTL_SECONDS
+
+    def get_turn_status(self, session_id: str, turn_id: str) -> dict[str, Any]:
+        with self._lock:
+            self._expire_locked()
+            session = self._sessions.get(session_id)
+            if session is None or not session.active:
+                raise VoiceAPIError(404, "session_not_found", "会話が見つからないか、期限切れです。")
+            progress = session.progress
+            if (
+                progress is None
+                or progress.turn_id != turn_id
+                or progress.generation != session.generation
+            ):
+                raise VoiceAPIError(404, "turn_not_found", "発話が見つからないか、期限切れです。")
+            # Polling must not keep either the transcript or the session alive.
+            return {
+                "session_id": session_id,
+                "turn_id": turn_id,
+                "generation": progress.generation,
+                "stage": progress.stage,
+                "transcript": progress.transcript,
+            }
 
     async def _process_turn(
         self,
@@ -197,7 +398,12 @@ class VoiceSessions:
             raise VoiceAPIError(503, "voice_unavailable", "音声処理を準備できません。", True)
 
         try:
-            result = await pipeline.process_audio_file(audio_path)
+            result = await pipeline.process_audio_file(
+                audio_path,
+                on_progress=lambda stage, transcript: self._update_turn_progress(
+                    session, generation, turn_id, stage, transcript
+                ),
+            )
             speech_url = f"/api/v1/voice/sessions/{session.session_id}/turns/{turn_id}/audio"
             response = {
                 "session_id": session.session_id,
@@ -222,6 +428,9 @@ class VoiceSessions:
                     expires_at=time.monotonic() + SPEECH_TTL_SECONDS,
                 )
                 session.last_activity = time.monotonic()
+                self._update_turn_progress(
+                    session, generation, turn_id, "complete", result.transcription.text
+                )
             return response
         except VoiceStageTimeout as exc:
             with self._lock:
@@ -241,6 +450,9 @@ class VoiceSessions:
                 f"{stage_name}の処理がタイムアウトしました。",
                 True,
             ) from exc
+        except BaseException:
+            self._update_turn_progress(session, generation, turn_id, "failed")
+            raise
         finally:
             with self._lock:
                 session.busy = False
@@ -343,7 +555,16 @@ class VoiceSessions:
         try:
             if pipeline is None:
                 raise VoiceAPIError(503, "voice_unavailable", "音声処理を準備できません。", True)
-            result = await pipeline.process_audio_file_stream(audio_path, publish)
+            result = await pipeline.process_audio_file_stream(
+                audio_path,
+                publish,
+                on_progress=lambda stage, transcript: self._update_turn_progress(
+                    session, generation, turn_id, stage, transcript
+                ),
+            )
+            self._update_turn_progress(
+                session, generation, turn_id, "complete", result.transcription.text
+            )
             publish(
                 {
                     "type": "complete",
@@ -413,6 +634,7 @@ class VoiceSessions:
                 "retryable": active,
             })
         finally:
+            self._update_turn_progress(session, generation, turn_id, "failed")
             with self._lock:
                 session.busy = False
                 session.task = None
@@ -458,6 +680,10 @@ class VoiceSessions:
 
     def abandon_turn(self, session: VoiceSession) -> None:
         with self._lock:
+            if session.progress is not None:
+                self._update_turn_progress(
+                    session, session.progress.generation, session.progress.turn_id, "failed"
+                )
             session.busy = False
             session.task = None
             session.last_activity = time.monotonic()

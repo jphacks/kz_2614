@@ -41,6 +41,7 @@ class VoiceStreamTurnResult:
 
 AcknowledgementHandler = Callable[[VoiceAcknowledgement], Awaitable[None]]
 StreamEventHandler = Callable[[dict[str, object]], None]
+ProgressHandler = Callable[[str, str | None], None]
 StageResult = TypeVar("StageResult")
 logger = logging.getLogger(__name__)
 
@@ -138,11 +139,15 @@ class VoicePipeline:
         self,
         audio_path: str | Path,
         on_acknowledgement: AcknowledgementHandler | None = None,
+        *,
+        on_progress: ProgressHandler | None = None,
     ) -> VoiceTurnResult:
         """音声を STT → LLM → TTS で処理し、遅延時は相づちを1回通知する。"""
         async with self._turn_lock:
             turn_started = time.perf_counter()
             acknowledgement_preparation_seconds = 0.0
+            if on_progress is not None:
+                on_progress("stt", None)
             transcription, stt_seconds = await _measure_stage(
                 "stt",
                 self.stt.transcribe_file_async(audio_path),
@@ -153,6 +158,9 @@ class VoicePipeline:
                     stt_seconds,
                 )
                 raise NoSpeechDetected("Whisper did not detect speech in the audio file")
+
+            if on_progress is not None:
+                on_progress("llm", transcription.text)
 
             acknowledgement_allowed = (
                 bool(self.behavior.get("backchannel_enabled", True))
@@ -198,6 +206,10 @@ class VoicePipeline:
                         )
 
                 response, llm_seconds = await llm_task
+
+                if on_progress is not None:
+                    on_progress("tts", None)
+
                 speech_task = asyncio.create_task(
                     _measure_stage("tts", self.tts.synthesize_async(response.text))
                 )
@@ -236,16 +248,27 @@ class VoicePipeline:
         self,
         audio_path: str | Path,
         on_event: StreamEventHandler,
+        *,
+        on_progress: ProgressHandler | None = None,
     ) -> VoiceStreamTurnResult:
         """Stream LLM text and phrase-level TTS audio while preserving turn ordering."""
         async with self._turn_lock:
             turn_started = time.perf_counter()
+            # Only an output-stream consumer can play these acknowledgements. PCM
+            # input sessions must not allocate TTS/GPU work merely by being created.
+            if self.behavior.get("backchannel_enabled", True):
+                self.start_acknowledgement_preparation()
+            if on_progress is not None:
+                on_progress("stt", None)
             transcription, stt_seconds = await _measure_stage(
                 "stt",
                 self.stt.transcribe_file_async(audio_path),
             )
             if not transcription.text.strip():
                 raise NoSpeechDetected("Whisper did not detect speech in the audio file")
+
+            if on_progress is not None:
+                on_progress("llm", transcription.text)
 
             vocal_analysis = transcription.vocal_analysis or {}
             on_event(
@@ -375,6 +398,8 @@ class VoicePipeline:
                         break
                     if isinstance(item, BaseException):
                         raise item
+                    if on_progress is not None:
+                        on_progress("tts", None)
                     speech, elapsed = await _measure_stage(
                         "tts",
                         self.tts.synthesize_async(item),
@@ -392,10 +417,10 @@ class VoicePipeline:
                     first_reply_audio.set()
 
                 await producer_task
-                await acknowledgement_task
                 response_text = "".join(response_parts).strip()
                 if not response_text:
                     raise RuntimeError("LM Studio returned no spoken response")
+                await acknowledgement_task
             except BaseException:
                 for task in (producer_task, acknowledgement_task):
                     if not task.done():

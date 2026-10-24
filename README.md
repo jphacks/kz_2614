@@ -1,5 +1,7 @@
 # サンプル（プロダクト名）
 
+このPCで最新の開発版を起動する方法は [LOCAL_SETUP.md](LOCAL_SETUP.md) を参照してください。
+
 [![IMAGE ALT TEXT HERE](https://jphacks.com/wp-content/uploads/2026/07/IMG_5316.png)](https://www.youtube.com/watch?v=piaNsc6ilBI)
 
 ## 製品概要

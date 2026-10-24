@@ -92,12 +92,16 @@ h1 { margin-bottom: 7px; font-size: clamp(23px, 2.8vw, 30px); font-weight: 600; 
 .voice-mode-tag { padding: 5px 9px; border-radius: 99px; background: #eee9df; color: #82796c; font-size: 9px; font-weight: 700; }
 .voice-call-card .section-description { margin: 12px 0 14px; }
 .voice-call-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.voice-device-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .voice-call-actions .button:disabled { cursor: not-allowed; }
 .button-record { background: #75866a; color: #fff; box-shadow: 0 5px 12px rgba(89, 112, 76, .13); }
 .button-record:hover { background: #647758; }
 .voice-call-status { min-height: 18px; margin: 11px 0 0; color: #77746b; font-size: 10px; line-height: 1.55; }
 .voice-call-status.error { color: #a85b45; }
 .voice-call-status.active { color: #66775a; }
+.voice-input-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; color: #82796c; font-size: 10px; }
+.voice-input-status meter { width: 130px; height: 12px; }
+.voice-input-status span { flex-basis: 100%; }
 .voice-turn { display: grid; gap: 11px; margin-top: 13px; padding: 13px; border: 1px solid #ece7de; border-radius: 9px; background: rgba(255,255,255,.72); }
 .voice-turn > div { display: grid; gap: 4px; }
 .voice-turn-text { min-height: 18px; margin: 0; color: #67645b; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; white-space: pre-wrap; }

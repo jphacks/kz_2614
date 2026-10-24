@@ -6,7 +6,7 @@ import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from dotenv import load_dotenv
 
@@ -427,11 +427,22 @@ class WhisperSTT:
             "emotion": "音響特徴だけでは断定しない",
         }
 
-    async def transcribe_file_async(self, audio_path: str | Path) -> Transcription:
+    async def transcribe_file_async(
+        self,
+        audio_path: str | Path,
+        *,
+        on_worker_finished: Callable[[], None] | None = None,
+    ) -> Transcription:
         """STTをイベントループ外で実行し、設定した期限内に結果を返す。"""
+        def transcribe() -> Transcription:
+            try:
+                return self.transcribe_file(audio_path)
+            finally:
+                if on_worker_finished is not None:
+                    on_worker_finished()
+
         return await run_blocking_stage(
             "stt",
             self.config.timeout_seconds,
-            self.transcribe_file,
-            audio_path,
+            transcribe,
         )

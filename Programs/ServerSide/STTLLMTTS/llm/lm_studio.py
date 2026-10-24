@@ -27,7 +27,7 @@ COMPANION_SYSTEM_PROMPT = """あなたは、寝る前の寂しさに寄り添う
 class VoiceLLMConfig:
     base_url: str = "http://127.0.0.1:1234"
     api_key: str = "lm-studio"
-    model: str = "google/gemma-4-26b-a4b"
+    model: str = "google/gemma-4-26b-a4b-qat"
     max_output_tokens: int = 160
     context_length: int = 4096
     max_history_messages: int = 8

@@ -4,6 +4,8 @@
 
 ## Web画面サーバーの起動
 
+このPCではリポジトリルートの `./service-local.sh start` でバックグラウンド起動します。停止は `./service-local.sh stop`、再起動は `./service-local.sh restart` です。ターミナルで動かす場合は `./start-local.sh` を使います。LM StudioのモデルとCUDAライブラリも準備します。設定と確認結果は [LOCAL_SETUP.md](../../../LOCAL_SETUP.md) を参照してください。
+
 依存関係をまだ準備していない場合は、リポジトリルートでOSに合うセットアップスクリプトを実行します。
 
 ```powershell
@@ -42,4 +44,4 @@ Android Web向けのAPIは、状態取得、セッション開始、音声ター
 
 ## 未確認事項
 
-サーバー起動、API操作、LAN・HTTPS接続、Whisper・LM Studio・Irodori-TTSとの実接続、Android実機での録音・再生は未確認です。コードがあることだけでは受け入れ完了と扱いません。
+このPCでは既存APIのSTT・指定Gemma・ローカルTTS接続とブラウザー録音・再生を確認済みです。新PCM入力・サーバーVADと今回取り込んだNDJSONの統合後の実モデル確認、LAN・HTTPS、Android／ESP32実機での確認は残ります。入力継続のため現サービスと画面は再起動・再読込していません。詳細は `LOCAL_SETUP.md` を参照してください。

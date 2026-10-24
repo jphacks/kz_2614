@@ -1,8 +1,8 @@
 # Android Web 音声会話 API
 
-レビュー反映日: 2026-10-24。Android WebView の同一オリジン画面から、スマートフォンのマイク音声を1発話ずつ送り、サーバーが STT → LLM → TTS を実行します。入力はターン単位のアップロードですが、認識後の返答テキストとTTS音声は逐次ストリームで受信できます。連続全二重マイク配信ではありません。
+レビュー反映日: 2026-10-24。継続PCM入力とサーバーVADによる途中認識を追加し、従来の1発話ファイル送信・NDJSON逐次返答も保持します。PCM経路では発話確定後にLLM → 全文TTSを実行します。入力のリアルタイム認識と返答の逐次配信は別の経路です。
 
-設定画面と同じ `NENGITSUNE_DASHBOARD_TOKEN` を Bearer token として使用します。音声モデルの稼働確認は初回の発話処理で行われ、`GET /api/v1/voice/status` はAPI経路の存在だけを示します。Android WebViewのマイク利用にはHTTPSのセキュアコンテキストが必要です。
+設定画面と同じ `NENGITSUNE_DASHBOARD_TOKEN` をBearer tokenに使います。別端末からはHTTPS、同一PCのlocalhost開発ではHTTPを使用できます。`GET /api/v1/voice/status` はAPIの存在と制限を示し、モデルの接続は保証しません。新しいPCM経路はコード・テストの確認対象であり、稼働中サービスは入力継続のため再起動していません。
 
 ## 音声条件
 
@@ -19,6 +19,8 @@
 
 STTは音声の基本周波数を約70〜400Hzの範囲で推定し、声の高さ、抑揚、声量の目安を算出します。これらは感情の断定に使わず、文字起こしと会話履歴を補う参考情報としてLLMの `input` に含めます。
 
+現行のWebクライアントは下記PCM経路を使います。無音も継続送信し、サーバーが発話開始・途中認識・終端を判定します。マイクは返答中も保持し、サーバーが処理・再生・クールダウン中の音声を認識から除外します。入力マイクを変更・切断した場合は手動再開を案内します。
+
 ## エンドポイント
 
 ### `GET /api/v1/voice/status`
@@ -27,7 +29,7 @@ STTは音声の基本周波数を約70〜400Hzの範囲で推定し、声の高�
 
 ### `POST /api/v1/voice/sessions`
 
-会話履歴を持つセッションを作成します。相づちがダッシュボードで有効な場合、サーバーは会話開始後に候補音声のキャッシュ生成をバックグラウンドで開始します。
+会話履歴を持つセッションを作成します。相づち候補の事前生成はNDJSON逐次返答を要求した時だけ開始し、PCM入力開始時には実行しません。
 
 ```json
 {
@@ -37,6 +39,56 @@ STTは音声の基本周波数を約70〜400Hzの範囲で推定し、声の高�
   "expires_in_seconds": 900
 }
 ```
+
+### `POST /api/v1/voice/sessions/{session_id}/audio-stream`
+
+ブラウザーと将来のESP32で共通のPCM入口です。VADをクライアントへ実装する必要はありません。
+
+| 項目 | 契約 |
+| --- | --- |
+| Content-Type | `audio/pcm;rate=16000;channels=1;format=s16le` |
+| 音声 | リトルエンディアン符号付き16-bit、16kHzモノラル。無音も送信 |
+| フレーム | 1〜32,000 bytes、偶数バイト。Web既定は4096 samples（256ms） |
+| 世代 | `X-Voice-Generation` に開始時の世代 |
+| 連番 | `X-Audio-Sequence` を0から1ずつ増加。同一フレームの再送は同じ番号 |
+
+```json
+{"session_id":"UUID","generation":0,"sequence":0,"next_sequence":1,"stage":"listening","turn_id":null,"transcript":""}
+```
+
+重複番号は再認識せずACKを返し、番号が飛ぶ場合は409 `audio_sequence_gap` と `expected_sequence` を返します。処理中・返答準備済み・再生中・クールダウン中の音声はACKして認識から除外します。途中文字は約1秒間隔のサーバー側STTで更新され、確定後に修正されることがあります。
+
+サーバーのSilero VADは32msフレームで状態を保持します。既定は開始確率0.65、終端確率0.35、継続発話384ms、終端無音896ms、先行音声640ms、最大発話20秒です。`VOICE_VAD_*` の環境変数で変更します。受信バッファー、途中推論と確定推論の並行数には上限があります。PCMはメモリと処理用一時WAVだけで扱い、処理後に削除します。
+
+### `GET /api/v1/voice/sessions/{session_id}/audio-stream`
+
+`X-Voice-Generation` を指定し、送信時と同じ現在状態を取得します。`stage` は `listening`、`speaking`、`stt`、`llm`、`tts`、`reply_ready`、`playing`、`cooldown`、`failed`。返答完了時は `response_text` と期限付き `speech.url` を返します。現在のPCM経路はNDJSON音声チャンクを配信しません。
+
+### `POST /api/v1/voice/sessions/{session_id}/audio-stream/playback`
+
+`Content-Type: application/json` で `generation`、`turn_id`、`event`（`started` / `ended` / `failed`）を送ります。再生開始で `playing`、完了で600msの `cooldown` 後に待受へ戻ります。失敗は手動再生待ちとし、自動で待受へ戻しません。古い世代・発話・停止済み会話の通知は拒否します。完了通知の再送は同じ発話で冪等です。
+
+### `POST /api/v1/voice/sessions/{session_id}/transcription`
+
+録音中の途中認識です。`Content-Type` とraw audio本文に加え、`X-Voice-Generation` にセッション開始時の世代を指定します。Whisperだけを実行し、LLM・TTSは呼びません。無音は空文字を返します。
+
+```json
+{ "session_id": "UUID", "generation": 0, "transcript": "途中まで聞き取った文字" }
+```
+
+旧WebMクライアントは発話の検知後、約1.2秒ごとに最新の録音prefixを送り、返却文字で表示を置き換えます。各要求はコンテナの先頭ヘッダーから現在までの音声を含み、単独の後続Blobだけは送信しません。要求は1件ずつ処理し、古い音声をキューに積みません。単一セッションで認識中、または確定turn処理中の追加previewは409で拒否します。録音を止めたら途中要求を中止し、遅着した途中結果は使いません。途中の文字は確定時に修正される場合があります。
+
+WebSocket接続ではなく、録音中の短い間隔のHTTP送信と途中認識を組み合わせます。更新には送信間隔と推論時間の遅延があります。MediaRecorderの途中Blobの再生可能性は形式・ブラウザーに依存します。[録画仕様](https://www.w3.org/TR/mediastream-recording/)が保証するのは完了した録音の全Blobを連結した結果です。このPCのChromium系ブラウザーが使うWebM/Opusを優先し、途中データが読めない場合は次のデータで再試行して画面にも示します。Android・MP4での途中認識は別途確認が必要です。
+
+### `GET /api/v1/voice/sessions/{session_id}/turns/{turn_id}/status`
+
+確定音声を送信した後の進捗です。`stage` は `stt`、`llm`、`tts`、`complete`、`failed`。STT完了時点から `transcript` を返し、LLM/TTS完了を待たず表示できます。認証は音声APIと同じです。
+
+```json
+{ "session_id": "UUID", "turn_id": "UUID", "generation": 0, "stage": "llm", "transcript": "確定した発話" }
+```
+
+現在の発話1件だけをメモリに保持します。次の発話、停止・世代変更・期限切れ後は404。進捗取得自体はセッションの期限を延ばしません。音声や認識本文はログに記録しません。
 
 ### `POST /api/v1/voice/sessions/{session_id}/turns/{turn_id}`
 
@@ -83,6 +135,6 @@ Raw audio bytes を本文として送ります。`Content-Type` は上記の対�
 ## データと確認範囲
 
 - 録音音声はログへ記録せず、処理用の一時ファイルを削除します。会話履歴と相づちキャッシュはセッションのメモリ内だけで保持します。
-- Android Webの逐次再生は、サーバーが選んだ音声を順番に再生します。再生開始・完了・失敗の個別通知APIは未実装です。
+- NDJSON対応クライアントはサーバーが選んだ音声を順番に再生します。NDJSON経路の再生通知は未実装。PCM経路は上記の通知を実装しています。
 - Pi 4しっぽ制御もサーバー側の責務ですが、サーバー経由のクライアント操作APIとPi 4接続は未実装です。
-- サーバー起動、モデル接続、HTTPS終端、Android実機での音声往復、無音・破損音声、停止競合、再接続は未確認です。
+- このPCの既存サービスではSTT → 指定LLM → ローカルTTS、無音・破損音声、ブラウザー再生を確認済み。新PCM経路・NDJSON統合後の実モデル試験、HTTPS、Android／ESP32実機での受け入れは未実施です。

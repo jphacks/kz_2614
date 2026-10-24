@@ -1,5 +1,5 @@
 .env
-.venv/
+.venv
 __pycache__/
 *.py[cod]
 **/__pycache__/
@@ -8,5 +8,6 @@ dashboard/data/recorded_speech/
 dashboard/data/dashboard_settings.json
 dashboard/data/reference_voice.wav
 whisper/*
+/whisper
 !whisper/.gitkeep
 !whisper/README.md

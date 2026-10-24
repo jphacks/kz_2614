@@ -1,4 +1,4 @@
-"""Irodori-TTS の Gradio API を使う音声合成クライアント。"""
+"""Irodori-TTS の Gradio API またはローカルモデルを使う音声合成。"""
 
 from __future__ import annotations
 
@@ -37,10 +37,22 @@ class TTSConfig:
     reference_audio_path: str = ""
     max_audio_bytes: int = 25_000_000
     timeout_seconds: float = 90.0
+    backend: str = "gradio"
+    source_dir: str = ""
+    cache_dir: str = ""
+    codec_repo: str = "Aratako/Semantic-DACVAE-Japanese-32dim"
+    local_files_only: bool = True
+    num_steps: int | None = None
+    max_seconds: float = 30.0
 
     @classmethod
     def from_env(cls) -> "TTSConfig":
         saved = get_saved_settings().get("tts", {})
+        backend = os.getenv("VOICE_TTS_BACKEND", "gradio").strip().lower()
+        default_checkpoint = (
+            "Aratako/Irodori-TTS-v4.1-Small" if backend == "local" else cls.checkpoint
+        )
+        steps = os.getenv("IRODORI_NUM_STEPS", "").strip()
         server_url = os.getenv("IRODORI_URL", cls.server_url).strip() or cls.server_url
         uploaded_reference_path = reference_voice_path()
         reference_audio_path = (
@@ -50,7 +62,7 @@ class TTSConfig:
         )
         return cls(
             server_url=server_url.rstrip("/") + "/",
-            checkpoint=saved.get("checkpoint", os.getenv("VOICE_TTS_CHECKPOINT", cls.checkpoint)),
+            checkpoint=saved.get("checkpoint", os.getenv("VOICE_TTS_CHECKPOINT", default_checkpoint)),
             model_device=os.getenv("VOICE_TTS_MODEL_DEVICE", cls.model_device),
             model_precision=os.getenv("VOICE_TTS_MODEL_PRECISION", cls.model_precision),
             codec_device=os.getenv("VOICE_TTS_CODEC_DEVICE", cls.codec_device),
@@ -63,6 +75,16 @@ class TTSConfig:
                 180.0,
                 max(1.0, float(os.getenv("VOICE_TTS_TIMEOUT_SECONDS", str(cls.timeout_seconds)))),
             ),
+            backend=backend,
+            source_dir=os.getenv("IRODORI_SOURCE_DIR", "").strip(),
+            cache_dir=os.getenv("HF_HUB_CACHE", "").strip() or str(
+                Path(os.getenv("HF_HOME", str(Path(__file__).resolve().parents[2] / "models" / "huggingface"))) / "hub"
+            ),
+            codec_repo=os.getenv("IRODORI_CODEC_REPO", cls.codec_repo).strip(),
+            local_files_only=os.getenv("IRODORI_LOCAL_FILES_ONLY", "true").strip().lower()
+            in {"1", "true", "yes", "on"},
+            num_steps=int(steps) if steps else None,
+            max_seconds=float(os.getenv("IRODORI_MAX_SECONDS", "30")),
         )
 
 
@@ -76,13 +98,15 @@ class SynthesizedSpeech:
 
 
 class IrodoriTTS:
-    """ローカルの Irodori-TTS Gradio サーバーから音声を生成する。"""
+    """Gradio または共有ローカルモデルから再生用音声を生成する。"""
 
     _server_locks: dict[str, threading.Lock] = {}
     _server_locks_guard = threading.Lock()
 
     def __init__(self, config: TTSConfig | None = None) -> None:
         self.config = config or TTSConfig.from_env()
+        if self.config.backend not in {"gradio", "local"}:
+            raise ValueError("VOICE_TTS_BACKEND must be gradio or local")
         self._client: Any | None = None
         self._client_lock = threading.Lock()
         with self._server_locks_guard:
@@ -190,6 +214,20 @@ class IrodoriTTS:
             raise ValueError("text must not be empty")
         if len(spoken_text) > 1_000:
             raise ValueError("text must be at most 1000 characters")
+
+        if self.config.backend == "local":
+            # Heavy inference dependencies stay optional until the local backend is used.
+            from .local_backend import LocalIrodoriBackend
+
+            try:
+                audio = LocalIrodoriBackend(self.config).synthesize(
+                    spoken_text,
+                    reference_audio=self._reference_audio_bytes,
+                    reference_suffix=self._reference_audio_suffix,
+                )
+            except Exception as exc:
+                raise SpeechSynthesisError("Local Irodori-TTS voice generation failed") from exc
+            return self._read_audio(audio)
 
         reference_audio: Any = None
         temporary_reference_path: Path | None = None

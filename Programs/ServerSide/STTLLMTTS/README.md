@@ -4,7 +4,7 @@
 
 サーバーの要件と現行コードとの差分は [要件定義](../REQUIREMENTS.md) を参照してください。`VoicePipeline` は音声を無音区間で分割し、Whisperの信頼度と声の高さ・抑揚・声量を分析してから、音響要約と文字起こしをLM Studioへ渡します。Android Web向けの逐次経路ではLM Studio SSEを読みながら文節ごとにTTSを生成し、NDJSONイベントで音声チャンクを配信します。Android Webは受信順に相づちと返答音声を再生します。相づち音声は会話開始時にバックグラウンドで事前生成します。モデル・実機での動作は未確認です。
 
-Web画面サーバーの起動方法、Web APIの認証、データ保存先は [dashboardのREADME](../dashboard/README.md) を参照してください。モデル・HTTPS環境・Android実機での動作は未確認です。
+Web画面サーバーの起動方法、Web APIの認証、データ保存先は [dashboardのREADME](../dashboard/README.md) を参照してください。このPCのモデル接続と実測は [LOCAL_SETUP.md](../../../LOCAL_SETUP.md) に記録します。HTTPS環境・Android実機での動作は未確認です。
 
 ## Whisper → LM Studio → Irodori-TTS
 
@@ -67,6 +67,8 @@ Discord Gateway、DAVE、Opus デコード、Discord 専用音声再生はこの
 ## TTS設定
 
 `Programs/ServerSide/.env.example` を `.env` にコピーして、LM Studio と Irodori-TTS の接続先を設定します。TTS側で `Aratako/Irodori-TTS-600M-v3-VoiceDesign` と Gradio API `/_run_generation` が利用できることが前提です。任意の参照音声を使う場合は `VOICE_TTS_REFERENCE_AUDIO` にサーバー側の音声ファイルを指定します。合成結果は上限サイズを確認してバイト列で返し、アプリ側で別の保存・削除処理は行いません。
+
+`VOICE_TTS_BACKEND=local` を選ぶと、別Gradioサーバーを使わず公式Pythonランタイムで合成します。追加依存は `../requirements-local-tts.txt`、外部ソースは `IRODORI_SOURCE_DIR`、モデルは `VOICE_TTS_CHECKPOINT`、コーデックは `IRODORI_CODEC_REPO`、キャッシュは `HF_HUB_CACHE` / `HF_HOME` で指定します。取得済みのv4.1-SmallではモデルCUDA / bf16、コーデックCUDA / fp32を使用しています。CPUでは両方cpu / fp32にします。既定の `IRODORI_LOCAL_FILES_ONLY=true` ではモデルとtokenizerを事前に用意してください。同じ設定のモデルは会話間で共有し、推論を直列化します。返答WAVはメモリで生成し、参照音声の処理用コピーは合成後に削除します。
 
 ## LLM クライアント
 

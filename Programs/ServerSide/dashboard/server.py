@@ -43,11 +43,22 @@ MAX_REQUEST_BYTES = 16_384
 LOGGER = logging.getLogger("nen_gitsune.dashboard")
 _VOICE_SESSIONS: VoiceSessions | None = None
 _VOICE_SESSIONS_LOCK = threading.Lock()
+_AUDIO_STREAMS = None
+_AUDIO_STREAMS_LOCK = threading.Lock()
+MAX_PCM_FRAME_BYTES = 32_000
+_SESSION_STREAM_ROUTE = re.compile(r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/audio-stream$")
+_SESSION_PLAYBACK_ROUTE = re.compile(r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/audio-stream/playback$")
 _SESSION_TURN_ROUTE = re.compile(
     r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/turns/([0-9a-fA-F-]{36})$"
 )
 _SESSION_AUDIO_ROUTE = re.compile(
     r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/turns/([0-9a-fA-F-]{36})/audio$"
+)
+_SESSION_PROGRESS_ROUTE = re.compile(
+    r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/turns/([0-9a-fA-F-]{36})/status$"
+)
+_SESSION_TRANSCRIPTION_ROUTE = re.compile(
+    r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/transcription$"
 )
 _SESSION_ROUTE = re.compile(r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})$")
 
@@ -58,6 +69,16 @@ def _voice_sessions() -> VoiceSessions:
         if _VOICE_SESSIONS is None:
             _VOICE_SESSIONS = VoiceSessions()
         return _VOICE_SESSIONS
+
+
+def _audio_streams():
+    global _AUDIO_STREAMS
+    with _AUDIO_STREAMS_LOCK:
+        if _AUDIO_STREAMS is None:
+            from ..STTLLMTTS.voice.pcm_stream import ServerAudioStreams
+
+            _AUDIO_STREAMS = ServerAudioStreams(_voice_sessions())
+        return _AUDIO_STREAMS
 
 
 def _audio_upload_format(content_type: str) -> tuple[str, str] | None:
@@ -112,6 +133,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _send_bytes(self, status: int, body: bytes, content_type: str) -> None:
         self.send_response(status)
+        # HTTP/1.1 errors may reject an upload before its body is consumed.
+        # Closing prevents those remaining bytes becoming the next request.
+        if status >= 400:
+            self.close_connection = True
+            self.send_header("Connection", "close")
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -120,7 +146,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; "
-            "font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+            "font-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         )
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -138,6 +164,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         route = urlsplit(self.path).path
+        stream_match = _SESSION_STREAM_ROUTE.fullmatch(route)
+        if stream_match:
+            if not self._api_auth_or_reject():
+                return
+            try:
+                generation = self._stream_header_integer("X-Voice-Generation")
+                self._send_json(200, _audio_streams().get_status(stream_match.group(1), generation))
+            except VoiceAPIError as exc:
+                self._send_voice_error(exc)
+            return
         if route == "/api/v1/dashboard/settings":
             if not self._api_auth_or_reject():
                 return
@@ -180,6 +216,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_voice_error(exc)
             return
 
+        progress_match = _SESSION_PROGRESS_ROUTE.fullmatch(route)
+        if progress_match:
+            if not self._api_auth_or_reject():
+                return
+            try:
+                self._send_json(200, _voice_sessions().get_turn_status(*progress_match.groups()))
+            except VoiceAPIError as exc:
+                self._send_voice_error(exc)
+            return
+
         audio_match = _SESSION_AUDIO_ROUTE.fullmatch(route)
         if audio_match:
             if not self._api_auth_or_reject():
@@ -195,6 +241,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         route = urlsplit(self.path).path
+        stream_match = _SESSION_STREAM_ROUTE.fullmatch(route)
+        if stream_match:
+            self._receive_pcm_frame(stream_match.group(1))
+            return
+        playback_match = _SESSION_PLAYBACK_ROUTE.fullmatch(route)
+        if playback_match:
+            self._receive_playback_event(playback_match.group(1))
+            return
         if route == "/api/v1/voice/sessions":
             if not self._api_auth_or_reject():
                 return
@@ -204,12 +258,142 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_voice_error(exc)
             return
 
+        transcription_match = _SESSION_TRANSCRIPTION_ROUTE.fullmatch(route)
+        if transcription_match:
+            self._receive_transcription(transcription_match.group(1))
+            return
+
         turn_match = _SESSION_TURN_ROUTE.fullmatch(route)
         if turn_match:
             self._receive_voice_turn(*turn_match.groups())
             return
 
         self._send_json(404, {"error": "not_found"})
+
+    def _stream_header_integer(self, name: str) -> int:
+        try:
+            value = int(self.headers.get(name, ""))
+            if not 0 <= value <= 9_007_199_254_740_991:
+                raise ValueError
+            return value
+        except (TypeError, ValueError) as exc:
+            raise VoiceAPIError(400, "invalid_stream_header", f"{name}に0以上の整数を指定してください。") from exc
+
+    def _stream_body(self, maximum: int) -> bytes:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise VoiceAPIError(400, "invalid_content_length", "本文の長さを確認してください。") from exc
+        if length <= 0 or length > maximum:
+            raise VoiceAPIError(413, "stream_frame_too_large", f"本文は1〜{maximum}バイトにしてください。")
+        try:
+            self.connection.settimeout(10.0)
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise VoiceAPIError(400, "incomplete_stream_frame", "音声データが途中で終了しました。")
+            return body
+        except OSError as exc:
+            raise VoiceAPIError(408, "stream_upload_timeout", "音声の受信がタイムアウトしました。", True) from exc
+        finally:
+            self.connection.settimeout(None)
+
+    def _receive_pcm_frame(self, session_id: str) -> None:
+        if not self._api_auth_or_reject():
+            return
+        try:
+            parts = [part.strip().lower() for part in self.headers.get("Content-Type", "").split(";")]
+            parameters = dict(part.split("=", 1) for part in parts[1:] if "=" in part)
+            if (parts[0] != "audio/pcm" or parameters.get("rate") != "16000"
+                    or parameters.get("channels") != "1" or parameters.get("format") != "s16le"):
+                raise VoiceAPIError(415, "unsupported_pcm_format", "PCM16LE、16kHz、モノラルを指定してください。")
+            generation = self._stream_header_integer("X-Voice-Generation")
+            sequence = self._stream_header_integer("X-Audio-Sequence")
+            body = self._stream_body(MAX_PCM_FRAME_BYTES)
+            if len(body) % 2:
+                raise VoiceAPIError(400, "invalid_pcm_frame", "PCM16LEの音声は偶数バイトにしてください。")
+            self._send_json(200, _audio_streams().push_audio(session_id, generation, sequence, body))
+        except VoiceAPIError as exc:
+            self._send_voice_error(exc)
+
+    def _receive_playback_event(self, session_id: str) -> None:
+        if not self._api_auth_or_reject():
+            return
+        try:
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                raise VoiceAPIError(415, "unsupported_playback_format", "再生通知はapplication/jsonで送信してください。")
+            try:
+                payload = json.loads(self._stream_body(MAX_REQUEST_BYTES))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise VoiceAPIError(400, "invalid_playback_event", "再生通知のJSONを確認してください。") from exc
+            if not isinstance(payload, dict):
+                raise VoiceAPIError(400, "invalid_playback_event", "再生通知はJSONオブジェクトにしてください。")
+            generation, turn_id, event = payload.get("generation"), payload.get("turn_id"), payload.get("event")
+            if (type(generation) is not int or generation < 0 or not isinstance(turn_id, str)
+                    or not isinstance(event, str) or event not in {"started", "ended", "failed"}):
+                raise VoiceAPIError(400, "invalid_playback_event", "世代・発話ID・再生イベントを確認してください。")
+            self._send_json(200, _audio_streams().playback(session_id, generation, turn_id, event))
+        except VoiceAPIError as exc:
+            self._send_voice_error(exc)
+
+    def _receive_transcription(self, session_id: str) -> None:
+        if not self._api_auth_or_reject():
+            return
+        try:
+            raw_generation = self.headers.get("X-Voice-Generation")
+            if raw_generation is None:
+                raise ValueError
+            generation = int(raw_generation)
+            if generation < 0:
+                raise ValueError
+        except ValueError:
+            self._send_json(400, {"error": "invalid_generation", "message": "X-Voice-Generationを指定してください。"})
+            return
+        audio_format = _audio_upload_format(self.headers.get("Content-Type", ""))
+        if audio_format is None:
+            self._send_json(415, {"error": "unsupported_audio_format"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json(400, {"error": "invalid_content_length"})
+            return
+        if length <= 0 or length > MAX_AUDIO_BYTES:
+            self._send_json(413, {"error": "audio_too_large", "max_bytes": MAX_AUDIO_BYTES})
+            return
+        try:
+            self.connection.settimeout(30.0)
+            audio = self.rfile.read(length)
+            if len(audio) != length:
+                self._send_json(400, {"error": "incomplete_audio_upload"})
+                return
+        except OSError:
+            self._send_json(408, {"error": "audio_upload_timeout", "retryable": True})
+            return
+        finally:
+            self.connection.settimeout(None)
+        media_type, suffix = audio_format
+        if not _has_audio_signature(audio, media_type):
+            self._send_json(400, {"error": "invalid_audio", "retryable": True})
+            return
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(prefix="nen-gitsune-preview-", suffix=suffix, delete=False) as temporary:
+                temporary_path = Path(temporary.name)
+                temporary.write(audio)
+            # Ownership passes to the manager, including on HTTP timeout: its native
+            # worker may not have decoded this file yet, so the handler cannot unlink it.
+            manager = _voice_sessions()
+            owned_path = temporary_path
+            temporary_path = None
+            response = manager.transcribe_preview(session_id, generation, owned_path)
+            self._send_json(200, response)
+        except VoiceAPIError as exc:
+            self._send_voice_error(exc)
+        except OSError:
+            self._send_json(500, {"error": "temporary_audio_unavailable"})
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
     def _receive_voice_turn(self, session_id: str, turn_id: str) -> None:
         if not self._api_auth_or_reject():
@@ -398,7 +582,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not self._api_auth_or_reject():
                 return
             try:
-                self._send_json(200, _voice_sessions().stop_session(session_match.group(1)))
+                stopped = _voice_sessions().stop_session(session_match.group(1))
+                if _AUDIO_STREAMS is not None:
+                    _AUDIO_STREAMS.discard(session_match.group(1))
+                self._send_json(200, stopped)
             except VoiceAPIError as exc:
                 self._send_voice_error(exc)
             return
@@ -415,14 +602,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": "reference_audio_unavailable", "message": "参照音声を削除できません。"})
 
     def _send_voice_error(self, error: VoiceAPIError) -> None:
-        self._send_json(
-            error.status,
-            {
-                "error": error.code,
-                "message": error.message,
-                "retryable": error.retryable,
-            },
-        )
+        value = {"error": error.code, "message": error.message, "retryable": error.retryable}
+        expected = getattr(error, "expected_sequence", None)
+        if type(expected) is int:
+            value["expected_sequence"] = expected
+        self._send_json(error.status, value)
 
     def do_PUT(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         route = urlsplit(self.path).path

@@ -39,6 +39,6 @@ ServerSide/
 - `dashboard/settings_store.py` は設定JSONと参照音声を `dashboard/data/` に保存します。STT・TTSが必要とする設定値を `STTLLMTTS/` から参照します。`requirements.txt` と `.env.example` はServerSide共通です。
 - `STTLLMTTS/tail_mcp_server.py` は後続フェーズ用の独立したサーバー側MCPプロセスです。会話制御から呼び出し、要求・設定・停止世代を検証してPi 4デバイスAPIへ接続する責務を持たせます。Pi 4側の状態をサーバー経由でクライアントへ返します。しっぽ制御は既定で無効にします。AndroidはPi 4 APIを直接呼び出しません。
 - 外部リポジトリはライセンスと依存関係を確認してから `STTLLMTTS/third_party/` に置きます。`AI_Secretary-main` は参考として確認しましたが、そのプログラム一式はコピーしていません。
-- `STTLLMTTS/third_party/Irodori-TTS/` は外部ソースの配置先です。音声処理コードは別途起動した互換Gradioサーバーへ接続します。モデル取得・起動・音声生成・Android実機再生は未確認です。
+- `STTLLMTTS/third_party/Irodori-TTS/` は外部ソースの配置先です。TTSは互換Gradioサーバーへの接続と、`VOICE_TTS_BACKEND=local` による公式ランタイムの直接実行に対応します。ローカル設定と確認結果は [このPCの起動手順](../../LOCAL_SETUP.md) を参照してください。Android実機再生は別途確認が必要です。
 
 Windows・Ubuntuでのセットアップからブラウザー画面・音声会話の利用までの手順は [ServerSide利用マニュアル](USAGE.md) を参照してください。起動スクリプトはHTTPサーバーを前面起動し、既定では `127.0.0.1:8765` で待ち受けます。画面の仕様は [dashboardのREADME](dashboard/README.md)、音声処理の詳細は [STTLLMTTSのREADME](STTLLMTTS/README.md) を参照してください。

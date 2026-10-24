@@ -63,23 +63,36 @@
           <div class="voice-call-heading">
             <div class="section-title-row">
               <div class="section-icon voice-icon" aria-hidden="true">話</div>
-              <div><p class="eyebrow">PUSH TO TALK</p><h2 id="voice-call-title">音声で話す</h2></div>
+              <div><p class="eyebrow">AUTO VOICE</p><h2 id="voice-call-title">音声で話す</h2></div>
             </div>
-            <span class="voice-mode-tag">1往復ずつ</span>
+            <span id="voice-mode-tag" class="voice-mode-tag">リアルタイム文字起こし</span>
           </div>
-          <p class="section-description">会話を始めてから録音ボタンを押し、話し終えたらもう一度押してください。返答音声はこのスマートフォンで再生します。</p>
+          <p class="section-description">入力マイクを選んで「会話を始める」を押してください。音声をサーバーへ送り、話している途中の文字を表示します。発話の区切りと返答のタイミングはサーバーが判断します。</p>
+          <div class="voice-device-settings">
+            <label class="field">
+              <span class="field-label">入力マイク</span>
+              <select id="voice-microphone-select" aria-describedby="voice-microphone-help">
+                <option value="default">システムの既定マイク</option>
+              </select>
+              <span id="voice-microphone-help" class="field-hint">口元のヘッドセットマイクを選ぶと、周囲の音を抑えられます。</span>
+            </label>
+          </div>
           <div class="voice-call-actions">
             <button id="voice-start-button" class="button button-primary" type="button">会話を始める</button>
-            <button id="voice-record-button" class="button button-record" type="button" disabled>録音して話す</button>
             <button id="voice-stop-button" class="button button-quiet" type="button" disabled>すぐに停止</button>
           </div>
-          <p id="voice-call-status" class="voice-call-status" role="status" aria-live="polite">HTTPSのページを開くと、マイクを使った音声会話を開始できます。</p>
+          <p id="voice-call-status" class="voice-call-status" role="status" aria-live="polite">「会話を始める」を押すと、マイクで自動的に聞き取りを始めます。</p>
+          <div class="voice-input-status">
+            <label for="voice-input-level">マイクの入力</label>
+            <meter id="voice-input-level" min="0" max="1" value="0" aria-label="マイクの音量"></meter>
+            <span id="voice-microphone-status">マイクは停止しています。</span>
+          </div>
           <div class="voice-turn" aria-live="polite">
-            <div><span class="field-label">聞き取った内容</span><p id="voice-transcript" class="voice-turn-text">まだ発話はありません。</p></div>
+            <div><span class="field-label">聞き取った内容</span><p id="voice-transcript" class="voice-turn-text">話した内容がここに表示されます。途中の文字は聞き取りに合わせて更新されます。</p></div>
             <div><span class="field-label">返事</span><p id="voice-response" class="voice-turn-text">会話を始めると、ここに返事が表示されます。</p></div>
             <audio id="voice-audio" controls preload="none" hidden></audio>
           </div>
-          <p class="voice-privacy-note">録音は返答の生成中だけサーバーの一時領域で扱い、処理後に削除します。音声会話にはHTTPS接続とマイク許可が必要です。</p>
+          <p class="voice-privacy-note">会話中は無音を含む音声をサーバーへ送信します。音声は処理中だけ扱い、終了後に破棄します。マイクの使用を許可してください。別の端末から接続する場合はHTTPSが必要です。</p>
         </section>
 
         <div class="settings-layout">
