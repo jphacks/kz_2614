@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .pipeline import NoSpeechDetected, VoicePipeline
-from .stt import AudioDurationExceeded
+from ..stt.whisper import AudioDurationExceeded
 
 
 MAX_AUDIO_BYTES = 25_000_000

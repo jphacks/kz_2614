@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from .acknowledgements import VoiceAcknowledgement, VoiceAcknowledgementSystem
-from .llm import COMPANION_SYSTEM_PROMPT, VoiceLLMClient, VoiceLLMReply
-from .stt import Transcription, WhisperSTT
-from .tts import IrodoriTTS, SynthesizedSpeech
+from ..llm.lm_studio import COMPANION_SYSTEM_PROMPT, VoiceLLMClient, VoiceLLMReply
+from ..stt.whisper import Transcription, WhisperSTT
+from ..tts.irodori import IrodoriTTS, SynthesizedSpeech
 from ..settings_store import build_behavior_guidance, get_dashboard_settings
 
 

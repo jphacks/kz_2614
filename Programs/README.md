@@ -32,7 +32,10 @@
 | --- | --- | --- |
 | Androidクライアント | `ClientSide/` | WebView、サーバーURL、マイク権限、録音・再生、停止操作 |
 | ダッシュボード／HTTP入口 | `ServerSide/app/dashboard/`、`ServerSide/web/` | 設定画面と配信、設定API、音声会話APIのHTTP受付 |
-| STT・LLM・TTS | `ServerSide/app/voice/` | 各モデル接続、STT→LLM→TTSパイプライン、セッション、相づち |
+| STT | `ServerSide/app/stt/` | faster-whisper接続と文字起こし |
+| LLM | `ServerSide/app/llm/` | LM Studio接続、質問本文と履歴の受け渡し |
+| TTS | `ServerSide/app/tts/` | Irodori-TTS接続と音声生成 |
+| 音声オーケストレーション | `ServerSide/app/voice/` | STT→LLM→TTSパイプライン、会話セッション、相づち |
 | 共有設定 | `ServerSide/app/settings_store.py` | ダッシュボードで保存した設定を音声処理から読む。参照WAVの検証・管理 |
 | Raspberry Pi 4・しっぽ | `ServerSide/app/tail_mcp_server.py`、`ServerSide/RASPBERRY_PI_API.md` | MCPから機器APIを呼ぶ。初期音声MVPの後に実装・統合 |
 
@@ -44,7 +47,10 @@
 | --- | --- |
 | `codex/android-client` | Android WebView、マイク、録音・再生、端末側停止 |
 | `codex/server-dashboard` | ダッシュボード画面、HTTP入口、設定API |
-| `codex/server-voice-pipeline` | STT、LLM、TTS、音声セッションと相づち |
+| `codex/server-stt` | faster-whisper接続と文字起こし |
+| `codex/server-llm` | LM Studio接続と質問本文・履歴の連携 |
+| `codex/server-tts` | Irodori-TTS接続と音声生成 |
+| `codex/server-voice-pipeline` | モデル接続を組み合わせるパイプライン、セッション、相づち |
 | `codex/raspberry-pi-tail` | Pi 4デバイスサービス、MCP、しっぽ制御 |
 
 担当をまたぐ変更では、先に `VOICE_API.md` または `RASPBERRY_PI_API.md` と関連要件書を更新し、同じAPI契約に合わせます。作業ブランチで差分を確認してから `main` に統合します。`main` は統合先とし、個別作業を直接積み重ねません。
@@ -73,7 +79,7 @@
 - MCPサーバーからRaspberry Pi 4への固定動作指示（HTTPS/JSON API）
 - 失敗・切断・タイムアウト時の停止処理
 
-自作コードは `ServerSide/app/` にまとめ、音声処理を `voice/`、HTTPサーバーを `dashboard/` に分けました。`voice/pipeline.py` がSTT・LLM・TTSをつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[自作ServerSideアプリの説明](ServerSide/app/README.md) を参照してください。
+自作コードは `ServerSide/app/` にまとめ、STT・LLM・TTS・音声オーケストレーション・ダッシュボードを別フォルダーに分けました。`voice/pipeline.py` が個別モデル接続をつなぎ、`voice/sessions.py` が会話セッションを管理します。モデル・HTTPS環境・Android実機は未確認です。詳細は [ServerSideの構成](ServerSide/README.md)、[音声API](ServerSide/VOICE_API.md)、[自作ServerSideアプリの説明](ServerSide/app/README.md) を参照してください。
 
 モデル候補として `faster-whisper-small`（STT）、`Gemma 4 26B-A4B（Q4_K_M）`（LLM）、`Irodori-TTS 600M v3 VoiceDesign`（TTS）をコードの初期設定にしています。接続先・デバイス設定とパイプラインは実装しましたが、モデルの準備、動作環境、応答速度は未確認です。
 
@@ -160,10 +166,13 @@ Programs/
 │   ├── app/
 │   │   ├── dashboard/     # HTTPサーバー
 │   │   │   └── server.py
-│   │   ├── voice/         # STT・LLM・TTSと会話セッション
-│   │   │   ├── stt.py
-│   │   │   ├── llm.py
-│   │   │   ├── tts.py
+│   │   ├── stt/           # faster-whisper
+│   │   │   └── whisper.py
+│   │   ├── llm/           # LM Studio
+│   │   │   └── lm_studio.py
+│   │   ├── tts/           # Irodori-TTS
+│   │   │   └── irodori.py
+│   │   ├── voice/         # 音声処理の組み立て・会話状態
 │   │   │   ├── pipeline.py
 │   │   │   ├── sessions.py
 │   │   │   └── acknowledgements.py

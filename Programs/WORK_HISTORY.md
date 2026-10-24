@@ -163,6 +163,11 @@
 - 確認: ファイル参照と差分を手動確認。テスト、サーバー起動、モデル接続は未実施。
 - 未完了: 起動とHTTP画面/APIの動作、Whisper・LM Studio・Irodori-TTS接続の確認。
 
+### STT・LLM・TTSを個別フォルダーへ分離（2026-10-24）
+- 対応: STTを `app/stt/whisper.py`、LLMを `app/llm/lm_studio.py`、TTSを `app/tts/irodori.py` に分離。`app/voice/` はパイプライン、セッション、相づちだけを担当し、`app/dashboard/` はHTTPサーバーを担当する。
+- 更新: パッケージimport、要件表、構成図、担当別ブランチ例を更新。
+- 確認: importとパス参照、差分チェックを実施。テストやサーバー起動は未実施。
+
 ## 現在のファイル構成
 
 ```text
@@ -195,14 +200,20 @@ Programs/
     │   ├── dashboard/
     │   │   ├── __init__.py
     │   │   └── server.py
+    │   ├── stt/
+    │   │   ├── __init__.py
+    │   │   └── whisper.py
+    │   ├── llm/
+    │   │   ├── __init__.py
+    │   │   └── lm_studio.py
+    │   ├── tts/
+    │   │   ├── __init__.py
+    │   │   └── irodori.py
     │   ├── voice/
     │   │   ├── __init__.py
     │   │   ├── acknowledgements.py
-    │   │   ├── llm.py
     │   │   ├── pipeline.py
-    │   │   ├── sessions.py
-    │   │   ├── stt.py
-    │   │   └── tts.py
+    │   │   └── sessions.py
     │   ├── mcp.json.example
     │   ├── requirements.txt
     │   ├── settings_store.py

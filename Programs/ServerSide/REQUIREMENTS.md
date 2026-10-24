@@ -44,7 +44,7 @@ Whisper・LLM・TTSのモデル、デバイス、バージョンと設定を記�
 
 1. `WhisperSTT.transcribe_file()` が音声から認識した本文を `Transcription.text` に返す。
 2. `VoicePipeline.process_audio_file()` は空本文なら `NoSpeechDetected` とし、LLM・TTSへ進まない。
-3. 本文がある場合は `VoiceLLMClient.generate_response(transcription.text, history)` に渡す。`app/voice/llm.py` がLM Studioの `input` 内に「今回のユーザー発話（質問・依頼）」として本文を配置する。
+3. 本文がある場合は `VoiceLLMClient.generate_response(transcription.text, history)` に渡す。`app/llm/lm_studio.py` がLM Studioの `input` 内に「今回のユーザー発話（質問・依頼）」として本文を配置する。
 4. 直近の会話履歴は同じ `input` 内で「以前の会話」として分離し、今回の発話に答えるための文脈として使う。話し方や役割の指定は `system_prompt` に置き、質問本文はそこへ入れない。
 5. 生成された返答本文をTTSへ渡し、音声バイト列と形式を `VoiceTurnResult.speech` で返す。
 
@@ -150,11 +150,12 @@ Android Web音声APIの入力形式・容量・長さ・総処理期限・HTTPS�
 
 | 現行部品 | あるもの | 不足するもの |
 | --- | --- | --- |
-| `app/voice/stt.py` | 既存ファイルのSTT、25MB・60秒上限、無音時の空結果 | STT個別の処理期限、日本語の小声認識の実機確認 |
+| `app/stt/whisper.py` | faster-whisper接続、既存ファイルのSTT、25MB・60秒上限、無音時の空結果 | STT個別の処理期限、日本語の小声認識の実機確認 |
 | `app/voice/pipeline.py` | STT→LLM→TTS、質問本文の受渡し、インスタンス内履歴、直列化、遅延相づちの通知と本返答との順序制御 | Android Webへの相づち配信・再生完了連携 |
-| `app/voice/llm.py` | LM Studio呼出し、今回の質問・依頼と履歴の分離、出力上限、限定MCP指定 | アプリセッションと停止許可の連携、音声完了までの全体制御 |
-| `app/voice/tts.py` | Irodori-TTS Gradio API呼出し、生成音声サイズ制限、音声バイト列返却、固定先の参照WAVをインスタンス内に保持 | TTSサーバー／モデル接続、段階タイムアウト／取消、音声設定・参照音声・Android再生の実機確認 |
+| `app/llm/lm_studio.py` | LM Studio呼出し、今回の質問・依頼と履歴の分離、出力上限、限定MCP指定 | アプリセッションと停止許可の連携、音声完了までの全体制御 |
+| `app/tts/irodori.py` | Irodori-TTS Gradio API呼出し、生成音声サイズ制限、音声バイト列返却、固定先の参照WAVをインスタンス内に保持 | TTSサーバー／モデル接続、段階タイムアウト／取消、音声設定・参照音声・Android再生の実機確認 |
 | `app/voice/acknowledgements.py` | 2種類の相づち音声をメモリ内に事前生成して交互に選択 | Android Web配信・再生完了通知との接続、実機での待ち時間・声・音量確認 |
+| `app/voice/sessions.py` | Android音声APIのセッション・発話・停止世代と期限付き音声管理 | 実端末の接続・停止競合・切断再接続確認 |
 | `app/dashboard/server.py` と `web/` | 設定画面、検証付き設定API、PCM WAV API、音声セッション／発話／返答音声／停止API、loopback既定と管理トークン | 起動とAPI操作、HTTPS終端、Android端末からの接続確認、モデル応答と停止競合の受け入れ確認 |
 | `app/tail_mcp_server.py` | ツール3種、引数上限、環境設定、HTTP送信 | 現在セッションの許可確認、連続動作制限、構造化した失敗／機器確認、Raspberry Pi 4との実機検証 |
 | Whisperの配置 | コードと既存フォルダーを `ServerSide/whisper/` に統一 | 実モデルのダウンロード・読み込みと配置確認 |

@@ -9,10 +9,13 @@ ServerSide/
 ├── app/
 │   ├── dashboard/       # HTTPサーバー
 │   │   └── server.py
-│   ├── voice/           # STT・LLM・TTSと音声セッション
-│   │   ├── stt.py
-│   │   ├── llm.py
-│   │   ├── tts.py
+│   ├── stt/              # faster-whisper接続
+│   │   └── whisper.py
+│   ├── llm/              # LM Studio接続
+│   │   └── lm_studio.py
+│   ├── tts/              # Irodori-TTS接続
+│   │   └── irodori.py
+│   ├── voice/            # 音声処理の組み立て・会話状態
 │   │   ├── pipeline.py
 │   │   ├── sessions.py
 │   │   └── acknowledgements.py
@@ -28,11 +31,12 @@ ServerSide/
 
 ## 役割の分離
 
-- `app/voice/` は音声処理専用です。`stt.py`、`llm.py`、`tts.py` は各モデル接続を担当し、`pipeline.py` がSTT→LLM→TTSの一往復をつなぎます。`sessions.py` はAndroid Web音声会話のセッションを管理し、`acknowledgements.py` は相づち音声を扱います。
-- `app/dashboard/` はHTTP入口です。`server.py` は設定APIと音声セッションAPIを受け、音声処理そのものは `app/voice/` に委譲します。ブラウザー画面は役割ごとに分けた静的資産として `web/` に置きます。
+- `app/stt/`、`app/llm/`、`app/tts/` は独立したモデル接続層です。STTは `stt/whisper.py`、LLMは `llm/lm_studio.py`、TTSは `tts/irodori.py` に置きます。
+- `app/voice/` はモデル接続を含めず、`pipeline.py` がSTT→LLM→TTSの一往復を組み立てます。`sessions.py` は会話セッション、`acknowledgements.py` は相づちを担当します。
+- `app/dashboard/` はHTTP入口です。`server.py` は設定APIと音声セッションAPIを受け、音声処理そのものは `app/voice/` に委譲します。ブラウザー画面は別の静的資産として `web/` に置きます。
 - `app/settings_store.py` はダッシュボードで編集した設定を音声処理も読むための共有層です。MCPしっぽ制御は `app/tail_mcp_server.py` に独立させています。
 - faster-whisperのPythonパッケージと `gradio_client` は `app/requirements.txt` から仮想環境へインストールし、Whisperモデル重みは既存の `whisper/` に保存します。外部パッケージのコードを `app/` にコピーしません。
 - 外部リポジトリはライセンスと依存関係を確認してから `third_party/` に置きます。`AI_Secretary-main` は参考として確認しましたが、そのプログラム一式はコピーしていません。
-- `Irodori-TTS/` は外部ソースを置くための場所です。現在は空で、`app/voice/tts.py` は別途起動した互換Gradioサーバーへ接続します。モデル取得・起動・音声生成・Android実機再生は未確認です。
+- `Irodori-TTS/` は外部ソースを置くための場所です。現在は空で、`app/tts/irodori.py` は別途起動した互換Gradioサーバーへ接続します。モデル取得・起動・音声生成・Android実機再生は未確認です。
 
 起動方法、API、設定、未確認事項は [app/README.md](app/README.md) を参照してください。
