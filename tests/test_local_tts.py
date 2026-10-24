@@ -13,6 +13,7 @@ import time
 import types
 import unittest
 import wave
+import weakref
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -177,6 +178,66 @@ class LocalTTSTests(unittest.TestCase):
             for call in (hub.snapshot_download.call_args, hub.hf_hub_download.call_args):
                 self.assertEqual(call.kwargs["cache_dir"], str(root / "explicit-cache"))
                 self.assertTrue(call.kwargs["local_files_only"])
+
+    def test_cuda_releases_completed_results_inside_runtime_lock_and_reuses_weights(self):
+        class Result:
+            audio = AudioTensor()
+            sample_rate = 48000
+
+        results = []
+
+        def synthesize(request):
+            result = Result()
+            results.append(weakref.ref(result))
+            return result
+
+        def release():
+            self.assertTrue(all(reference() is None for reference in results))
+            self.assertEqual(len(LocalIrodoriBackend._runtimes), 1)
+            runtime, lock = next(iter(LocalIrodoriBackend._runtimes.values()))[1:]
+            self.assertIs(runtime, self.runtime)
+            self.assertTrue(lock._is_owned())
+
+        cuda = types.SimpleNamespace(is_available=lambda: True, empty_cache=Mock(side_effect=release))
+        self.runtime.key = types.SimpleNamespace(model_device="cuda", codec_device="cuda")
+        self.runtime.synthesize.side_effect = synthesize
+        config = replace(self.config, model_device="cuda", codec_device="cuda", model_precision="bf16")
+        with self.fake_model(), patch.dict(sys.modules, {"torch": types.SimpleNamespace(cuda=cuda)}):
+            self.assertTrue(IrodoriTTS(config).synthesize("こんにちは。").audio_bytes)
+            IrodoriTTS(config).synthesize("おやすみ。")
+        self.assertEqual(cuda.empty_cache.call_count, 2)
+        self.assertEqual(self.api.InferenceRuntime.from_key.call_count, 1)
+
+    def test_cuda_releases_workspace_after_inference_failure(self):
+        cuda = types.SimpleNamespace(is_available=lambda: True, empty_cache=Mock())
+        self.runtime.key = types.SimpleNamespace(model_device="cuda", codec_device="cpu")
+        self.runtime.synthesize.side_effect = RuntimeError("original inference failure")
+        config = replace(self.config, model_device="cuda", model_precision="bf16")
+        with self.fake_model(), patch.dict(sys.modules, {"torch": types.SimpleNamespace(cuda=cuda)}):
+            with self.assertRaises(SpeechSynthesisError) as error:
+                IrodoriTTS(config).synthesize("こんにちは。")
+        self.assertEqual(str(error.exception.__cause__), "original inference failure")
+        cuda.empty_cache.assert_called_once()
+        self.assertEqual(len(LocalIrodoriBackend._runtimes), 1)
+
+    def test_cpu_inference_never_checks_or_clears_cuda(self):
+        cuda = types.SimpleNamespace(is_available=Mock(side_effect=AssertionError("CPU must not query CUDA")), empty_cache=Mock())
+        self.runtime.key = types.SimpleNamespace(model_device="cpu", codec_device="cpu")
+        with self.fake_model(), patch.dict(sys.modules, {"torch": types.SimpleNamespace(cuda=cuda)}):
+            IrodoriTTS(self.config).synthesize("こんにちは。")
+        cuda.is_available.assert_not_called()
+        cuda.empty_cache.assert_not_called()
+
+    def test_cleanup_failure_does_not_replace_the_original_model_error(self):
+        cuda = types.SimpleNamespace(is_available=lambda: True, empty_cache=Mock(side_effect=RuntimeError("cleanup failed")))
+        self.runtime.key = types.SimpleNamespace(model_device="cuda", codec_device="cpu")
+        self.runtime.synthesize.side_effect = RuntimeError("original inference failure")
+        config = replace(self.config, model_device="cuda", model_precision="bf16")
+        with self.fake_model(), patch.dict(sys.modules, {"torch": types.SimpleNamespace(cuda=cuda)}), \
+             self.assertLogs("Programs.ServerSide.STTLLMTTS.tts.local_backend", level="WARNING"):
+            with self.assertRaises(SpeechSynthesisError) as error:
+                IrodoriTTS(config).synthesize("こんにちは。")
+        self.assertEqual(str(error.exception.__cause__), "original inference failure")
 
 
 if __name__ == "__main__":

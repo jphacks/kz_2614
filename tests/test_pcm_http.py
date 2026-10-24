@@ -34,8 +34,26 @@ class PCMHTTPTests(unittest.TestCase):
         manager.push_audio.return_value = {"stage": "listening", "next_sequence": 1}
         with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=manager):
             handler._receive_pcm_frame(self.session_id)
-        manager.push_audio.assert_called_once_with(self.session_id, 0, 0, body)
+        manager.push_audio.assert_called_once_with(self.session_id, 0, 0, body, input_gain=1.0)
         handler._send_json.assert_called_once_with(200, manager.push_audio.return_value)
+
+    def test_input_volume_is_forwarded_without_changing_packet_bytes_or_sequence(self):
+        body = b"\x01\x00\xff\x7f" * 2048
+        handler = self.handler(body, headers={"X-Audio-Input-Gain": "0.6", "X-Audio-Sequence": "7"})
+        manager = Mock()
+        with patch("Programs.ServerSide.dashboard.server._audio_streams", return_value=manager):
+            handler._receive_pcm_frame(self.session_id)
+        manager.push_audio.assert_called_once_with(self.session_id, 0, 7, body, input_gain=0.6)
+
+    def test_invalid_input_volume_is_rejected_before_audio_is_consumed(self):
+        for gain in ("NaN", "inf", "-1", "0", "0.24", "2.1", "text", ""):
+            with self.subTest(gain=gain):
+                handler = self.handler(headers={"X-Audio-Input-Gain": gain})
+                with patch("Programs.ServerSide.dashboard.server._audio_streams") as factory:
+                    handler._receive_pcm_frame(self.session_id)
+                factory.assert_not_called()
+                self.assertEqual(handler.rfile.tell(), 0)
+                self.assertEqual(handler._send_json.call_args.args[0], 400)
 
     def test_authentication_precedes_audio_read_and_controller_access(self):
         handler = self.handler(authorized=False)

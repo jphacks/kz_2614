@@ -7,6 +7,7 @@ import hmac
 import ipaddress
 import json
 import logging
+import math
 import mimetypes
 import os
 import re
@@ -17,7 +18,7 @@ from concurrent.futures import CancelledError as FutureCancelledError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from queue import Empty, Queue
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from dotenv import load_dotenv
 
@@ -45,8 +46,12 @@ _VOICE_SESSIONS: VoiceSessions | None = None
 _VOICE_SESSIONS_LOCK = threading.Lock()
 _AUDIO_STREAMS = None
 _AUDIO_STREAMS_LOCK = threading.Lock()
+_AUDIO_EVENT_READERS = threading.BoundedSemaphore(8)
+AUDIO_EVENT_STREAM_SECONDS = 25.0
+AUDIO_EVENT_HEARTBEAT_SECONDS = 10.0
 MAX_PCM_FRAME_BYTES = 32_000
 _SESSION_STREAM_ROUTE = re.compile(r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/audio-stream$")
+_SESSION_EVENTS_ROUTE = re.compile(r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/audio-stream/events$")
 _SESSION_PLAYBACK_ROUTE = re.compile(r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/audio-stream/playback$")
 _SESSION_TURN_ROUTE = re.compile(
     r"^/api/v1/voice/sessions/([0-9a-fA-F-]{36})/turns/([0-9a-fA-F-]{36})$"
@@ -164,6 +169,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         route = urlsplit(self.path).path
+        events_match = _SESSION_EVENTS_ROUTE.fullmatch(route)
+        if events_match:
+            self._stream_audio_events(events_match.group(1))
+            return
         stream_match = _SESSION_STREAM_ROUTE.fullmatch(route)
         if stream_match:
             if not self._api_auth_or_reject():
@@ -297,6 +306,97 @@ class DashboardHandler(BaseHTTPRequestHandler):
         finally:
             self.connection.settimeout(None)
 
+    def _stream_audio_events(self, session_id: str) -> None:
+        """Receive reply audio independently of the continuously uploaded PCM."""
+        if not self._api_auth_or_reject():
+            return
+        acquired = False
+        started = False
+        cursor = 0
+        generation = 0
+        try:
+            generation = self._stream_header_integer("X-Voice-Generation")
+            values = parse_qs(urlsplit(self.path).query, keep_blank_values=True).get("after", ["0"])
+            try:
+                if len(values) != 1 or not values[0].isascii() or not values[0].isdecimal():
+                    raise ValueError
+                cursor = int(values[0])
+                if cursor > 9_007_199_254_740_991:
+                    raise ValueError
+            except ValueError as exc:
+                raise VoiceAPIError(400, "invalid_event_cursor", "返答の受信位置を確認してください。") from exc
+            acquired = _AUDIO_EVENT_READERS.acquire(blocking=False)
+            if not acquired:
+                raise VoiceAPIError(503, "event_readers_busy", "返答の接続が混み合っています。", True)
+            streams = _audio_streams()
+            pending = streams.read_events(session_id, generation, cursor, timeout=0)
+            self.connection.settimeout(15.0)
+            self._begin_ndjson_response()
+            started = True
+            deadline = time.monotonic() + AUDIO_EVENT_STREAM_SECONDS
+            while True:
+                if pending:
+                    for event in pending:
+                        self._write_ndjson_event(event)
+                        cursor = int(event["cursor"])
+                else:
+                    self._write_ndjson_event({
+                        "type": "heartbeat", "session_id": session_id,
+                        "generation": generation, "turn_id": None, "cursor": cursor,
+                    })
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                pending = streams.read_events(
+                    session_id, generation, cursor,
+                    timeout=min(AUDIO_EVENT_HEARTBEAT_SECONDS, remaining),
+                )
+        except VoiceAPIError as exc:
+            if not started:
+                self._send_voice_error(exc)
+            else:
+                try:
+                    self._write_ndjson_event({
+                        "type": "error", "session_id": session_id,
+                        "generation": generation, "turn_id": None, "cursor": cursor,
+                        "error": exc.code, "message": exc.message, "retryable": exc.retryable,
+                    })
+                except OSError:
+                    pass
+        except OSError:
+            # The input connection and model work survive a disconnected output reader.
+            LOGGER.info("PCM reply receiver disconnected")
+        finally:
+            if started:
+                self._finish_ndjson_response()
+            if acquired:
+                _AUDIO_EVENT_READERS.release()
+
+    def _begin_ndjson_response(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("Connection", "close")
+        self.send_header("Cache-Control", "no-store, no-transform")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        self.close_connection = True
+
+    def _write_ndjson_event(self, event: dict[str, object]) -> None:
+        body = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+        self.wfile.write(f"{len(body):X}\r\n".encode("ascii"))
+        self.wfile.write(body)
+        self.wfile.write(b"\r\n")
+        self.wfile.flush()
+
+    def _finish_ndjson_response(self) -> None:
+        try:
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
+        except OSError:
+            pass
+
     def _receive_pcm_frame(self, session_id: str) -> None:
         if not self._api_auth_or_reject():
             return
@@ -308,10 +408,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise VoiceAPIError(415, "unsupported_pcm_format", "PCM16LE、16kHz、モノラルを指定してください。")
             generation = self._stream_header_integer("X-Voice-Generation")
             sequence = self._stream_header_integer("X-Audio-Sequence")
+            try:
+                input_gain = float(self.headers.get("X-Audio-Input-Gain", "1"))
+                if not math.isfinite(input_gain) or not 0.25 <= input_gain <= 2:
+                    raise ValueError
+            except (TypeError, ValueError) as exc:
+                raise VoiceAPIError(400, "invalid_input_gain", "入力音量は25〜200%で指定してください。") from exc
             body = self._stream_body(MAX_PCM_FRAME_BYTES)
             if len(body) % 2:
                 raise VoiceAPIError(400, "invalid_pcm_frame", "PCM16LEの音声は偶数バイトにしてください。")
-            self._send_json(200, _audio_streams().push_audio(session_id, generation, sequence, body))
+            self._send_json(200, _audio_streams().push_audio(
+                session_id, generation, sequence, body, input_gain=input_gain,
+            ))
         except VoiceAPIError as exc:
             self._send_voice_error(exc)
 

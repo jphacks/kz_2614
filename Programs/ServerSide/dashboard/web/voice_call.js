@@ -4,6 +4,7 @@
   const API_SESSIONS = "/api/v1/voice/sessions";
   const TOKEN_KEY = "nen-gitsune-dashboard-token";
   const MICROPHONE_KEY = "nen-gitsune-voice-microphone";
+  const INPUT_GAIN_KEY = "nen-gitsune-voice-input-gain-percent";
   const PCM_CONTENT_TYPE = "audio/pcm;rate=16000;channels=1;format=s16le";
   const PCM_FRAME_BYTES = 8192;
   const MAX_QUEUE_BYTES = 64_000;
@@ -11,7 +12,9 @@
   const MICROPHONE_TIMEOUT_MS = 15_000;
   const REQUEST_TIMEOUT_MS = 5_000;
   const POLL_INTERVAL_MS = 350;
-  const INPUT_STAGES = new Set(["listening", "speaking"]);
+  const MAX_PLAYBACK_QUEUE_BYTES = 8 * 1024 * 1024;
+  const MAX_EVENT_LINE_CHARS = 40 * 1024 * 1024;
+  const EVENT_IDLE_TIMEOUT_MS = 35_000;
   const startButton = document.getElementById("voice-start-button");
   const recordButton = document.getElementById("voice-record-button");
   const stopButton = document.getElementById("voice-stop-button");
@@ -24,6 +27,13 @@
   const microphoneStatus = document.getElementById("voice-microphone-status");
   const modeTag = document.getElementById("voice-mode-tag");
   const microphoneSelect = document.getElementById("voice-microphone-select");
+  const inputGainSlider = document.getElementById("voice-input-gain");
+  const inputGainValue = document.getElementById("voice-input-gain-value");
+  const inputGainPresets = [
+    [document.getElementById("voice-input-gain-noisy"), 60],
+    [document.getElementById("voice-input-gain-normal"), 100],
+    [document.getElementById("voice-input-gain-quiet"), 150],
+  ];
 
   let sessionId = null;
   let generation = null;
@@ -34,6 +44,7 @@
   let activityVersion = 0;
   let microphoneDevicesReady = false;
   let conversationChannel = null;
+  let inputGainPercent = 100;
   const tabOwner = makeId();
 
   function makeId() {
@@ -47,6 +58,18 @@
 
   function writePreference(key, value) {
     try { sessionStorage.setItem(key, value); } catch (_) { /* Preferences are optional. */ }
+  }
+
+  function updateInputGain(value, save = true) {
+    const number = Number(value);
+    inputGainPercent = Number.isFinite(number) ? Math.min(200, Math.max(25, Math.round(number / 5) * 5)) : 100;
+    if (inputGainSlider) {
+      inputGainSlider.value = String(inputGainPercent);
+      inputGainSlider.setAttribute?.("aria-valuetext", `${inputGainPercent}%`);
+    }
+    if (inputGainValue) inputGainValue.textContent = `${inputGainPercent}%`;
+    for (const [button, percent] of inputGainPresets) button?.setAttribute?.("aria-pressed", String(inputGainPercent === percent));
+    if (save) writePreference(INPUT_GAIN_KEY, String(inputGainPercent));
   }
 
   function setStatus(message, kind = "") {
@@ -200,6 +223,11 @@
     request.controller.abort();
     clearTimeout(request.permissionTimer); clearTimeout(request.pollTimer);
     request.queue = []; request.queuedBytes = 0; request.controls = [];
+    request.eventController?.abort();
+    try { Promise.resolve(request.eventReader?.cancel()).catch(() => {}); } catch (_) {}
+    for (const resume of request.spaceWaiters || []) resume();
+    request.spaceWaiters?.clear();
+    if (request.reply) { request.reply.queue = []; request.reply.queuedBytes = 0; }
     if (request.worklet) request.worklet.port.onmessage = null;
     for (const node of [request.source, request.worklet, request.output]) {
       try { node?.disconnect(); } catch (_) { /* Already disconnected. */ }
@@ -221,7 +249,8 @@
       sessionId, generation, controller: new AbortController(), cancelled: false, ready: false,
       stream: null, source: null, worklet: null, output: null, permissionTimer: null,
       queue: [], queuedBytes: 0, nextSequence: 0, operation: false, controls: [], pollTimer: null, pollDue: false,
-      stage: "listening", reply: null, handledReplies: new Set(),
+      stage: "listening", reply: null, completedTurns: new Set(),
+      eventCursor: 0, eventController: null, eventReader: null, spaceWaiters: new Set(),
     };
     captureRequest = request;
     setStatus("マイクの許可を待っています…ブラウザーの確認が表示されたら許可してください。");
@@ -253,6 +282,7 @@
       void refreshMicrophones();
       renderState(request);
       schedulePoll(request, 0);
+      void consumeEventStream(request);
     } catch (error) {
       if (!currentCapture(request)) { disposeCapture(request); return; }
       const denied = ["NotAllowedError", "SecurityError"].includes(error.name);
@@ -261,21 +291,18 @@
     }
   }
 
-  function maySendAudio(request) {
-    return INPUT_STAGES.has(request.stage) && !request.reply;
-  }
-
   function receivePCM(request, data) {
     if (!currentCapture(request) || !request.ready || data?.type !== "pcm") return;
-    // RMS is display-only. Every frame, including complete silence, follows server state.
-    if (inputLevel) inputLevel.value = Number.isFinite(data.level) ? Math.min(1, Math.max(0, data.level * 8)) : 0;
+    // RMS is display-only. Send every frame, including silence and reply playback.
+    // The server alone decides whether a frame participates in recognition.
+    if (inputLevel) inputLevel.value = Number.isFinite(data.level) ? Math.min(1, Math.max(0, data.level * 8 * inputGainPercent / 100)) : 0;
     if (!data.pcm || data.pcm.byteLength !== PCM_FRAME_BYTES) { failCapture(request, "音声フレームを正しく作成できませんでした。"); return; }
-    if (!maySendAudio(request)) return;
     if (request.queuedBytes + data.pcm.byteLength > MAX_QUEUE_BYTES) {
       failCapture(request, "音声の送信が追いつかず、約2秒の待機上限を超えました。音声を黙って間引かず停止しました。");
       return;
     }
-    request.queue.push(data.pcm); request.queuedBytes += data.pcm.byteLength;
+    // Freeze the server-side gain with this frame; changing the slider cannot alter a retry.
+    request.queue.push({ pcm: data.pcm, gain: inputGainPercent / 100 }); request.queuedBytes += data.pcm.byteLength;
     pumpTransport(request);
   }
 
@@ -320,37 +347,32 @@
   function applyState(request, body) {
     if (!validState(request, body)) return;
     if (typeof body.stage === "string") request.stage = body.stage;
-    if (body.transcript) transcriptLine.textContent = body.transcript;
-    if (body.response_text) responseLine.textContent = body.response_text;
-    if (!INPUT_STAGES.has(request.stage)) { request.queue = []; request.queuedBytes = 0; }
-    if (request.reply?.ended && INPUT_STAGES.has(request.stage)) request.reply = null;
-    renderState(request);
-    if (body.stage === "reply_ready" && body.turn_id && body.speech?.url && !request.handledReplies.has(body.turn_id)) {
-      request.handledReplies.add(body.turn_id);
-      request.reply = { turnId: body.turn_id, started: false, ended: false, awaitingUser: false, playing: false };
-      request.queue = []; request.queuedBytes = 0;
-      void playReply(request, request.reply, body.speech.url);
+    // Confirmed transcript/text events are authoritative for the current output turn.
+    if (body.transcript && (!request.reply || request.reply.ended || !request.reply.transcriptConfirmed)) {
+      transcriptLine.textContent = body.transcript;
     }
+    if (request.reply?.ended && ["listening", "speaking"].includes(request.stage)) request.reply = null;
+    renderState(request);
   }
 
   function renderState(request) {
     if (!currentCapture(request) || !request.ready) return;
     const reply = request.reply;
     if (reply && !reply.ended) {
-      setStatus(reply.failed ? "返答音声を再生できませんでした。再生を再試行するか、停止して会話を開始し直してください。"
-        : reply.awaitingUser ? "返答を受け取りました。再生ボタンを押してください。再生が終わるまで入力はサーバーで待機します。"
-          : reply.playing ? "返答を再生中です。再生が終わるとサーバーの待受へ戻ります。" : "返答音声を受け取っています…", reply.failed ? "error" : "active");
+      setStatus(reply.failed ? "返答音声を再生できませんでした。再生を再試行するか、会話を開始し直してください。"
+        : reply.awaitingUser ? "音声を受け取りました。再生ボタンを押してください。マイクの送信は継続しています。"
+          : reply.playing ? "返答音声を届いた文節から再生しています。" : "次の返答音声を待っています…", reply.failed ? "error" : "active");
     } else {
       const messages = {
         listening: "音声をサーバーへ送信中です。話しかけると文字が表示されます。",
         speaking: "聞き取り中です。話し終えるとサーバーが返答を作ります。",
         stt: "音声を文字にしています…", llm: "返事を考えています…", tts: "返答音声を作っています…",
-        reply_ready: "返答音声を受け取っています…", playing: "返答を再生中です。",
-        cooldown: "聞き取りの再開を待っています…", failed: "音声処理に失敗しました。停止して会話を開始し直してください。",
+        reply_ready: "返答音声を待っています…", playing: "返答音声を再生中です。",
+        cooldown: "サーバーが次の発話を受け付ける準備をしています…", failed: "音声処理に失敗しました。停止して会話を開始し直してください。",
       };
       setStatus(messages[request.stage] || "サーバーの音声状態を確認しています…", request.stage === "failed" ? "error" : "active");
     }
-    if (microphoneStatus) microphoneStatus.textContent = maySendAudio(request) ? "マイク接続・サーバーへ送信中" : "マイク接続・サーバーの処理／再生を待機中";
+    if (microphoneStatus) microphoneStatus.textContent = "マイク接続・音声送信を継続中";
     refreshButtons();
   }
 
@@ -358,9 +380,9 @@
     if (!currentCapture(request) || request.operation) return;
     let operation;
     if (request.controls.length) operation = { type: "control", control: request.controls.shift() };
-    else if (maySendAudio(request) && request.queue.length) {
-      const pcm = request.queue.shift(); request.queuedBytes -= pcm.byteLength;
-      operation = { type: "audio", pcm, sequence: request.nextSequence };
+    else if (request.queue.length) {
+      const frame = request.queue.shift(); request.queuedBytes -= frame.pcm.byteLength;
+      operation = { type: "audio", pcm: frame.pcm, gain: frame.gain, sequence: request.nextSequence };
     } else if (request.pollDue) { operation = { type: "poll" }; request.pollDue = false; }
     else return;
     request.operation = true;
@@ -368,7 +390,7 @@
     try {
       const body = await withRetries(request, () => {
         if (operation.type === "audio") return fetchJSON(request, route, {
-          method: "POST", headers: authHeaders({ "Content-Type": PCM_CONTENT_TYPE, "X-Voice-Generation": String(request.generation), "X-Audio-Sequence": String(operation.sequence) }), body: operation.pcm,
+          method: "POST", headers: authHeaders({ "Content-Type": PCM_CONTENT_TYPE, "X-Voice-Generation": String(request.generation), "X-Audio-Sequence": String(operation.sequence), "X-Audio-Input-Gain": String(operation.gain) }), body: operation.pcm,
         });
         if (operation.type === "control") return fetchJSON(request, `${route}/playback`, {
           method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
@@ -393,46 +415,234 @@
 
   function notifyPlayback(request, reply, event) {
     if (!currentCapture(request) || request.reply !== reply) return;
-    if (event === "started") { if (reply.started) return; reply.started = true; reply.failed = false; reply.playing = true; reply.awaitingUser = false; }
-    if (event === "ended") {
-      if (reply.ended) return;
-      reply.ended = true; reply.playing = false;
-      // A completed reply cannot be replayed outside the server's playback state.
-      resetAudio();
+    if (event === "started") {
+      if (reply.started) return;
+      reply.started = true;
+    } else if (event === "ended") {
+      if (reply.ended || !reply.complete || reply.current || reply.queue.length) return;
+      reply.ended = true;
+      request.completedTurns.add(reply.turnId);
+    } else if (event === "failed") {
+      if (reply.failureNotified) return;
+      reply.failureNotified = true;
     }
-    if (event === "failed") { if (reply.failed) return; reply.failed = true; reply.started = false; reply.playing = false; reply.awaitingUser = true; }
     request.controls.push({ turnId: reply.turnId, event });
-    renderState(request); pumpTransport(request);
+    renderState(request);
+    pumpTransport(request);
   }
 
-  async function playReply(request, reply, url) {
+  function eventError(message, code = "invalid_voice_event") {
+    const error = new Error(message);
+    error.code = code;
+    error.fatal = true;
+    return error;
+  }
+
+  function replyForEvent(request, event) {
+    if (typeof event.turn_id !== "string" || !event.turn_id) throw eventError("返答の識別情報を確認できませんでした。");
+    if (request.completedTurns.has(event.turn_id)) {
+      if (event.type === "complete") return null;
+      throw eventError("終了した返答のデータが遅れて届きました。");
+    }
+    if (!request.reply || request.reply.turnId !== event.turn_id) {
+      if (request.reply && !request.reply.ended) throw eventError("複数の返答が同時に届きました。");
+      request.reply = {
+        turnId: event.turn_id, queue: [], queuedBytes: 0, current: null,
+        complete: false, started: false, ended: false, failed: false, failureNotified: false,
+        playing: false, awaitingUser: false, text: "", transcriptConfirmed: false,
+        audioKeys: new Set(), audioCount: 0,
+      };
+    }
+    return request.reply;
+  }
+
+  function resumeEventReader(request) {
+    if (request.reply && request.reply.queuedBytes >= MAX_PLAYBACK_QUEUE_BYTES / 2) return;
+    for (const resume of request.spaceWaiters) resume();
+    request.spaceWaiters.clear();
+  }
+
+  function finishReplyIfReady(request, reply) {
+    if (!currentCapture(request) || request.reply !== reply || !reply.complete || reply.current || reply.queue.length) return;
+    if (!reply.audioCount) throw eventError("返答の音声データがありませんでした。");
+    notifyPlayback(request, reply, "ended");
+  }
+
+  function handleVoiceEvent(request, event) {
+    if (!currentCapture(request) || event.session_id !== request.sessionId || event.generation !== request.generation) return;
+    // Heartbeats and terminal controls do not advance the durable event cursor.
+    if (event.type === "heartbeat") return;
+    const noSpeech = event.type === "error" && event.error === "no_speech"
+      && typeof event.turn_id === "string" && Boolean(event.turn_id)
+      && Number.isSafeInteger(event.cursor) && event.cursor >= 1;
+    if (event.type === "error" && !noSpeech) throw eventError(event.message || "音声応答の受信に失敗しました。", event.error || "voice_stream_error");
+    if (!Number.isSafeInteger(event.cursor) || event.cursor < 1) throw eventError("音声応答の番号を確認できませんでした。");
+    if (event.cursor <= request.eventCursor) return;
+    if (event.cursor !== request.eventCursor + 1) throw eventError("音声応答の一部を受信できませんでした。", "event_cursor_gap");
+    if (noSpeech) {
+      if (request.reply?.turnId === event.turn_id) {
+        resetAudio();
+        request.reply.queue = [];
+        request.reply.current = null;
+        request.reply.queuedBytes = 0;
+        request.reply = null;
+        responseLine.textContent = "";
+        resumeEventReader(request);
+      }
+      request.completedTurns.add(event.turn_id);
+      request.eventCursor = event.cursor;
+      setStatus("発話を確認できませんでした。聞き取りと音声送信を続けています。", "active");
+      return;
+    }
+    if (["transcript", "text_delta", "acknowledgement", "audio_chunk", "complete"].includes(event.type)) {
+      const reply = replyForEvent(request, event);
+      if (reply) {
+        if (event.type === "transcript") {
+          reply.transcriptConfirmed = true;
+          transcriptLine.textContent = event.text || "（認識できませんでした）";
+        } else if (event.type === "text_delta") {
+          reply.text += event.text || "";
+          if (reply.text.length > 4_000) throw eventError("返答テキストの受信上限を超えました。");
+          responseLine.textContent = reply.text;
+        } else if (event.type === "acknowledgement" || event.type === "audio_chunk") {
+          const key = event.type === "acknowledgement" ? "acknowledgement" : Number.isSafeInteger(event.index) ? `audio:${event.index}` : `event:${event.cursor}`;
+          if (!reply.audioKeys.has(key)) {
+            if (typeof event.audio_base64 !== "string" || !event.media_type?.startsWith("audio/")) throw eventError("返答音声の形式を確認できませんでした。");
+            let binary;
+            try { binary = atob(event.audio_base64); } catch (_) { throw eventError("返答音声を読み取れませんでした。"); }
+            if (!binary.length || binary.length > MAX_PLAYBACK_QUEUE_BYTES) throw eventError("返答音声の大きさが受信上限を超えました。");
+            if (reply.queuedBytes + binary.length > MAX_PLAYBACK_QUEUE_BYTES) {
+              const error = new Error("Playback queue is full"); error.backpressure = true; throw error;
+            }
+            const bytes = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+            reply.queue.push({ key, blob: new Blob([bytes], { type: event.media_type }), bytes: bytes.length });
+            reply.queuedBytes += bytes.length;
+            reply.audioCount++;
+            reply.audioKeys.add(key);
+            pumpPlayback(request, reply);
+          }
+        } else if (event.type === "complete") {
+          reply.complete = true;
+          reply.transcriptConfirmed = true;
+          if (event.transcript) transcriptLine.textContent = event.transcript;
+          if (event.response_text) responseLine.textContent = event.response_text;
+          finishReplyIfReady(request, reply);
+        }
+        renderState(request);
+      }
+    }
+    request.eventCursor = event.cursor;
+  }
+
+  function markChunkPlaying(request, reply, chunk) {
+    if (!currentCapture(request) || request.reply !== reply || reply.current !== chunk || reply.ended) return;
+    reply.playing = true;
+    reply.awaitingUser = false;
+    reply.failed = false;
+    notifyPlayback(request, reply, "started");
+    renderState(request);
+  }
+
+  function pumpPlayback(request, reply) {
+    if (!currentCapture(request) || request.reply !== reply || reply.current || reply.ended) return;
+    if (!reply.queue.length) { finishReplyIfReady(request, reply); return; }
+    const chunk = reply.queue.shift();
+    reply.current = chunk;
+    reply.playing = false;
+    reply.awaitingUser = false;
+    resetAudio();
+    audioObjectUrl = URL.createObjectURL(chunk.blob);
+    audioPlayer.src = audioObjectUrl; audioPlayer.hidden = false;
+    audioPlayer.onended = () => {
+      if (!currentCapture(request) || request.reply !== reply || reply.current !== chunk) return;
+      reply.current = null;
+      reply.playing = false;
+      reply.queuedBytes -= chunk.bytes;
+      resetAudio();
+      resumeEventReader(request);
+      try { pumpPlayback(request, reply); renderState(request); }
+      catch (error) { failCapture(request, error.message); }
+    };
+    audioPlayer.onerror = () => {
+      if (!currentCapture(request) || request.reply !== reply || reply.current !== chunk) return;
+      reply.failed = true; reply.playing = false; reply.awaitingUser = true;
+      notifyPlayback(request, reply, "failed"); renderState(request);
+    };
     try {
+      Promise.resolve(audioPlayer.play()).then(() => markChunkPlaying(request, reply, chunk)).catch(() => {
+        if (!currentCapture(request) || request.reply !== reply || reply.current !== chunk || reply.playing) return;
+        reply.awaitingUser = true; renderState(request);
+      });
+    } catch (_) { reply.awaitingUser = true; renderState(request); }
+  }
+
+  async function consumeEventStream(request) {
+    let failures = 0;
+    while (currentCapture(request)) {
       const controller = new AbortController();
+      request.eventController = controller;
       const abort = () => controller.abort();
       request.controller.signal.addEventListener("abort", abort, { once: true });
-      const timer = setTimeout(abort, REQUEST_TIMEOUT_MS);
-      let audio;
+      let reader = null;
+      let headerTimer = setTimeout(abort, REQUEST_TIMEOUT_MS);
+      let idleTimer = null;
+      let backpressure = false;
+      const beforeCursor = request.eventCursor;
       try {
-        const response = await fetch(url, { cache: "no-store", credentials: "same-origin", headers: authHeaders(), signal: controller.signal });
-        if (!response.ok) throw new Error("返答音声を取得できませんでした。");
-        audio = await response.blob();
-      } finally { clearTimeout(timer); request.controller.signal.removeEventListener("abort", abort); }
-      if (!currentCapture(request) || request.reply !== reply) return;
-      resetAudio();
-      audioObjectUrl = URL.createObjectURL(audio); audioPlayer.src = audioObjectUrl; audioPlayer.hidden = false;
-      audioPlayer.onended = () => notifyPlayback(request, reply, "ended");
-      audioPlayer.onerror = () => {
-        if (!currentCapture(request) || request.reply !== reply) return;
-        notifyPlayback(request, reply, "failed"); setStatus("返答音声を再生できませんでした。", "error");
-      };
-      try {
-        await audioPlayer.play();
-        if (currentCapture(request) && request.reply === reply) notifyPlayback(request, reply, "started");
-      } catch (_) {
-        if (currentCapture(request) && request.reply === reply && !reply.started) { reply.awaitingUser = true; renderState(request); }
+        const route = `${API_SESSIONS}/${encodeURIComponent(request.sessionId)}/audio-stream/events?after=${request.eventCursor}`;
+        const response = await fetch(route, { cache: "no-store", credentials: "same-origin",
+          headers: authHeaders({ Accept: "application/x-ndjson", "X-Voice-Generation": String(request.generation) }), signal: controller.signal });
+        clearTimeout(headerTimer); headerTimer = null;
+        if (!response.ok) await readJson(response);
+        if (!response.body?.getReader) throw eventError("音声の逐次受信に対応していないサーバー応答です。");
+        reader = response.body.getReader(); request.eventReader = reader;
+        const decoder = new TextDecoder("utf-8");
+        let pending = "";
+        while (currentCapture(request)) {
+          clearTimeout(idleTimer); idleTimer = setTimeout(abort, EVENT_IDLE_TIMEOUT_MS);
+          const { value, done } = await reader.read();
+          clearTimeout(idleTimer); idleTimer = null;
+          if (!currentCapture(request)) return;
+          pending += decoder.decode(value || new Uint8Array(), { stream: !done });
+          if (pending.length > MAX_EVENT_LINE_CHARS) throw eventError("音声応答の受信上限を超えました。");
+          const lines = pending.split("\n"); pending = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            let event;
+            try { event = JSON.parse(line); } catch (_) { throw eventError("音声応答の形式を確認できませんでした。"); }
+            handleVoiceEvent(request, event);
+          }
+          if (done) {
+            if (pending.trim()) handleVoiceEvent(request, JSON.parse(pending));
+            break;
+          }
+        }
+        failures = 0;
+      } catch (error) {
+        if (!currentCapture(request)) return;
+        if (error.backpressure) backpressure = true;
+        else if (error.fatal || (error.status && error.status < 500 && ![408, 429].includes(error.status))) {
+          failCapture(request, error.message || "音声応答を継続して受信できませんでした。"); return;
+        } else {
+          failures = request.eventCursor > beforeCursor ? 1 : failures + 1;
+          if (failures >= 4) { failCapture(request, "音声応答との接続が途切れました。"); return; }
+          setStatus("音声応答を再接続しています。受信済みの音声は順に再生します。", "error");
+        }
+      } finally {
+        clearTimeout(headerTimer); clearTimeout(idleTimer);
+        controller.abort();
+        if (reader) { try { await reader.cancel(); } catch (_) {} try { reader.releaseLock(); } catch (_) {} }
+        if (request.eventReader === reader) request.eventReader = null;
+        request.controller.signal.removeEventListener("abort", abort);
       }
-    } catch (error) {
-      if (currentCapture(request) && request.reply === reply) { notifyPlayback(request, reply, "failed"); setStatus(error.message || "返答音声を取得できませんでした。", "error"); }
+      if (!currentCapture(request)) return;
+      try {
+        if (backpressure && request.reply && request.reply.queuedBytes >= MAX_PLAYBACK_QUEUE_BYTES / 2) {
+          await abortable(new Promise((resolve) => request.spaceWaiters.add(resolve)), request.controller.signal);
+        }
+        await abortable(new Promise((resolve) => setTimeout(resolve, failures ? Math.min(2_000, 250 * failures) : 100)), request.controller.signal);
+      } catch (_) { return; }
     }
   }
 
@@ -459,6 +669,10 @@
     if (!silent && activityVersion === stopVersion) setStatus("マイク・再生を停止し、会話を終了しました。");
   }
 
+  const savedGain = Number(readPreference(INPUT_GAIN_KEY));
+  updateInputGain(Number.isInteger(savedGain) && savedGain >= 25 && savedGain <= 200 && savedGain % 5 === 0 ? savedGain : 100, false);
+  inputGainSlider?.addEventListener("input", () => updateInputGain(inputGainSlider.value));
+  for (const [button, percent] of inputGainPresets) button?.addEventListener("click", () => updateInputGain(percent));
   if (microphoneSelect) {
     microphoneSelect.value = "default";
     microphoneSelect.addEventListener("change", () => {
@@ -483,8 +697,8 @@
   stopButton.addEventListener("click", () => void stopCall());
   audioPlayer.addEventListener("play", () => {
     const request = captureRequest;
-    if (!request?.reply || request.reply.ended || !currentCapture(request)) { audioPlayer.pause(); return; }
-    notifyPlayback(request, request.reply, "started");
+    if (!request?.reply?.current || request.reply.ended || !currentCapture(request)) { audioPlayer.pause(); return; }
+    markChunkPlaying(request, request.reply, request.reply.current);
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") { void stopCall({ silent: true, keepalive: true }); setStatus("画面が切り替わったため停止しました。戻ったら会話を開始してください。"); }

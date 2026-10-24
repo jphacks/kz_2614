@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import io
 import threading
 import unittest
 import uuid
+import wave
 from concurrent.futures import CancelledError as FutureCancelledError
 from pathlib import Path
 from queue import Queue
@@ -29,17 +31,28 @@ def make_pipeline(deltas, *, pause_after_first=None):
                 while not pause_after_first.is_set():
                     await asyncio.sleep(0.005)
 
-    stt = SimpleNamespace(transcribe_file_async=AsyncMock(return_value=Transcription(
-        "今回の発話", "ja", 0.99, 1.2,
-        vocal_analysis={"pitch": "中くらい", "delivery": "穏やか"},
-    )))
+    async def transcribe(path, *, on_worker_finished=None):
+        try:
+            return Transcription("今回の発話", "ja", 0.99, 1.2,
+                                 vocal_analysis={"pitch": "中くらい", "delivery": "穏やか"})
+        finally:
+            if on_worker_finished is not None:
+                on_worker_finished()
+
+    stt = SimpleNamespace(transcribe_file_async=AsyncMock(side_effect=transcribe))
     llm = SimpleNamespace(
         config=SimpleNamespace(max_history_messages=8),
         generate_response=AsyncMock(return_value=VoiceLLMReply("返答です。", (), {})),
         stream_response=stream, close=AsyncMock(), last_tool_calls=(), last_stats={},
     )
+    audio = io.BytesIO()
+    with wave.open(audio, "wb") as writer:
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(48_000)
+        writer.writeframes(bytes(960))
     tts = SimpleNamespace(synthesize_async=AsyncMock(return_value=SynthesizedSpeech(
-        b"test reply audio", "audio/wav", ".wav",
+        audio.getvalue(), "audio/wav", ".wav",
     )))
     acknowledgements = Mock()
     acknowledgements.ready = True
@@ -141,6 +154,11 @@ class StreamSessionMergeTests(unittest.TestCase):
         self.assertTrue(all(event["session_id"] == session.session_id and event["generation"] == generation for event in events))
         self.assertEqual(self.manager.get_turn_status(session.session_id, turn_id)["stage"], "complete")
         self.assertIs(self.manager.get_active_session(session.session_id, generation), session)
+        self.assertTrue(events[-1]["speech"]["url"].endswith("/audio"))
+        fallback, media_type = self.manager.get_speech(session.session_id, turn_id)
+        with wave.open(io.BytesIO(fallback)) as audio:
+            self.assertEqual(audio.getnframes(), 960)
+        self.assertEqual(media_type, "audio/wav")
 
     def test_stop_invalidates_stream_generation_and_prevents_later_audio(self):
         session, generation, turn_id, queue, future = self.start(pause=True)

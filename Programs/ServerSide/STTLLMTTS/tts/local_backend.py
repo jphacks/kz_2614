@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import io
+import logging
 import math
 import os
 import sys
@@ -14,6 +15,9 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .irodori import TTSConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 class LocalIrodoriBackend:
@@ -138,18 +142,43 @@ class LocalIrodoriBackend:
                     reference_path = Path(temporary.name)
             api, runtime, lock = self._load()
             with lock:
-                request = api.SamplingRequest(
-                    text=text, caption=self.config.caption or None,
-                    ref_wav=str(reference_path) if reference_path else None,
-                    no_ref=reference_path is None, num_steps=self.config.num_steps,
-                    max_seconds=self.config.max_seconds,
-                    seed=int(self.config.seed) if self.config.seed.strip() else None,
-                )
-                result = runtime.synthesize(request)
-                return self._encode_wav(result.audio, int(result.sample_rate))
+                result = None
+                try:
+                    request = api.SamplingRequest(
+                        text=text, caption=self.config.caption or None,
+                        ref_wav=str(reference_path) if reference_path else None,
+                        no_ref=reference_path is None, num_steps=self.config.num_steps,
+                        max_seconds=self.config.max_seconds,
+                        seed=int(self.config.seed) if self.config.seed.strip() else None,
+                    )
+                    result = runtime.synthesize(request)
+                    return self._encode_wav(result.audio, int(result.sample_rate))
+                finally:
+                    # SamplingResult also holds the candidate tensor list. Release it
+                    # before returning unused PyTorch workspace to CTranslate2/STT.
+                    result = None
+                    self._release_cuda_workspace(runtime)
         finally:
             if reference_path is not None:
                 reference_path.unlink(missing_ok=True)
+
+    def _release_cuda_workspace(self, runtime: Any) -> None:
+        key = getattr(runtime, "key", None)
+        devices = []
+        for name in ("model_device", "codec_device"):
+            actual = getattr(key, name, None)
+            devices.append(actual if isinstance(actual, str) else getattr(self.config, name))
+        if not any(device == "auto" or device.startswith("cuda") for device in devices):
+            return
+        try:
+            torch = importlib.import_module("torch")
+            if torch.cuda.is_available():
+                # Live model/codec tensors remain owned by the shared runtime.
+                torch.cuda.empty_cache()
+        except Exception as exc:
+            # Cleanup must not replace the original inference exception or discard a
+            # successfully encoded WAV if the CUDA context itself is unhealthy.
+            logger.warning("voice_tts_workspace_release_failed error_type=%s", type(exc).__name__)
 
     def _encode_wav(self, audio: Any, sample_rate: int) -> bytes:
         import soundfile
