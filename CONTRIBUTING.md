@@ -1,6 +1,6 @@
 # 開発への参加
 
-[フォルダー構成](docs/repository-layout.md) と [担当範囲](docs/development/ownership.md) を確認してから、最新mainから作業ブランチを作成します。
+[フォルダー構成](docs/repository-layout.md) と [担当範囲](docs/development/ownership.md) を確認し、[contributors名の作業ブランチ](docs/development/branches.md) を使います。個別機能をさらに分ける場合は次の手順で最新mainからブランチを作成します。
 
 ```bash
 git fetch origin --prune
@@ -31,4 +31,4 @@ Androidのルートは `apps/android`、ESP32の手順は [firmware/esp32](firmw
 
 `apps/hossy-web`直下でNode.js 22.22.0以上を使い、`npm ci`・`npm run build`を実行します。旧`astro-site/`は廃止しました。画面・保存・PWAの確認は[製品Web仕様](docs/requirements/web-product.md)、起動は[セットアップ](docs/setup/hossy-web.md)を参照してください。
 
-新規ブランチは半角小文字・ハイフンを使い、`feature/web-voice-integration`のように作業内容を表します。詳しくは[ブランチ運用](docs/development/branches.md)。
+contributors名の4人分の作業ブランチはその名前を維持します。個別機能の新規ブランチは半角小文字・ハイフンを使い、`feature/web-voice-integration`のように作業内容を表します。詳しくは[ブランチ運用](docs/development/branches.md)。

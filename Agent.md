@@ -2,6 +2,11 @@
 
 このファイルは、このリポジトリで作業するエージェント向けの指示と、引き継ぐ作業リストです。新しい作業を始めるときは、依頼内容に加えてこのファイル、関連する `docs/repository-layout.md`・要件定義・`docs/development/work-history.md` を確認してください。
 
+## 4人分の作業ブランチ（2026-10-25）
+
+- 最新の利用者指定: 全ブランチ統合後、contributors名で4人分の作業ブランチを分ける。`RyuuzinnRaika`、`naminamina`、`Happy-Emori`、`takemi853` を同一mainから開始し、各ブランチからmain向けPRで統合する。
+- [ブランチ運用](docs/development/branches.md)を参照。過去の「人名単位のブランチを終了する」方針より今回の指定を優先する。既存ブランチの削除や担当・アクセス権の変更は行わない。
+
 ## 公開全ブランチのmain統合（2026-10-25）
 
 - 専用cloneの `docs/main-integration` で、公開main `9273748` に `HOSSY＿WEB` `33bbb7c` と `namikawa_3Dprint` `7c3e9e9` を通常mergeした。`emori-ESP32` `61bf53d` と `feature/web-voice-integration` `9273748` は基点mainに既に含まれる。取得した公開5ブランチのSHAと扱いは [ブランチ一覧](docs/development/branches.md) を正本とする。

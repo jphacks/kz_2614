@@ -925,3 +925,11 @@ Programs/
 - 部品保全: STL全8件はbinary STLのサイズと面数の整合、および取り込み元 `namikawa_3Dprint` とのbyte一致を確認。印刷・組立・実機確認は行っていない。
 - 検証: 全Markdownの相対ファイルリンク370件に切れなし、git diff --check成功。基点mainとの差分がMarkdownとSTL8点に限定されることを確認した。統合PR #15のmergeと公開mainでの取得先端包含を確認した。実行ソース不変のため、既存のアプリ試験・ビルドは今回再実行せず、過去の成功を今回の結果に数えない。
 - 状態: 完了。統合PR #15を通常mergeし、公開main `b4e3535c92151934ff4a0799077b1215c1d2be53` に全5取得先端を包含。PR #1の全変更も含む。GitHub連携のPR作成は権限不足（403）だったため、認証済みGitHub CLIでPR作成・mergeを実施した。共同作業ブランチの削除・force-push・履歴書換えは行っていない。稼働サービス、マイク、公開設定、モデル、ESP32を操作せず、製品Web音声APIとMCP実機の未接続状態を維持する。
+
+
+## 2026-10-25 contributors名で4人分の作業ブランチを分ける
+
+- 依頼: main統合後、contributors名で4人分の作業ブランチを作成する。
+- 対象: GitHub contributors APIで確認した `RyuuzinnRaika`、`naminamina`、`Happy-Emori`、`takemi853`。本案内を含む同一mainコミットを分岐点にする。
+- 文書: ブランチ運用、CONTRIBUTING、担当範囲の作業単位、Agentを新しい方針へ揃え、各PCでの切替・main取り込み・PRの手順を記載した。過去の統合履歴は保持する。
+- 公開方法: mainの文書更新と4本の新規refをatomic pushでまとめて公開する。既存ブランチの削除・force-push・権限変更は行わない。公開後にmainと4本のSHA一致を確認する。実行コードは変更しない。
