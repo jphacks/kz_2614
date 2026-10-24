@@ -63,10 +63,74 @@
 - 現在の依頼: 「いままでの作業履歴を入れておくファイルを作成して今までの会話を入れておいてください。」
 - 対応: 本ファイル `Programs/WORK_HISTORY.md` を作成。
 
+### 9. STT → LLM → TTS パイプライン
+
+- 依頼: 参照用の `AI_Secretary-main` を確認し、現在のプロジェクトに合う STT・LLM・TTS を作成する。
+- 対応: 参照元は読み取りのみとし、Discord依存部を持ち込まず、Irodori-TTSのGradio API呼び出し方式を参考に `ServerSide/app/voice_tts.py` を追加。既存のWhisper STT・LM Studio LLMと `voice_pipeline.py` で接続し、生成音声のバイト列、形式、STT/LLM/TTS/合計時間を返すようにした。
+- 関連変更: `app/requirements.txt`、`app/.env.example`、`app/README.md`、`ServerSide/README.md`、`ServerSide/REQUIREMENTS.md`、`ServerSide/.gitignore`、`voice_stt.py`、`Programs/README.md`。
+- Whisper配置: 既存の `ServerSide/whisper/` をモデル保存先としてコード・Git除外設定と統一。
+- 未確認: faster-whisperモデル、LM Studio、Irodori-TTS互換Gradioサーバー、GPU/CPU設定、生成音声の実機再生。スマホ向けAPI・音声配信・相づち・セッション停止は未実装。
+
+### 10. エージェント作業指示リスト
+
+- 依頼: 「Agent.mdの中に作業の指示リストを入れるように定義づけてください。」
+- 対応: リポジトリ直下に `Agent.md` を作成し、作業ルール、音声プライバシー、しっぽ制御、未完了タスク、状態管理、完了条件を記載。Codexが自動参照する標準名 `AGENTS.md` を追加して `Agent.md` を案内。
+- 作業リストは既存のクライアント／サーバー要件をもとに作成。STT/LLM/TTSのコード実装とモデル・端末を使った実機確認を別状態で扱う。
+
+### 11. STT・LLM・TTSパイプラインと相づち
+
+- 依頼: 参考プロジェクトをもとにSTT・LLM・TTSを実装し、相づちシステムも含める。
+- 対応: STT音声入力にサイズ上限を追加。Irodori-TTS結果をメモリ上の音声データへ変換し、OS一時フォルダー内の取得ファイルを読み取り後に削除。2種類の相づち音声を事前生成・キャッシュし、LLM待ちが設定時間を超えた場合に最大1回だけ再生コールバックへ通知する処理を追加。
+- 本返答は相づち再生コールバック完了後に返し、返答音声と重ならない契約にした。「おやすみ」・停止要求では相づちを抑止する。
+- 主な変更: `voice_stt.py`、`voice_tts.py`、`voice_acknowledgements.py`、`voice_pipeline.py`、`.env.example`、ServerSide要件・説明資料、`Agent.md`。
+- 確認: コードと要件の照合のみ。テスト、モデル接続、スマートフォン再生は未実施。
+- 未確認: Whisper、LM Studio、Irodori-TTS各サービスへの接続、GPU設定、コールバックとスマートフォン再生の統合。スマホAPI・配信・再生完了通知は未実装。
+
+### 12. ESP32との通信契約
+
+- 依頼: 「このシステムにおいてESP32と通信するための決め事を決めたいですね。」
+- 対応: `ServerSide/ESP32_API.md` を追加し、MVPでは隔離Wi-Fi LAN上のHTTP/1.1 JSON APIを使う契約を記録。APIパス、Bearer認証、タップ制限、成功／エラー応答、要求ID、タイムアウト・再試行の扱い、ファームウェア側の停止条件を定義。
+- 関連更新: `Programs/README.md`、`ServerSide/app/README.md`、`ServerSide/REQUIREMENTS.md`、`Agent.md` の説明とタスク状態を同期。
+- 未完了: 現行MCP HTTPクライアントのAPI契約への適合、セッション／停止世代を使った遅着開始の拒否、ESP32ファームウェア、手元停止と連続動作上限の実装・実機検証。制御設定は引き続き既定無効。
+
+### 13. 音声パイプライン仕様と質問本文の入力先
+
+- 依頼: 「仕様の内容を入れておいてください。ついでにちゃんと質問内容を入れておくところに入れておいてくださいね。」
+- 対応: `ServerSide/REQUIREMENTS.md` にSTT→LLM→TTSと相づちの具体的な現行仕様、質問本文の受け渡し手順を追記。Whisper文字起こしをLM Studio `input` の「今回のユーザー発話（質問・依頼）」として渡し、過去の会話と `system_prompt` の役割を分離するよう `voice_llm.py` を更新。
+- 関連更新: `voice_pipeline.py` に受渡しコメント、`ServerSide/app/README.md` に質問本文の流れを追記。
+- 確認: コードと要件文書の照合のみ。LM Studio実接続・モデル回答の確認は未実施。
+
+### 14. Raspberry Pi 4へデバイス機能を集約
+
+- 依頼: ESP32ではなくRaspberry Pi 4を使い、ESP32に想定していた機能をPi 4側へ集約する。音声入出力とMCPのトントン制御を含める。
+- 決定: Pi 4がマイク録音、スピーカー再生、しっぽのサーボ制御を担当する。スマートフォンは操作画面、アプリサーバーはSTT・LLM・TTSを担当する。
+- 対応: `ServerSide/RASPBERRY_PI_API.md` に音声・サーボAPI案を記録し、ClientSide／ServerSide要件、README、Agent作業リストを更新。
+- 未完了: Pi 4デバイスサービス、音声機器と形式・上限値、現行MCPクライアントのAPI適合、停止世代の拒否、GPIO・サーボ回路と手元停止、実機検証。
+- ブランチ: 実装用に `codex/raspberry-pi-implementation` を作成。Markdown類は `main` に反映し、実装コードは作業ブランチに保持する。
+
+### 15. Android Webアプリとサーバー設定ダッシュボード
+
+- 決定: ユーザーは「androidはwebアプリを基本とします」と指定。さらに、WebのHTMLなどをサーバー側へ置き、ダッシュボードにして、STT音声・TTS・会話時のふるまいを設定したいと指定。
+- 対応: `ServerSide/web/` にモバイル対応の設定画面（HTML/CSS/JavaScript）を作成。STTモデル・言語・実行デバイス・計算形式・VAD、TTSモデル・声の説明、話し方・返答長・質問頻度・追加指示を編集できる構成にした。相づちは必須で無効化できない。
+- 対応: `app/dashboard_server.py` に静的ファイル配信と設定読込／保存APIを作成。既定はloopback bind、loopback外では管理トークンを必須とし、設定値を `app/data/dashboard_settings.json` に保存する。設定ファイルはGit除外。
+- 対応: `app/settings_store.py` を追加し、STT・TTS設定を新しい処理インスタンスに、ふるまいの希望を安全ルールに添えたシステムプロンプトに反映する。ダッシュボードからMCPの許可状態は変更しない。
+- 関連更新: `ClientSide/README.md`、`ClientSide/REQUIREMENTS.md`、`ServerSide/README.md`、`ServerSide/REQUIREMENTS.md`、`ServerSide/app/README.md`、`Programs/README.md`、`.env.example`、`.gitignore`、`Agent.md`。
+- 未確認: ダッシュボードの起動、設定保存・再読込、モデルへの反映、LAN/HTTPSアクセス、Android端末での表示・操作は未確認。音声会話の録音・送信・再生APIは別途未実装。
+
+### 16. Irodori-TTS参照WAVのアップロードと保存
+
+- 依頼: 「音声設定がなくねwavファイルなどをIrodoriTTSは設定できるのでwavを保存する機構とそれに対応するwebダッシュボードを実装しておいてくださいね。」
+- 対応: ダッシュボードのTTS欄にWAV選択、サーバーへの保存、状態表示、削除を追加。APIは `GET`／`PUT`／`DELETE /api/v1/dashboard/reference-audio`。
+- 保存と検証: PCM WAV、16-bit、mono/stereo、16〜48kHz、1〜30秒、10MB以下を受け入れる。固定先は `ServerSide/app/data/reference_voice.wav`。原子的に置換し、ファイル名や保存先をブラウザーから受け取らない。設定ファイルと参照音声はGit除外。
+- TTS連携: 新しい `IrodoriTTS` インスタンスが保存音声を読み込み、Gradioの `ref_wav` として送る。インスタンス作成後に保存音声を置換・削除しても、既存インスタンスは読み込み済みの音声を使う。
+- 未確認: アップロードAPI、破損WAV拒否、削除、実際のIrodori-TTS接続と生成、Androidブラウザーからの操作は未確認。MVPのWebアップロード形式はPCM WAVのみ。
+
 ## 現在のファイル構成
 
 ```text
 Programs/
+├── AGENTS.md
+├── Agent.md
 ├── README.md
 ├── WORK_HISTORY.md
 ├── ClientSide/
@@ -74,17 +138,27 @@ Programs/
 │   └── REQUIREMENTS.md
 └── ServerSide/
     ├── README.md
+    ├── RASPBERRY_PI_API.md
     ├── REQUIREMENTS.md
+    ├── web/
+    │   ├── index.html
+    │   ├── dashboard.css
+    │   └── dashboard.js
     ├── .gitignore
     ├── app/
     │   ├── README.md
     │   ├── __init__.py
+    │   ├── dashboard_server.py
     │   ├── mcp.json.example
     │   ├── requirements.txt
+    │   ├── settings_store.py
+    │   ├── data/                 # 設定JSON・参照WAVの実行時保存先（Git除外）
+    │   ├── voice_acknowledgements.py
     │   ├── tail_mcp_server.py
     │   ├── voice_llm.py
     │   ├── voice_pipeline.py
-    │   └── voice_stt.py
+    │   ├── voice_stt.py
+    │   └── voice_tts.py
     ├── third_party/
     │   ├── README.md
     │   └── Irodori-TTS/.gitkeep
@@ -95,7 +169,10 @@ Programs/
 
 ## 現在の決定事項
 
-- MVP の録音・音声再生はスマートフォンで行う。
+- 更新後のMVPではPi 4が音声入出力としっぽ制御、スマートフォンが操作画面を担当する。
+- AndroidはWebアプリを基本とし、設定ダッシュボードのHTMLなどは `ServerSide/web/` に配置してサーバーから配信する。
+- STT・TTS・会話のふるまいはサーバーのダッシュボードから設定し、サーバー側に保存する。設定は新しい音声処理インスタンスから反映する。
+- Irodori-TTSの参照音声はダッシュボードからPCM WAVをアップロードし、サーバー内の固定パスに保存する。ユーザーは置換・削除できる。
 - サーバー側で STT、LLM、TTS と音声配信を行う想定。
 - 相づちは MVP 要件に含める。
 - しっぽ制御は MCP 経由とし、無効設定を既定値にする。動作にはユーザーの明示的な依頼や制御条件を必要とする。
@@ -105,12 +182,11 @@ Programs/
 
 ## 未完了・未検証事項
 
-- クライアントアプリ／Web UI と API エンドポイントは未実装。
-- TTS、相づち音声、スマートフォンへの音声配信、再生完了通知は未実装。
+- 設定ダッシュボード、設定保存API、PCM WAVのアップロード・状態・削除コードを作成したが、起動・保存・再読込・Android表示・実TTS利用は未確認。音声会話用Web UI/APIとPi 4への音声送信・再生は未実装。
+- Irodori-TTS呼び出しクライアント、STT→LLM→TTS単発パイプライン、相づちキャッシュと遅延通知コールバックは実装済み。モデル接続、Pi 4への音声配信、再生完了通知、デバイスAPIは未実装・未確認。
 - 優先停止、セッション期限、再接続、遅着 LLM/MCP 動作の拒否は要件化されているが、コード上の一貫した実装・検証は未完了。
-- Whisper の配置先に不一致がある。実際のフォルダは `ServerSide/whisper/`、現在のコード設定は `ServerSide/models/whisper/` を参照しているため、利用前に揃える。
 - `mcp.json.example` はこのPCの絶対パスを含む。別のPCで使う際にパスを変更する。
-- MCP と ESP32 間の API 仕様、ファームウェア、モーターの電源・角度・速度制限は未確定・未検証。
+- Raspberry Pi 4音声・サーボAPI案は `ServerSide/RASPBERRY_PI_API.md` に文書化済み。現行MCPクライアントとの不整合、セッション停止世代、デバイスサービス、音声機器、モーターの電源・角度・速度制限は未解消・未検証。
 - 音声形式、録音時間・サイズ上限、各処理のタイムアウト、相づちを出すタイミング、バックグラウンド動作条件は未確定。
 - 実機、Whisper モデル、LM Studio、TTS、スマートフォンでの受け入れ試験は未実施。要件書にある受け入れ条件を実施済みとみなさない。
 
