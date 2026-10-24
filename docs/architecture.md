@@ -4,7 +4,7 @@
 
 2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](development/ownership.md) を参照してください。
 
-更新日: 2026-10-25。照合した実装は [`975b3ad`](https://github.com/jphacks/kz_2614/commit/975b3ada96203675a6beee43917cde61b2a43461) の統合済み `main`。この文書更新でプログラムの動作は変更していません。
+更新日: 2026-10-25。PC音声の公開配置9036cce、統合仕様f6b0055、HOSSy製品Web107b762、EMORI記録61bf53dを照合しています。製品Webはmainへソース統合済みでも音声APIは未接続です。
 
 [仕様書一覧](README.md) / [サーバー要件](requirements/server.md) / [端末要件](requirements/clients.md)
 
@@ -15,7 +15,8 @@
 ```mermaid
 flowchart TB
     subgraph Clients[入力・出力端末]
-        Web[Web画面]
+        Web[音声・設定Web / apps/web]
+        Product[製品Web・PWA / apps/hossy-web]
         Android[Android音声アプリ]
         VoiceESP[ESP32音声通信部品]
     end
@@ -31,6 +32,8 @@ flowchart TB
         Follower[ESP32 Follower]
         Servo[SG90 × 3]
     end
+    Product --> BrowserData[端末内の選択・タイマー記録]
+    Product -.->|次の音声統合| HTTP
     Web <-->|PCM入力・NDJSON出力| HTTP
     Android <-->|TCP v1| TCP
     VoiceESP <-->|TCP v1| TCP
@@ -151,7 +154,7 @@ ESP32引き継ぎの実動作は **0.3回/秒固定、0.5〜5秒、60秒枠で�
 flowchart LR
     Example[Git管理する設定例] --> Local[各PCの.env / Git除外]
     UI[Web設定画面] --> Validate[型・範囲・WAVの検証]
-    Validate --> Data[dashboard/data / Git除外]
+    Validate --> Data[server/api/data / Git除外]
     Local --> New[新しい会話の設定を作成]
     Data -->|保存済み項目を優先| New
     New --> Runtime[稼働インスタンスの観測値]
@@ -166,7 +169,8 @@ flowchart LR
 
 | 経路 | 既定・場所 | 確認範囲 |
 | --- | --- | --- |
-| Web | HTTP 127.0.0.1:8765 / `server/api/server.py` | PC実モデルHTTPの記録あり |
+| 製品Web/PWA | Astro開発127.0.0.1:4321 / `apps/hossy-web` | UI。音声・実機は未接続 |
+| 音声・設定Web | HTTP 127.0.0.1:8765 / `server/api/server.py` | PC実モデルHTTPの記録あり |
 | LLM | HTTP 127.0.0.1:1234 / `llm/lm_studio.py` | 指定Gemmaの記録あり。API選択はMCP有効/無効で異なる |
 | TTS | `tts/irodori.py`・`tts/local_backend.py` | このPCはlocal Irodori v4.1。テンプレートはGradioの旧既定も保持 |
 | Android音声 | TCP 8766 / `voice/tcp_server.py` | サーバー試験あり。最新APK・実機未確認 |
@@ -183,10 +187,34 @@ flowchart LR
 | `firmware/esp32/codex-memo` | `docs/esp32/history` |
 | `Programs/ClientSide/Raspi4Ver` | `docs/archive/raspberry-pi` |
 
-[配置一覧](repository-layout.md)。ServerSide、androidVer、起動スクリプトは既存パスを維持しています。旧フォルダーのモデル・venvを参照するPCでは、移行確認前に旧チェックアウトを削除しないでください。
+[配置一覧](repository-layout.md)。Pythonはserver、Androidはapps/androidへ移行済みです。ルートの起動スクリプト名は維持しています。旧フォルダーのモデル・venvを参照するPCでは、移行確認前に旧チェックアウトを削除しないでください。
 
 ## ソース配置と分担
 
-Webはapps/web（HOSSy）、AI・APIはserver（kameyama）、ESP32はfirmware/esp32（EMORI）、Androidはapps/android。詳しい配置は [フォルダー構成](repository-layout.md)、共同作業は [担当範囲](development/ownership.md) を参照してください。
+製品Webはapps/hossy-web、音声・設定Webはapps/web（HOSSy）、AI・APIはserver（kameyama）、ESP32はfirmware/esp32（EMORI）、Androidはapps/android。詳しい配置は [フォルダー構成](repository-layout.md)、共同作業は [担当範囲](development/ownership.md) を参照してください。
 
 ルートの起動スクリプト名は維持し、Pythonのモジュールと設定保存場所を新配置へ変更しました。[ローカル環境の移行](development/layout-migration.md) が必要です。モデルを保持する旧kz_2614フォルダーは削除しません。
+
+
+## 7. 製品Webの画面・保存フロー
+
+```mermaid
+flowchart TD
+    Open[製品Webを開く] --> Load[localStorageを読込 / なければ既定値]
+    Load --> Home[ホーム]
+    Home --> Routine[入眠準備 / 時刻と時間を選ぶ]
+    Home --> Sound[サウンドを選ぶ / 再生は未実装]
+    Home --> Diary[日別・月間ダイアリー]
+    Home --> About[製品紹介]
+    Routine --> Start[タイマー開始時刻を記録]
+    Start --> Finish[タイマー終了時刻を記録]
+    Finish --> Store[端末内に保存]
+    Sound --> Store
+    Store --> Diary
+    Diary --> Sample[睡眠グラフはサンプル / タイマー時刻は実記録]
+    Open --> SW[Service Worker / 静的画面キャッシュ]
+    SW --> Offline[オフライン時は保存済み画面を表示]
+    Routine -.-> Future[今後の音声HTTP API接続]
+```
+
+製品Webの保存先は配信originごとのlocalStorageです。音声管理Webの設定保存先server/api/dataとは別です。音声統合前にSWのAPIキャッシュ除外が必要です。[画面仕様](requirements/web-product.md) / [起動とPWA](setup/hossy-web.md)。

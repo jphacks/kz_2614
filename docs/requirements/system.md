@@ -1,6 +1,6 @@
 # ねんぎつね 統合仕様書
 
-更新日: 2026-10-25。PC/Web側とEMORI側の仕様をまとめた、プロジェクト全体の参照入口です。公開用配置のmain `9036cce` と、その後のESP32文書更新 `a786078` を統合しています。文書の統合によって、未接続の機能が動作可能になったという意味ではありません。
+更新日: 2026-10-25。PC/Web側とEMORI側の仕様をまとめた、プロジェクト全体の参照入口です。公開用配置のmain `9036cce` と、その後のESP32文書更新 `a786078` を統合しています。さらにHOSSy製品Web `107b762` とEMORI記録 `61bf53d` を取り込みました。ソースの統合によって、未接続の機能が動作可能になったという意味ではありません。
 
 [処理フロー図](../architecture.md) / [仕様書一覧](../README.md) / [フォルダー構成](../repository-layout.md)
 
@@ -10,7 +10,8 @@
 
 | 領域 | 役割 | 主な配置 | 担当 |
 | --- | --- | --- | --- |
-| Web | 設定、マイク入力、途中文字表示、返答音声出力 | `apps/web` | HOSSy |
+| 製品Web/PWA | ホーム・ダイアリー・タイマー・端末内保存。音声API未接続 | `apps/hossy-web` | HOSSy |
+| 音声・設定Web | 設定、マイク入力、途中文字表示、返答音声出力 | `apps/web` | HOSSy |
 | Android | ネイティブ音声通話、TCP送受信 | `apps/android` | 担当者名未指定 |
 | PC | HTTP/TCP受付、設定・会話状態、VAD、STT、LLM、TTS、MCP仲介 | `server/api`・`server/ai` | kameyama |
 | しっぽ機器 | Readerの可変抵抗入力、FollowerのHTTP受付・3台のPWM | `firmware/esp32` | EMORI |
@@ -20,6 +21,7 @@
 
 | 場面 | 仕様 | 現状 |
 | --- | --- | --- |
+| 製品Webのタイマー | 時間・サウンドを選び、開始/終了を端末内に記録 | UI実装。音声・アラームは未接続 |
 | 会話開始 | 利用者の操作でマイク入力を始める。追加の録音ボタンは不要 | Webに実装 |
 | 話している間 | 無音も含めてPCMを送り、PCのVAD/STTで途中文字を更新 | Web・PCに実装 |
 | 返答待ち | 認識した本文と会話履歴をLLMへ渡す。必要なら短い相づちを最大1回 | PCに実装 |
@@ -36,7 +38,8 @@
 
 | 接続 | 現行の契約 | 正本 |
 | --- | --- | --- |
-| Web ↔ PC | HTTP継続PCM、独立したNDJSON出力、状態照会、出力結果通知 | [HTTP音声API](../api/voice-http.md) |
+| 製品Web ↔ 端末内 | localStorageと静的素材のSWキャッシュ。PCへのAPIなし | [製品Web仕様](web-product.md) |
+| 音声・設定Web ↔ PC | HTTP継続PCM、独立したNDJSON出力、状態照会、出力結果通知 | [HTTP音声API](../api/voice-http.md) |
 | Android / ESP32音声 ↔ PC | TCP v1。4-byte長+JSON、1接続1会話 | [TCP音声API](../api/voice-tcp.md) |
 | PCアプリ ↔ LLM | LM Studio。MCP有効時は互換Chat API、無効時はnative Chat API | [サーバー要件](server.md) |
 | PCアプリ ↔ MCP ↔ PC設定 | stdio、頻度2操作、保存成功のみ | [PC頻度API](../api/tail-frequency.md) |
@@ -72,6 +75,7 @@ Webは16kHz・mono・PCM16LEを継続送信し、完成したTTS文節を最大1
 
 | 対象 | 保存されている検証根拠 | 残作業 |
 | --- | --- | --- |
+| 製品Web/PWA | HOSSyのソースと過去のビルド記録 | 音声API接続、端末インストールと保存・オフライン確認 |
 | PC Web音声 | 実モデルHTTP往復、連番/割込み/停止の自動試験 | 最新HyperX/物理出力の聴感、物理ネットワーク不調 |
 | 新しいソース配置 | 219件のプログラムテスト、静的配信・起動の記録 | Windows/各端末での移行確認 |
 | Android / ESP32音声 | サーバー実ソケット試験・通信部品 | 最新ビルド、機器IO、新profileと割込み、実機通話 |
@@ -86,6 +90,7 @@ Webは16kHz・mono・PCM16LEを継続送信し、完成したTTS文節を最大1
 | --- | --- |
 | 製品全体の範囲・担当間の境界 | この統合仕様書と [構成図](../architecture.md) |
 | PCの要件・受け入れ条件 | [server.md](server.md) |
+| 製品Webの画面・PWA・端末内保存 | [web-product.md](web-product.md) |
 | Web/Android/ESP32音声の要件 | [clients.md](clients.md) |
 | Reader/Followerの配線・PWM・校正・状態 | [esp32.md](esp32.md) |
 | メッセージ・音声形式・エラー | [API一覧](../api/README.md) |

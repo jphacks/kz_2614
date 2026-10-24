@@ -26,3 +26,9 @@ Androidのルートは `apps/android`、ESP32の手順は [firmware/esp32](firmw
 変更の目的・担当領域・確認結果・残る制限をPRまたはコミットに記載します。APIを変更したらdocs/apiを、構成を変更したらdocs/repository-layout.mdを更新し、作業結果をdocs/development/work-history.mdへ追記します。
 
 モデル重み、参照音声、録音、生成音声、.env、Wi-Fiパスワード、機器固有設定、ビルド成果物はコミットしません。追加素材の再配布条件は [第三者素材一覧](THIRD_PARTY_NOTICES.md) に記録します。
+
+## 製品Webの開発
+
+`apps/hossy-web`直下でNode.js 22.22.0以上を使い、`npm ci`・`npm run build`を実行します。旧`astro-site/`は廃止しました。画面・保存・PWAの確認は[製品Web仕様](docs/requirements/web-product.md)、起動は[セットアップ](docs/setup/hossy-web.md)を参照してください。
+
+新規ブランチは半角小文字・ハイフンを使い、`feature/web-voice-integration`のように作業内容を表します。詳しくは[ブランチ運用](docs/development/branches.md)。

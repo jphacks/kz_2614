@@ -24,6 +24,7 @@ JPHACKS 2026 / チーム `kz_2614`
 
 | 機能 | 状態 |
 | --- | --- |
+| HOSSyの製品Web・PWA | ホーム・ダイアリー・タイマー等のUI。音声API・実機は未接続 |
 | PCのWeb画面からSTT → LLM → TTSの音声往復 | 実モデルで確認済み |
 | 連続PCM入力、返答PCM配信、割込み、短い通信遅延からの復旧 | 実装済み。自動テストと記録済みのHTTP試験あり |
 | ESP32 Reader/Follower・SG90制御 | ファームウェアとEMORI側の実機記録あり |
@@ -35,7 +36,9 @@ JPHACKS 2026 / チーム `kz_2614`
 ## 技術構成
 
 ```text
-Webマイク ─HTTP PCM→ PCサーバー ─PCMフレーム→ Webスピーカー
+製品Web / PWA ─ 端末内のタイマー・選択・記録（音声APIは未接続）
+
+音声管理Webのマイク ─HTTP PCM→ PCサーバー ─PCMフレーム→ Webスピーカー
                          │
                   Silero VAD → Whisper → Gemma → Irodori-TTS
                          │
@@ -50,7 +53,8 @@ ESP32 Reader ─Wi-Fi→ ESP32 Follower → SG90 × 3
 | --- | --- | --- |
 | AI・会話制御 | Python、faster-whisper、Silero VAD、LM Studio、Irodori-TTS、MCP | [server/ai](server/ai/) |
 | HTTP・設定・音声API | Python HTTPサーバー、JSON、NDJSON、PCM16LE | [server/api](server/api/) |
-| Web | HTML、CSS、JavaScript、Web Audio / AudioWorklet | [apps/web](apps/web/) |
+| 製品Web / PWA | Astro、JavaScript、localStorage、Service Worker | [apps/hossy-web](apps/hossy-web/) |
+| 音声・設定Web | HTML、CSS、JavaScript、Web Audio / AudioWorklet | [apps/web](apps/web/) |
 | Android | Java、Android SDK、Gradle、TCPソケット | [apps/android](apps/android/) |
 | しっぽ・機器 | ESP32、Arduino C++、Wi-Fi/HTTP、SG90 × 3 | [firmware/esp32](firmware/esp32/) |
 | ESP32音声通信部品 | C、ESP-IDF、TCP、PCM16LE | [firmware/esp32/voice_tcp](firmware/esp32/voice_tcp/) |
@@ -66,7 +70,7 @@ ESP32 Reader ─Wi-Fi→ ESP32 Follower → SG90 × 3
 | 担当 | 主な領域 | 変更する場所 |
 | --- | --- | --- |
 | **kameyama** | AI・音声パイプライン、サーバー側の会話・MCP連携 | `server/ai/`、`server/api/`、`docs/api/` |
-| **HOSSy** | Web画面、マイク入力・音声出力、操作・設定UI | `apps/web/`、`tests/web/` |
+| **HOSSy** | 製品Web・PWA、音声画面・操作UI | `apps/hossy-web/`、`apps/web/`、`tests/web/` |
 | **EMORI** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、機器仕様・API、`docs/esp32/` |
 | 担当者名未指定 | Android音声クライアント | `apps/android/` |
 
@@ -88,9 +92,11 @@ APIや音声形式の変更は双方の担当で確認します。詳細は [担
 
 依存関係とモデルを用意したこのPCでは、ルートの `./service-local.sh start` でWebサーバーを起動し、`http://127.0.0.1:8765/` を開きます。クリーンなcloneでは先にセットアップが必要です。
 
+HOSSyの製品Webは `cd apps/hossy-web && npm ci && npm run dev` で起動し、`http://127.0.0.1:4321/` を開きます。[画面仕様](docs/requirements/web-product.md) / [起動とPWA](docs/setup/hossy-web.md)。
+
 ## 今後の展望
 
-会話MCPとESP32実機の接続、Android/ESP32の音声入出力と停止の実機検証、利用環境に応じた応答品質・速度の調整を進めます。実装済み・実測済み・未確認を分けて [開発履歴](docs/development/work-history.md) に残します。
+製品Webと音声HTTP APIの接続、会話MCPとESP32実機の接続、Android/ESP32の音声入出力と停止の実機検証、利用環境に応じた応答品質・速度の調整を進めます。実装済み・実測済み・未確認を分けて [開発履歴](docs/development/work-history.md) に残します。
 
 ## ライセンス・公開データ
 

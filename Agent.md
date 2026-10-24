@@ -2,6 +2,13 @@
 
 このファイルは、このリポジトリで作業するエージェント向けの指示と、引き継ぐ作業リストです。新しい作業を始めるときは、依頼内容に加えてこのファイル、関連する `docs/repository-layout.md`・要件定義・`docs/development/work-history.md` を確認してください。
 
+## HOSSy製品Webの統合・配置（2026-10-25）
+
+- HOSSyの107b762とEMORIの61bf53d、PCのf6b0055を履歴ごと統合。競合したREADMEと作業記録は双方を保持する。
+- 製品UI/PWAはapps/hossy-web直下。旧astro-siteの二重階層を解消し、過去のメモ・画像はdocs/web/historyへ保存。現行仕様はdocs/requirements/web-product.md、起動はdocs/setup/hossy-web.md。
+- apps/webは音声・設定ダッシュボードとして維持。製品Webの音声API・ESP32接続は未実装。API接続時はSWによる音声・APIのキャッシュ保存を防止する。
+- ブランチはdocs/development/branches.mdを参照。稼働チェックアウトは別worktreeの統合中も保持し、サービス・マイク・.env・音声は操作しない。
+
 ## このPCの作業ブランチ（2026-10-25）
 
 - 利用者の指定により、稼働チェックアウトkz_2614-latestの作業ブランチを `kameyama` にした。取得したorigin/main 9036cceは既に履歴へ含まれ、EMORI文書更新a786078と統合仕様の整理も保持している。
@@ -318,3 +325,10 @@
 - 利用者の確認を受け、C:\〇Codex-JPHACK2026appをHOSSY＿WEB（全角＿）ブランチへ追加。最新mainの9036cceから別worktreeを作り、apps/hossy-webへ独立したプロジェクトとして取り込んだ。状態: 完了（ソース追加・検証）。
 - 元コミットb300ac8の追跡49ファイルをコピーし、全SHA-256一致を確認。既存apps/web、server、firmwareと元フォルダーを維持し、サーバーの配信先やAPI接続を変更しない。元アプリのOneDev mainに対するbehind表示は、その内容を更新する指示ではないため、ローカルの現物を対象とする。
 - npm ci、Astro 7.4.1の本番ビルド、public JS構文、生成物の一時HTTP配信、相対文書リンク、差分を検証。Dockerビルド・既存公開サイトの更新・端末のPWAインストールは今回行わない。新READMEから独立起動と未統合範囲を確認できる。
+
+
+### HOSSy Web統合の検証（2026-10-25）
+
+- Astro本番ビルド、既存219 unittest（skipなし）、相対リンク329件、Mermaid13図の構文とSVG描画、5画面切替が成功。移動47ファイルと非公開7ファイルの保持を確認。
+- mainへ統合し、旧kameyamaをfeature/server-voiceに改名、次の作業はmainからfeature/web-voice-integration。稼働サービスと実行コードは維持し、音声APIを製品UIへ接続する実装は次の作業。
+- 詳細と未実施のDocker/PWA実機等はdocs/development/work-history.md。旧資料の記録と現行の正本を区別する。

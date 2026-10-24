@@ -1,6 +1,6 @@
 # 仕様書・開発資料
 
-PC/WebとEMORIの仕様を、現在のmainの構成で整理しています。まず [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
+PC音声・HOSSyの製品Web・EMORIの機器仕様を、統合mainの構成で整理しています。まず [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
 
 ## 読む順序
 
@@ -13,6 +13,7 @@ PC/WebとEMORIの仕様を、現在のmainの構成で整理しています。�
 
 | 目的 | 参照先 |
 | --- | --- |
+| ホーム・ダイアリー・PWAを試す | [製品Web仕様](requirements/web-product.md) / [起動手順](setup/hossy-web.md) |
 | PCのAI・会話・停止の要件 | [サーバー仕様](requirements/server.md) |
 | Web・Android・ESP32音声の役割 | [端末仕様](requirements/clients.md) |
 | サーボの配線・校正・PWM・モード | [ESP32機器仕様](requirements/esp32.md) |
@@ -30,6 +31,7 @@ PC/WebとEMORIの仕様を、現在のmainの構成で整理しています。�
 | --- | --- |
 | `requirements/` | 統合仕様とサーバー・端末・ESP32の要件/機器仕様 |
 | `api/` | 通信形式、エンドポイント、制限、エラーの正本 |
+| `web/` | 製品Webの案内。`history/`は取り込み元のメモ・画像・旧配信記録 |
 | `esp32/` | 機器担当向けの案内、MCP統合、引き継ぎ。`history/`は当時の記録 |
 | `setup/` | 環境構築、運用手順、個別環境の記録 |
 | `development/` | 担当、ブランチ、Git除外、移行、変更履歴 |

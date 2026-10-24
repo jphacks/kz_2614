@@ -4,7 +4,7 @@
 kz_2614/
 ├── README.md                 # JPHACKS公開用の製品・技術・担当説明
 ├── apps/
-│   ├── web/                  # HOSSy: ブラウザー画面と音声入出力
+│   ├── web/                  # 音声・設定Web / Python配信 / 8765
 │   ├── hossy-web/            # HOSSy: 独立したAstro製品UI・PWA
 │   └── android/              # Androidネイティブ音声アプリ
 ├── server/                   # kameyama: PCサーバー
@@ -31,12 +31,13 @@ kz_2614/
     ├── setup/                # 環境構築とこのPCの記録
     ├── requirements/         # 統合仕様・サーバー・端末・ESP32
     ├── development/          # 分担・ブランチ・検証・作業履歴
+    ├── web/                  # 製品Webの案内と元のメモ・画像
     ├── esp32/                # MCP統合案内・引き継ぎ・当時の記録
     ├── archive/              # 旧Pi案・旧構成案
     └── licenses/             # 同梱ライセンス原文
 ```
 
-`apps/hossy-web/`は別プロジェクトから追加した製品UI・PWAです。[起動と構成](../apps/hossy-web/README.md)を参照してください。元の`astro-site/`とComposeを保持し、既存`apps/web/`のサーバー配信先は変更していません。
+`apps/hossy-web/`は別プロジェクトから追加した製品UI・PWAです。[起動と構成](../apps/hossy-web/README.md)を参照してください。`package.json`・`src/`・`public/`・Dockerfile・Composeを直下へ集約しました。開発メモ・画像は`docs/web/history/`へ移動し、既存`apps/web/`のサーバー配信先は維持します。
 
 ## 旧配置からの対応
 
@@ -51,6 +52,9 @@ kz_2614/
 | Programs/ClientSide/ESP32/VoiceTCP | firmware/esp32/voice_tcp |
 | Programs/WORK_HISTORY.md | docs/development/work-history.md |
 | LOCAL_SETUP.md | docs/setup/local-pc.md |
+| apps/hossy-web/astro-site/* | apps/hossy-web/* |
+| apps/hossy-web/Codex-memo | docs/web/history/hossy |
+| apps/hossy-web/DEPLOY.md（旧本文） | docs/web/history/standalone-deploy.md |
 
 Pythonは `server.api` / `server.ai` に統一。Webファイルはserver/api/server.pyがルートのapps/webから配信します。Arduinoはスケッチ名とフォルダー名の一致を保ちます。Androidはapps/androidをAndroid Studioで開きます。
 
@@ -68,6 +72,7 @@ docs/
 │   ├── system.md               # 統合仕様書
 │   ├── server.md               # PCサーバー
 │   ├── clients.md              # 音声端末
+│   ├── web-product.md          # 製品Webの画面・保存・未接続範囲
 │   └── esp32.md                # Reader/Follower・サーボ
 ├── api/
 │   ├── README.md
@@ -84,4 +89,4 @@ docs/
     └── history/                # 過去の試験と提案原本
 ```
 
-EMORIの仕様整理 `a786078` を取り込み、機器仕様と機器HTTPを共通分類へ移しました。旧パスは案内だけを残し、本文・図の二重管理を避けています。実行ソース、非公開設定・音声・モデルの配置は今回変更しません。
+EMORIの仕様整理 `a786078` を取り込み、機器仕様と機器HTTPを共通分類へ移しました。旧パスは案内だけを残し、本文・図の二重管理を避けています。サーバー・機器の実行ソース、非公開設定・音声・モデルの配置は維持します。HOSSyのAstroソースだけ上表の新配置に整理しています。

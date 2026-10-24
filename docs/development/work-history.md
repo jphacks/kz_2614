@@ -874,3 +874,16 @@ Programs/
 - 案内: apps/hossy-web/README.mdを追加し、ルートREADME・配置表・担当表から参照。元DEPLOYは独立OneDev構成の記録として保持し、共有GitHubでの作業ディレクトリを新READMEに記載。静的UI・localStorageの範囲と、会話API・ESP32未統合を明示した。
 - 検証: Node v24.14.1 / npm 11.11.0、npm ciで191パッケージ、Astro 7.4.1の本番ビルド成功。public/app.jsとsw.jsのNode構文、生成物の一時localhost HTTP配信とPWA資産、文書相対リンク、git diff --checkを確認した。
 - 実施しない範囲: Docker実行、公開サイトへのデプロイ、ブラウザー操作・PWAインストール、サーバー再起動、モデル・マイク・ESP32操作。mainやemori-ESP32への統合は行わず、指定ブランチへ公開する。
+
+
+## 2026-10-25 HOSSy製品Webをmainへ統合して構成・仕様・ブランチを整理
+
+- 依頼: HOSSY＿WEBの更新をmainへ入れ、README・Markdown・図・フォルダーを整理し、ブランチ名と次の作業ブランチを整える。
+- 履歴: PC仕様f6b0055、EMORI記録61bf53d、HOSSy製品Web107b762を通常mergeで統合。Agent/README/開発履歴の競合は双方を保持。稼働中のチェックアウト外のworktreeで作業し、実行中サービスを停止しない。
+- 原本: 4先端の全追跡ファイルをOriginal-before-hossy-main-2026-10-25へOriginal.tarで保管。server/.envとdataの非公開7ファイルは内容を出さずhashを比較し一致を確認。
+- 配置: apps/hossy-web/astro-siteのソース・設定・Dockerfileをapps/hossy-web直下へ移動。Composeのbuild contextを同じフォルダーへ更新。Codex-memoと画像はdocs/web/history/hossyへ、旧README/DEPLOY本文もhistoryへ保持した。移動したソース・素材・履歴47ファイルが元とbyte一致。
+- 仕様: requirements/web-product.mdとsetup/hossy-web.mdを正本に追加。ルートREADME、統合/端末仕様、配置・担当・デモ・開発案内を更新。製品WebのlocalStorage/静的SWと、音声管理WebのAPI/サーバー保存を区別し、音声API・実機未接続を明記。API統合前にはSWの音声/APIキャッシュ除外が必要。
+- 検証: Node24.19.0、一時npm11.21.1でpackage-lockを保持してnpm ciとAstro7.4.1の本番ビルド成功。public JS構文、相対リンク329件、Git除外8ケース、Mermaid13図の構文とブラウザーSVG13件描画を確認。既存219 unittestは11.864秒で全件成功、skipなし。モデル推論はモック。
+- 画面: 一時loopback配信でホーム・ダイアリー・入眠準備・サウンド・製品紹介の表示/切替、エラーログ0を確認。既存ユーザーのタイマー記録・設定は操作しない。Dockerビルド、PWA実機インストール/オフライン、音声連携・ESP32実機は未実施。検証用HTTPサーバーとタブは終了する。
+- 保持: server/firmware/Android/testsおよび既存Webの実行コードはf6b0055から差分なし。公開URL、localStorageキー、サーバー設定、マイク、モデルを変更しない。URLが変わるとブラウザーの保存領域も変わる点を注意事項として記載。
+- ブランチ: ローカルmainを検証済み統合先へfast-forwardする。旧kameyamaはfeature/server-voiceへ改名し旧先端を保全、mainからfeature/web-voice-integrationを切り、稼働チェックアウトをそこへ合わせる。共同作業用リモートブランチは削除・履歴書換えしない。公開結果は作業報告で区別する。

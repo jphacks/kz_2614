@@ -10,3 +10,5 @@
 通信JSON・音声形式・HTTP/TCPエラーは [API一覧](../api/README.md)、処理の流れは [Mermaid構成図](../architecture.md) を参照します。MCPから実機までの接続条件は [統合ガイド](../esp32/mcp-integration.md) に集約しています。
 
 受け入れ済みと書くときは、対象のコード・環境・実施した確認・残る制約を [作業履歴](../development/work-history.md) に残してください。
+
+製品Web/PWAの画面・保存・未接続範囲は [web-product.md](web-product.md) を参照してください。音声端末の仕様とは分けて管理します。
