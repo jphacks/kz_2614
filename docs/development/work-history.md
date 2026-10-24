@@ -887,3 +887,14 @@ Programs/
 - 画面: 一時loopback配信でホーム・ダイアリー・入眠準備・サウンド・製品紹介の表示/切替、エラーログ0を確認。既存ユーザーのタイマー記録・設定は操作しない。Dockerビルド、PWA実機インストール/オフライン、音声連携・ESP32実機は未実施。検証用HTTPサーバーとタブは終了する。
 - 保持: server/firmware/Android/testsおよび既存Webの実行コードはf6b0055から差分なし。公開URL、localStorageキー、サーバー設定、マイク、モデルを変更しない。URLが変わるとブラウザーの保存領域も変わる点を注意事項として記載。
 - ブランチ: ローカルmainを検証済み統合先へfast-forwardする。旧kameyamaはfeature/server-voiceへ改名し旧先端を保全、mainからfeature/web-voice-integrationを切り、稼働チェックアウトをそこへ合わせる。共同作業用リモートブランチは削除・履歴書換えしない。公開結果は作業報告で区別する。
+
+
+## 2026-10-25 公開製品Webの入口と結合テスト準備をWebブランチへ記録
+
+- 依頼: 実際の製品Web https://hiroron-jphacks2026.hiroron.net/#diary をREADME等へ反映し、後続の結合テストに備える。公開製品WebとPCの8765番の音声管理Webを区別した。
+- 基点: 既存3Dプリント用チェックアウトを変更せず、別clone kz_2614-web-docsを用意。originをjphacks/kz_2614へ設定し最新参照を取得。HOSSY＿WEBの107b762はmain 9273748の祖先（独自0、main側6コミット）だったため、HOSSY＿WEBを9273748までfast-forwardした。共同作業者の履歴を保持し、force-pushや分岐の大規模mergeは行わない。
+- 保全: 変更前の8文書をチェックアウト外のOriginal-web-public-url-2026-10-25へ.Original付きで保存し、SHA256.jsonを作成した。
+- 文書: README、apps/hossy-web/README、apps/web/README、docs/setup/hossy-web、docs/requirements/web-product、docs/demo、Agentと本履歴を更新。公開URL・#diary、Passportログイン画面までの確認範囲と未確認事項、ログイン→UI→API到達→音声往復→連続/割込み→停止のチェック表を追加した。
+- 経路: ソースでは静的Nginx配信と製品Webの音声API未実装を確認。公開側の認証設定・HTTPS終端・API転送・PCへの到達経路は未確認で、PCローカルHTTPへ直接接続する手順を追加しない。
+- 未実施: ログイン後の製品UI、公開版とソースの一致、API到達、実モデル音声往復・連続・停止、PWA実機。コード・稼働サービス・マイク・公開サイト設定は変更しない。既存アプリ試験の成功を今回の実行結果として扱わない。文書のコミット・pushは後続作業で行う。
+- 検証: 変更8文書の相対ファイルリンク62件に切れなし、Original原本8件のSHA256一致、git diff --check成功。origin/mainとorigin/feature/web-voice-integrationの追跡差分は0で、取得済みの公開ブランチでは音声API接続を確認できない。別のローカル試作の所在・公開状況は今回の確認対象外とし、消失したとは判断しない。

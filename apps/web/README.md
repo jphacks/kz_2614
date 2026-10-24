@@ -11,4 +11,4 @@ Webを開くには [サーバーの起動手順](../../docs/setup/server.md) に
 
 共有仕様: [HTTP音声](../../docs/api/voice-http.md)。テストは [tests/web](../../tests/web/)。心音素材の出典は [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)。
 
-ホーム・ダイアリー・入眠タイマーを持つ製品Web/PWAは [apps/hossy-web](../hossy-web/README.md) です。こちらの音声API接続済み画面とは、起動・配信・保存場所が異なります。
+ホーム・ダイアリー・入眠タイマーを持つ製品Web/PWAは [apps/hossy-web](../hossy-web/README.md) です。公開先は [製品Webのダイアリー](https://hiroron-jphacks2026.hiroron.net/#diary) で、こちらの8765番の音声API接続済み画面とは、起動・配信・保存場所が異なります。公開先の未ログイン確認はhiroron Passportのログイン画面までで、公開UIからの音声接続を確認したものではありません。
