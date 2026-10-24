@@ -24,6 +24,9 @@
   let micRequestPending = false;
   let turnRequest = null;
   let audioObjectUrl = null;
+  let playbackQueue = Promise.resolve();
+  let playbackEpoch = 0;
+  let cancelCurrentPlayback = null;
   let pageIsHidden = document.visibilityState === "hidden";
 
   function setStatus(message, kind = "") {
@@ -126,6 +129,12 @@
   }
 
   function resetAudio() {
+    playbackEpoch += 1;
+    if (cancelCurrentPlayback) {
+      cancelCurrentPlayback();
+      cancelCurrentPlayback = null;
+    }
+    playbackQueue = Promise.resolve();
     audioPlayer.pause();
     audioPlayer.removeAttribute("src");
     audioPlayer.hidden = true;
@@ -242,33 +251,137 @@
     }
   }
 
-  async function playReply(url, expectedSession, expectedGeneration) {
-    const response = await fetch(url, {
-      cache: "no-store",
-      credentials: "same-origin",
-      headers: authHeaders(),
-      signal: turnRequest.signal,
-    });
-    if (!response.ok) throw new Error("返答音声を取得できませんでした。");
-    if (sessionId !== expectedSession || generation !== expectedGeneration) return;
-    const audioBlob = await response.blob();
-    if (sessionId !== expectedSession || generation !== expectedGeneration) return;
-    resetAudio();
-    audioObjectUrl = URL.createObjectURL(audioBlob);
-    audioPlayer.src = audioObjectUrl;
-    audioPlayer.hidden = false;
-    audioPlayer.onended = () => {
-      if (sessionId === expectedSession) setStatus("返答が終わりました。続けて話せます。", "active");
-      refreshButtons();
-    };
-    try {
-      await audioPlayer.play();
-      if (sessionId !== expectedSession || generation !== expectedGeneration) return;
-      setStatus("返答を再生中です。", "active");
-    } catch (_) {
-      if (sessionId !== expectedSession || generation !== expectedGeneration) return;
-      setStatus("返答を受け取りました。再生ボタンを押して聞いてください。", "active");
+  function playStreamAudio(event, expectedSession, expectedGeneration, epoch) {
+    if (sessionId !== expectedSession || generation !== expectedGeneration || epoch !== playbackEpoch) {
+      return Promise.resolve();
     }
+    if (!event.audio_base64 || !event.media_type) {
+      return Promise.reject(new Error("音声チャンクの形式が正しくありません。"));
+    }
+
+    const binary = atob(event.audio_base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const audioBlob = new Blob([bytes], { type: event.media_type });
+    const nextUrl = URL.createObjectURL(audioBlob);
+    const previousUrl = audioObjectUrl;
+    audioObjectUrl = nextUrl;
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    audioPlayer.pause();
+    audioPlayer.src = nextUrl;
+    audioPlayer.hidden = false;
+    audioPlayer.controls = true;
+    audioPlayer.load();
+    refreshButtons();
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let playbackStarted = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        audioPlayer.removeEventListener("ended", onEnded);
+        audioPlayer.removeEventListener("error", onError);
+        audioPlayer.removeEventListener("play", onPlay);
+        cancelCurrentPlayback = null;
+        if (error) reject(error);
+        else resolve();
+      };
+      const onEnded = () => finish();
+      const onError = () => finish(new Error("受信した音声を再生できませんでした。"));
+      const onPlay = () => {
+        playbackStarted = true;
+        refreshButtons();
+      };
+      audioPlayer.addEventListener("ended", onEnded);
+      audioPlayer.addEventListener("error", onError);
+      audioPlayer.addEventListener("play", onPlay);
+      cancelCurrentPlayback = () => finish(new DOMException("Playback stopped", "AbortError"));
+
+      audioPlayer.play().then(() => {
+        if (sessionId === expectedSession && epoch === playbackEpoch) {
+          setStatus(event.type === "acknowledgement" ? "相づちを再生中です。" : "返答を再生中です。", "active");
+        }
+      }).catch(() => {
+        if (sessionId !== expectedSession || epoch !== playbackEpoch) {
+          finish(new DOMException("Playback stopped", "AbortError"));
+          return;
+        }
+        setStatus("音声を受け取りました。プレーヤーの再生ボタンを押してください。", "active");
+        if (!playbackStarted) refreshButtons();
+      });
+    });
+  }
+
+  function enqueueStreamAudio(event, expectedSession, expectedGeneration) {
+    const epoch = playbackEpoch;
+    playbackQueue = playbackQueue
+      .then(() => playStreamAudio(event, expectedSession, expectedGeneration, epoch))
+      .catch((error) => {
+        if (error && error.name !== "AbortError" && sessionId === expectedSession) {
+          setStatus(error.message || "音声を再生できませんでした。", "error");
+        }
+      });
+  }
+
+  async function consumeTurnStream(response, expectedSession, expectedGeneration) {
+    if (!response.ok) await readJson(response);
+    if (!response.body || typeof response.body.getReader !== "function") {
+      throw new Error("このブラウザーは音声の逐次受信に対応していません。WebViewを更新してください。");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let pending = "";
+    let completion = null;
+    let streamError = null;
+    const handleLine = (line) => {
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (
+        sessionId !== expectedSession
+        || generation !== expectedGeneration
+        || event.generation !== expectedGeneration
+      ) return;
+      if (event.type === "transcript") {
+        transcriptLine.textContent = event.text || "（認識できませんでした）";
+        responseLine.textContent = "返答を作っています…";
+        setStatus("発話を認識しました。返答を作っています…", "active");
+      } else if (event.type === "text_delta") {
+        if (responseLine.textContent === "返答を作っています…") responseLine.textContent = "";
+        responseLine.textContent += event.text || "";
+      } else if (event.type === "acknowledgement" || event.type === "audio_chunk") {
+        enqueueStreamAudio(event, expectedSession, expectedGeneration);
+      } else if (event.type === "complete") {
+        completion = event;
+      } else if (event.type === "error") {
+        streamError = new Error(event.message || "音声を処理できませんでした。");
+        streamError.code = event.error || "voice_processing_failed";
+      }
+    };
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        pending += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = pending.split("\n");
+        pending = lines.pop() || "";
+        for (const line of lines) handleLine(line);
+        if (done) break;
+      }
+      if (pending.trim()) handleLine(pending);
+    } finally {
+      reader.releaseLock();
+    }
+
+    await playbackQueue;
+    if (sessionId !== expectedSession || generation !== expectedGeneration) return;
+    if (streamError) throw streamError;
+    if (!completion) throw new Error("音声応答ストリームが途中で終了しました。");
+    transcriptLine.textContent = completion.transcript || transcriptLine.textContent;
+    responseLine.textContent = completion.response_text || responseLine.textContent;
+    setStatus("返答が終わりました。続けて話せます。", "active");
+    refreshButtons();
   }
 
   async function sendTurn(audio, mediaType) {
@@ -290,16 +403,11 @@
         method: "POST",
         cache: "no-store",
         credentials: "same-origin",
-        headers: authHeaders({ "Content-Type": mediaType }),
+        headers: authHeaders({ "Content-Type": mediaType, Accept: "application/x-ndjson" }),
         body: audio,
         signal: turnRequest.signal,
       });
-      const body = await readJson(uploadResponse);
-      if (sessionId !== submittedSession || body.generation !== submittedGeneration) return;
-      transcriptLine.textContent = body.transcript || "（認識できませんでした）";
-      responseLine.textContent = body.response_text || "返答がありません。";
-      setStatus("返答音声を受け取っています…");
-      await playReply(body.speech.url, submittedSession, submittedGeneration);
+      await consumeTurnStream(uploadResponse, submittedSession, submittedGeneration);
     } catch (error) {
       if (error.name === "AbortError") return;
       if (sessionId === submittedSession) {

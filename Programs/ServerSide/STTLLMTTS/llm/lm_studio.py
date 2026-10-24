@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, AsyncIterator, Sequence
 
 import httpx
 from dotenv import load_dotenv
@@ -77,6 +77,9 @@ class VoiceLLMClient:
         user_text: str,
         history: Sequence[dict[str, str]] = (),
         system_prompt: str = COMPANION_SYSTEM_PROMPT,
+        *,
+        stream: bool = False,
+        speech_context: dict[str, str | float] | None = None,
     ) -> dict[str, Any]:
         recent_history = [
             {"role": item["role"], "content": str(item["content"])}
@@ -89,6 +92,14 @@ class VoiceLLMClient:
             recent_history = []
 
         current_utterance = user_text.strip()
+        if speech_context:
+            pitch = str(speech_context.get("pitch", "判定できず"))[:100]
+            delivery = str(speech_context.get("delivery", "判定できず"))[:120]
+            current_utterance += (
+                "\n\n今回の声の特徴（参考情報）:\n"
+                f"声の高さ: {pitch}\n話し方: {delivery}\n"
+                "特徴だけから感情を決めつけず、文字起こしと会話の流れを優先してください。"
+            )
         if recent_history:
             user_input = (
                 "以前の会話は文脈として参照してください。回答対象は、最後に記載する今回のユーザー発話です。\n"
@@ -109,7 +120,7 @@ class VoiceLLMClient:
             "context_length": self.config.context_length,
             "temperature": 0.7,
             "store": False,
-            "stream": False,
+            "stream": stream,
         }
         if self.config.tail_mcp_enabled:
             payload["integrations"] = [
@@ -126,6 +137,7 @@ class VoiceLLMClient:
         user_text: str,
         history: Sequence[dict[str, str]] = (),
         system_prompt: str = COMPANION_SYSTEM_PROMPT,
+        speech_context: dict[str, str | float] | None = None,
     ) -> VoiceLLMReply:
         """STTで得た現在のユーザー発話を質問・依頼としてLM Studioへ送る。"""
         if not user_text.strip():
@@ -134,7 +146,12 @@ class VoiceLLMClient:
         try:
             response = await self.client.post(
                 "/api/v1/chat",
-                json=self._build_payload(user_text, history, system_prompt),
+                json=self._build_payload(
+                    user_text,
+                    history,
+                    system_prompt,
+                    speech_context=speech_context,
+                ),
             )
         except httpx.TimeoutException as exc:
             raise VoiceStageTimeout("llm", self.config.timeout_seconds) from exc
@@ -173,6 +190,97 @@ class VoiceLLMClient:
             "reasoning": "off",
         }
         return VoiceLLMReply(text=text, tool_calls=tool_calls, stats=dict(self.last_stats))
+
+    async def stream_response(
+        self,
+        user_text: str,
+        history: Sequence[dict[str, str]] = (),
+        system_prompt: str = COMPANION_SYSTEM_PROMPT,
+        speech_context: dict[str, str | float] | None = None,
+    ) -> AsyncIterator[str]:
+        """Yield LM Studio SSE text deltas while retaining final stats and tool-call metadata."""
+        if not user_text.strip():
+            raise ValueError("user_text must not be empty")
+        payload = self._build_payload(
+            user_text,
+            history,
+            system_prompt,
+            stream=True,
+            speech_context=speech_context,
+        )
+        event_data: list[str] = []
+        response_parts: list[str] = []
+        final_result: dict[str, Any] = {}
+
+        async def handle_event(raw_event: str) -> tuple[str | None, dict[str, Any] | None]:
+            if not raw_event.strip():
+                return None, None
+            event = json.loads(raw_event)
+            event_type = event.get("type")
+            if event_type == "error":
+                detail = event.get("error", {})
+                raise RuntimeError(detail.get("message", "LM Studio streaming error"))
+            if event_type == "message.delta":
+                return str(event.get("content", "")), None
+            if event_type == "chat.end":
+                result = event.get("result", {})
+                return None, result if isinstance(result, dict) else {}
+            return None, None
+
+        try:
+            timeout = httpx.Timeout(self.config.timeout_seconds, connect=5.0)
+            async with self.client.stream(
+                "POST",
+                "/api/v1/chat",
+                json=payload,
+                timeout=timeout,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line.startswith("data:"):
+                        event_data.append(line[5:].strip())
+                        continue
+                    if line.strip() or not event_data:
+                        continue
+                    delta, result = await handle_event("\n".join(event_data))
+                    event_data.clear()
+                    if result is not None:
+                        final_result = result
+                    if delta:
+                        response_parts.append(delta)
+                        yield delta
+        except httpx.TimeoutException as exc:
+            raise VoiceStageTimeout("llm", self.config.timeout_seconds) from exc
+
+        if event_data:
+            delta, result = await handle_event("\n".join(event_data))
+            if result is not None:
+                final_result = result
+            if delta:
+                response_parts.append(delta)
+                yield delta
+
+        text = "".join(response_parts).strip()
+        if not text:
+            raise RuntimeError("LM Studio returned no spoken response")
+        output = final_result.get("output", [])
+        if any(
+            item.get("type") == "reasoning" and item.get("content", "").strip()
+            for item in output
+        ):
+            raise RuntimeError("LM Studio returned reasoning while reasoning=off")
+        if any(item.get("type") == "invalid_tool_call" for item in output):
+            raise RuntimeError("LM Studio returned an invalid tail-control tool call")
+        self.last_tool_calls = tuple(
+            str(item.get("tool", ""))
+            for item in output
+            if item.get("type") == "tool_call" and item.get("tool")
+        )
+        self.last_stats = {
+            **final_result.get("stats", {}),
+            "model": final_result.get("model_instance_id", self.config.model),
+            "reasoning": "off",
+        }
 
     async def close(self) -> None:
         await self.client.aclose()

@@ -12,8 +12,11 @@ import os
 import re
 import tempfile
 import threading
+import time
+from concurrent.futures import CancelledError as FutureCancelledError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from queue import Empty, Queue
 from urllib.parse import unquote, urlsplit
 
 from dotenv import load_dotenv
@@ -27,7 +30,12 @@ from .settings_store import (
     save_reference_voice,
     save_settings,
 )
-from ..STTLLMTTS.voice.sessions import MAX_AUDIO_BYTES, VoiceAPIError, VoiceSessions
+from ..STTLLMTTS.voice.sessions import (
+    MAX_AUDIO_BYTES,
+    TURN_TIMEOUT_SECONDS,
+    VoiceAPIError,
+    VoiceSessions,
+)
 
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
@@ -87,6 +95,7 @@ def _is_loopback(host: str) -> bool:
 
 class DashboardHandler(BaseHTTPRequestHandler):
     server_version = "NenGitsuneDashboard/1.0"
+    protocol_version = "HTTP/1.1"
 
     @property
     def dashboard_server(self) -> "DashboardHTTPServer":
@@ -253,6 +262,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             with tempfile.NamedTemporaryFile(prefix="nen-gitsune-voice-", suffix=suffix, delete=False) as temporary_file:
                 temporary_file.write(audio)
                 temporary_path = Path(temporary_file.name)
+            if "application/x-ndjson" in self.headers.get("Accept", "").lower():
+                self._stream_voice_turn(manager, session, generation, turn_id, temporary_path)
+                return
             response = manager.process_turn(session, generation, turn_id, temporary_path)
             self._send_json(200, response)
         except VoiceAPIError as exc:
@@ -267,6 +279,117 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     temporary_path.unlink(missing_ok=True)
                 except OSError:
                     LOGGER.warning("Temporary voice audio cleanup failed")
+
+    def _stream_voice_turn(self, manager, session, generation: int, turn_id: str, audio_path: Path) -> None:
+        events: Queue[dict[str, object] | None] = Queue()
+        future = manager.stream_turn(session, generation, turn_id, audio_path, events)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("Connection", "close")
+        self.send_header("Cache-Control", "no-store, no-transform")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        self.close_connection = True
+
+        def write_event(event: dict[str, object]) -> None:
+            body = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+            self.wfile.write(f"{len(body):X}\r\n".encode("ascii"))
+            self.wfile.write(body)
+            self.wfile.write(b"\r\n")
+            self.wfile.flush()
+
+        deadline = time.monotonic() + TURN_TIMEOUT_SECONDS
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    manager.timeout_stream_turn(session)
+                    write_event(
+                        {
+                            "type": "error",
+                            "session_id": session.session_id,
+                            "turn_id": turn_id,
+                            "generation": generation,
+                            "error": "turn_timeout",
+                            "message": "音声処理がタイムアウトしました。もう一度お試しください。",
+                            "retryable": True,
+                        }
+                    )
+                    break
+                try:
+                    event = events.get(timeout=min(0.25, remaining))
+                except Empty:
+                    if future is not None and future.done() and events.empty():
+                        try:
+                            future.result()
+                        except FutureCancelledError:
+                            write_event(
+                                {
+                                    "type": "error",
+                                    "session_id": session.session_id,
+                                    "turn_id": turn_id,
+                                    "generation": generation,
+                                    "error": "session_stopped",
+                                    "message": "会話は停止されました。",
+                                    "retryable": False,
+                                }
+                            )
+                        except Exception:
+                            write_event(
+                                {
+                                    "type": "error",
+                                    "session_id": session.session_id,
+                                    "turn_id": turn_id,
+                                    "generation": generation,
+                                    "error": "voice_processing_failed",
+                                    "message": "音声を処理できませんでした。設定と音声サービスを確認してください。",
+                                    "retryable": True,
+                                }
+                            )
+                        break
+                    continue
+                if event is None:
+                    if future is not None:
+                        try:
+                            future.result()
+                        except FutureCancelledError:
+                            write_event(
+                                {
+                                    "type": "error",
+                                    "session_id": session.session_id,
+                                    "turn_id": turn_id,
+                                    "generation": generation,
+                                    "error": "session_stopped",
+                                    "message": "会話は停止されました。",
+                                    "retryable": False,
+                                }
+                            )
+                        except Exception:
+                            write_event(
+                                {
+                                    "type": "error",
+                                    "session_id": session.session_id,
+                                    "turn_id": turn_id,
+                                    "generation": generation,
+                                    "error": "voice_processing_failed",
+                                    "message": "音声を処理できませんでした。設定と音声サービスを確認してください。",
+                                    "retryable": True,
+                                }
+                            )
+                    break
+                write_event(event)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            if future is not None:
+                future.cancel()
+            LOGGER.info("Voice stream client disconnected")
+        finally:
+            try:
+                self.wfile.write(b"0\r\n\r\n")
+                self.wfile.flush()
+            except OSError:
+                pass
 
     def do_DELETE(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         route = urlsplit(self.path).path

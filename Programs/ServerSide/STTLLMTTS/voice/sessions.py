@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import logging
 import threading
 import time
 import uuid
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
 from pathlib import Path
+from queue import Queue
 from typing import Any
 
 from .pipeline import NoSpeechDetected, VoicePipeline
 from ..stt.whisper import AudioDurationExceeded, CudaUnavailableError
+from ..tts.irodori import SynthesizedSpeech
 from ..runtime import VoiceStageTimeout
 
 
@@ -22,6 +26,7 @@ MAX_TURNS_PER_SESSION = 100
 SESSION_TTL_SECONDS = 15 * 60
 SPEECH_TTL_SECONDS = 2 * 60
 TURN_TIMEOUT_SECONDS = 180
+logger = logging.getLogger(__name__)
 
 
 class VoiceAPIError(RuntimeError):
@@ -91,7 +96,10 @@ class VoiceSessions:
         return asyncio.run_coroutine_threadsafe(coroutine, loop)
 
     async def _create_pipeline(self) -> VoicePipeline:
-        return VoicePipeline()
+        pipeline = VoicePipeline()
+        if pipeline.behavior.get("backchannel_enabled", True):
+            pipeline.start_acknowledgement_preparation()
+        return pipeline
 
     def _retire_locked(self, session: VoiceSession, *, cancel_task: bool = True) -> None:
         session.active = False
@@ -280,6 +288,173 @@ class VoiceSessions:
             if not session.active:
                 raise VoiceAPIError(409, "session_stopped", "会話は停止されました。") from exc
             raise VoiceAPIError(502, "voice_processing_failed", "音声を処理できませんでした。設定と音声サービスを確認してください。", True) from exc
+
+    async def _process_stream_turn(
+        self,
+        session: VoiceSession,
+        generation: int,
+        turn_id: str,
+        audio_path: Path,
+        events: Queue[dict[str, Any] | None],
+    ) -> None:
+        current_task = asyncio.current_task()
+        with self._lock:
+            if not session.active or session.generation != generation:
+                events.put({
+                    "type": "error",
+                    "error": "session_stopped",
+                    "message": "停止後の発話は処理しません。",
+                    "retryable": False,
+                })
+                events.put(None)
+                return
+            session.task = current_task
+            pipeline = session.pipeline
+
+        def publish(event: dict[str, object]) -> None:
+            with self._lock:
+                if not session.active or session.generation != generation:
+                    raise asyncio.CancelledError
+            payload = dict(event)
+            speech = payload.pop("speech", None)
+            if isinstance(speech, SynthesizedSpeech):
+                payload["media_type"] = speech.media_type
+                payload["audio_base64"] = base64.b64encode(speech.audio_bytes).decode("ascii")
+            payload.update(
+                {
+                    "session_id": session.session_id,
+                    "turn_id": turn_id,
+                    "generation": generation,
+                }
+            )
+            events.put(payload)
+
+        def publish_terminal(event: dict[str, object]) -> None:
+            payload = dict(event)
+            payload.update(
+                {
+                    "session_id": session.session_id,
+                    "turn_id": turn_id,
+                    "generation": generation,
+                }
+            )
+            events.put(payload)
+
+        try:
+            if pipeline is None:
+                raise VoiceAPIError(503, "voice_unavailable", "音声処理を準備できません。", True)
+            result = await pipeline.process_audio_file_stream(audio_path, publish)
+            publish(
+                {
+                    "type": "complete",
+                    "transcript": result.transcription.text,
+                    "response_text": result.response.text,
+                    "timings_seconds": result.timings_seconds,
+                }
+            )
+        except asyncio.CancelledError:
+            raise
+        except VoiceAPIError as exc:
+            publish({
+                "type": "error",
+                "error": exc.code,
+                "message": exc.message,
+                "retryable": exc.retryable,
+            })
+        except VoiceStageTimeout as exc:
+            with self._lock:
+                timed_out = session.active and session.generation == generation
+                if timed_out:
+                    self._retire_locked(session, cancel_task=False)
+            if not timed_out:
+                publish_terminal({
+                    "type": "error",
+                    "error": "session_stopped",
+                    "message": "会話は停止されました。",
+                    "retryable": False,
+                })
+            else:
+                stage_name = {"stt": "STT", "llm": "LLM", "tts": "TTS"}.get(exc.stage, exc.stage)
+                publish_terminal({
+                    "type": "error",
+                    "error": f"{exc.stage}_timeout",
+                    "message": f"{stage_name}の処理がタイムアウトしました。",
+                    "retryable": True,
+                })
+        except NoSpeechDetected:
+            publish({
+                "type": "error",
+                "error": "no_speech",
+                "message": "音声から発話を認識できませんでした。",
+                "retryable": False,
+            })
+        except AudioDurationExceeded:
+            publish({
+                "type": "error",
+                "error": "audio_too_long",
+                "message": "音声は60秒以内にしてください。",
+                "retryable": False,
+            })
+        except CudaUnavailableError:
+            publish({
+                "type": "error",
+                "error": "cuda_unavailable",
+                "message": "WhisperのCUDAを利用できません。NVIDIAドライバーとCUDA 12、cuBLAS、cuDNN 9を確認するか、ダッシュボードでCPUを選択してください。",
+                "retryable": True,
+            })
+        except Exception as exc:
+            logger.warning("voice_stream_turn_failed error_type=%s", type(exc).__name__)
+            with self._lock:
+                active = session.active and session.generation == generation
+            publish_terminal({
+                "type": "error",
+                "error": "voice_processing_failed" if active else "session_stopped",
+                "message": "音声を処理できませんでした。設定と音声サービスを確認してください。" if active else "会話は停止されました。",
+                "retryable": active,
+            })
+        finally:
+            with self._lock:
+                session.busy = False
+                session.task = None
+                session.last_activity = time.monotonic()
+                should_close = not session.active
+                pipeline_to_close = session.pipeline
+            if should_close and pipeline_to_close is not None:
+                try:
+                    await pipeline_to_close.close()
+                except Exception as exc:
+                    logger.warning("voice_pipeline_close_failed error_type=%s", type(exc).__name__)
+            events.put(None)
+
+    def stream_turn(
+        self,
+        session: VoiceSession,
+        generation: int,
+        turn_id: str,
+        audio_path: Path,
+        events: Queue[dict[str, Any] | None],
+    ):
+        """Schedule a turn that writes NDJSON-ready events to a thread-safe queue."""
+        try:
+            return self._submit(
+                self._process_stream_turn(session, generation, turn_id, audio_path, events)
+            )
+        except VoiceAPIError:
+            self.abandon_turn(session)
+            events.put({
+                "type": "error",
+                "error": "voice_unavailable",
+                "message": "音声処理を開始できません。",
+                "retryable": True,
+            })
+            events.put(None)
+            return None
+
+    def timeout_stream_turn(self, session: VoiceSession) -> None:
+        """Fence and cancel a stream whose whole-turn deadline has elapsed."""
+        with self._lock:
+            if session.active:
+                self._retire_locked(session)
 
     def abandon_turn(self, session: VoiceSession) -> None:
         with self._lock:

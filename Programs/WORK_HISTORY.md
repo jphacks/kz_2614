@@ -351,6 +351,16 @@ Programs/
 - 状態: 起動手順とコードは用意されているが、インストール済み・サーバー稼働中とは扱わない。HTTPダッシュボード単体の起動と、CUDA・外部モデルを含む音声往復は別々に確認する必要がある。
 - 作業リスト: `Agent.md` のサーバーAPI項目にセットアップスクリプト未実行と `.venv` 未作成を記録。状態は進行中。
 
+### AI_Secretaryと現在の音声処理経路を比較（2026-10-24）
+
+- 依頼: `C:\Users\ryuuz\Downloads\AI_Secretary-main\AI_Secretary-main` と現行ServerSideの音声処理に違いがあるか確認する。
+- 比較: 参考側はDiscordのOpus/DAVE音声を話者ごとに復号し、RMS・無音時間で約0.7〜1秒の無音後に最大15秒単位で発話を切り、48kHzステレオPCMを16kHzモノラルへ変換する。現行側はAndroidのMediaRecorder音声（WebM/Ogg/WAV/MP4）を発話ボタン単位でアップロードし、最大60秒を音声ファイルとしてSTTへ渡す。
+- STT/LLM/TTS差分: 参考側にはWhisperの無音・認識信頼度判定と声の高さ・話し方の音響分析がある。参考側はLM Studio SSEを文節ごとにTTS・Discord再生へ流す。コード上はmacOSシステム音声への切替もあるが、参考側の現行設定はIrodori固定。現行側はモデル返答全文を待ってからIrodori-TTSを一度呼び、生成音声をAndroidへバイナリ配信する。現行の相づちは事前生成・キャッシュ機能と再生コールバックが実装されているが、セッションAPIからコールバックを渡さず、通常API経路では事前生成も再生も起動しない。
+- 共通点と設定差: 両者ともfaster-whisper、LM Studio `/api/v1/chat`、Irodori-TTS Gradio `/_run_generation` を使う構成。参考側の現行設定はWhisper small、STTクラスの初期値はCPU/int8、Irodori呼出しはMPS/fp32。現行ServerSideはWhisper CUDA/float16、Irodori model/codec CUDA/fp16を既定にする。CUDAでの性能差は未測定。
+- 結論: Discord専用のOpus/DAVE復号はAndroid Web入力には不要。低遅延の文節ストリーム、Whisperの信頼度による無音誤認識除外、相づちのAndroid再生接続は別途検討すべき機能差として残る。会話品質・速度はモデル・マイク・サービスが異なり、コード比較だけでは同等性を判断しない。
+- 確認範囲: 参考コード、参考設定・実行記録、現行コードを静的に照合。コード変更・テスト・実音声比較は未実施。
+- 作業リスト: 現在のAndroid録音・サーバー処理の進行状態は維持。相づち配信・実モデル確認は未完了。
+
 ### ServerSideのWindows・Ubuntuセットアップスクリプト（2026-10-24）
 
 - 依頼: `STTLLMTTS/third_party/` にWindows・Ubuntu用のGit導入とPython依存関係セットアップ用スクリプトを追加する。
@@ -405,3 +415,13 @@ Programs/
 - 確認: `gradlew.bat assembleDebug` 成功、`voice_call.js` と `dashboard.js` の `node --check` 成功、対象差分の `git diff --check` 成功。WebViewの実機ファイル選択、HTTPS接続、権限許可、音声往復はサーバー環境がないため未確認。
 - UI改善: 管理トークン欄を音声操作の直前に移動し、初回認証が必要な構成でも入力場所を見つけやすくした。
 - 作業リスト: Androidのファイル選択・トークン導線をコードで補ったが、実機での確認を残す。音声・Pi 4連携は既存の未完了状態を維持。
+
+### AI_Secretary方式の音声処理・逐次配信を追加（2026-10-24）
+
+- 依頼: 相づちをAI_Secretaryに近い方式にし、入力音声を発話ごとに分割、STT側で声の高さ・話し方を分析してLLM入力へ含め、返答テキストとTTS音声をリアルタイムに配信する。
+- 対応: PyAVでWebM/Ogg/WAV/MP4を16kHzモノラルへ復号。RMSベースで約0.7秒の無音を境界にして0.25〜15秒の発話区間へ分け、各区間をWhisperで認識する。Whisperの認識信頼度・無音確率を加え、信頼度の低い無音上の誤認識を除外する。基本周波数、抑揚、声量の特徴を推定し、感情を断定しない音響要約をLM Studioのユーザー入力へ付ける。
+- 対応: 会話開始後に相づち音声をバックグラウンド事前生成し、最初の返答音声が既定0.9秒以内に用意できなければ候補を1つ配信する。LM Studio SSEのテキスト差分を句読点・文節単位にしてIrodori-TTSを順次呼び、音声チャンクをNDJSON HTTPストリームでAndroid Webへ送る。ブラウザーは受信順に再生キューへ入れ、停止・切断時に読取と端末再生を中断する。旧クライアント用のJSON応答経路は残した。
+- 更新ファイル: `Programs/ServerSide/STTLLMTTS/stt/whisper.py`、`llm/lm_studio.py`、`voice/pipeline.py`、`voice/acknowledgements.py`、`voice/sessions.py`、`dashboard/server.py`、`dashboard/web/voice_call.js`、`requirements.txt`、音声API・要件・README類、`Programs/ClientSide/REQUIREMENTS.md`、`Programs/ClientSide/README.md`、`Programs/README.md`、`Agent.md`、本履歴。
+- 確認: コードとAPI契約、セッション停止世代、ダッシュボード設定の参照経路を静的に照合。テスト・サーバー起動・CUDA、LM Studio、Irodori-TTSとの接続・Android実機での音声往復は未実施。
+- 未完了: Web側への再生開始・完了・失敗通知API、実環境の発話分割・音響分析精度、相づちタイミングとチャンク再生、停止・切断時の受け入れ確認。
+- 作業リスト: サーバーAPI・スマートフォンクライアント・逐次音声配信は進行中。MVP受け入れは未着手のまま維持。

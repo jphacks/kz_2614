@@ -36,6 +36,7 @@ class VoiceAcknowledgementSystem:
         self._cache: tuple[VoiceAcknowledgement, ...] = ()
         self._next_index = 0
         self._prepare_lock = asyncio.Lock()
+        self._ready_event = asyncio.Event()
 
     @property
     def ready(self) -> bool:
@@ -48,12 +49,21 @@ class VoiceAcknowledgementSystem:
         async with self._prepare_lock:
             if self.ready:
                 return
-            generated = []
-            for phrase in self.phrases:
-                speech = await self.tts.synthesize_async(phrase)
-                generated.append(VoiceAcknowledgement(text=phrase, speech=speech))
-            self._cache = tuple(generated)
-            self._next_index = 0
+            self._ready_event.clear()
+            try:
+                generated = []
+                for phrase in self.phrases:
+                    speech = await self.tts.synthesize_async(phrase)
+                    generated.append(VoiceAcknowledgement(text=phrase, speech=speech))
+                self._cache = tuple(generated)
+                self._next_index = 0
+            finally:
+                self._ready_event.set()
+
+    async def wait_until_ready(self) -> bool:
+        """Wait for cache preparation to finish, whether it succeeds or fails."""
+        await self._ready_event.wait()
+        return self.ready
 
     def next(self) -> VoiceAcknowledgement:
         if not self.ready:
@@ -74,3 +84,4 @@ class VoiceAcknowledgementSystem:
         """セッション終了時にキャッシュした音声を解放する。"""
         self._cache = ()
         self._next_index = 0
+        self._ready_event.set()
