@@ -82,6 +82,7 @@ APIや音声形式の変更は双方の担当で確認します。詳細は [担
 
 - [統合仕様書](docs/requirements/system.md) / [仕様書・処理フロー図の一覧](docs/README.md)
 
+- [製品Webの使い方](docs/web/usage.md)（タイマー・日記・保存・PWA）
 - [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（公開製品Webのソース。音声API接続は未実装）
 - [Git管理・除外方針](docs/development/gitignore.md)
 

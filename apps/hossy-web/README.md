@@ -32,6 +32,7 @@ npm run dev -- --host 127.0.0.1
 
 公開環境の確認は [ログインから連続会話・停止までの結合テスト表](../../docs/demo.md#公開製品webの結合テスト準備) を使います。公開HTTPSからPCのローカルHTTPへ直接つなぐ前提にせず、既存の配信・認証・API到達経路を先に確認してください。
 
+- [使い方：タイマー・ダイアリー・保存・PWA](../../docs/web/usage.md)
 - [画面・保存・未実装機能の仕様](../../docs/requirements/web-product.md)
 - [ローカル起動・Docker・PWAの確認手順](../../docs/setup/hossy-web.md)
 - [画面の処理フローと統合境界](../../docs/architecture.md)
