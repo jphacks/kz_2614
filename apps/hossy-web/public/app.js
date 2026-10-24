@@ -28,6 +28,8 @@ const navigation = [...document.querySelectorAll('.nav-item')];
 const soundOptions = [...document.querySelectorAll('[data-sound]')];
 const toast = document.querySelector('.toast');
 let toastTimer;
+const loadingScreen = document.querySelector('#loading-screen');
+const themeColorMeta = document.querySelector('#theme-color-meta');
 const installBanner = document.querySelector('#install-banner');
 const installAction = document.querySelector('#install-action');
 const installGuide = document.querySelector('#install-guide');
@@ -182,25 +184,81 @@ const wakeTime = document.querySelector('#wake-time');
 bedtime.value = state.bedtime;
 duration.value = String(state.duration);
 wakeTime.value = state.wakeTime;
+const bedtimeDisplay = document.querySelector('#bedtime-display');
+const wakeTimeDisplay = document.querySelector('#wake-time-display');
+function syncTimeDisplays() {
+  if (bedtimeDisplay) bedtimeDisplay.textContent = bedtime.value || state.bedtime;
+  if (wakeTimeDisplay) wakeTimeDisplay.textContent = wakeTime.value || state.wakeTime;
+}
+syncTimeDisplays();
+[bedtime, wakeTime].forEach((input) => {
+  input.addEventListener('input', () => {
+    if (input === bedtime && bedtime.value) state.bedtime = bedtime.value;
+    if (input === wakeTime && wakeTime.value) state.wakeTime = wakeTime.value;
+    syncTimeDisplays();
+    saveState();
+  });
+  input.addEventListener('click', () => { try { input.showPicker?.(); } catch {} });
+});
 bedtime.addEventListener('change', () => {
   state.bedtime = bedtime.value;
+  syncTimeDisplays();
   saveState();
 });
 wakeTime.addEventListener('change', () => {
   state.wakeTime = wakeTime.value;
+  syncTimeDisplays();
   saveState();
 });
 
 function updateDuration() {
   document.querySelector('#duration-value').textContent = duration.value;
   const percent = ((Number(duration.value) - 15) / 75) * 100;
-  duration.style.background = `linear-gradient(90deg,#a69ad0 0%,#a69ad0 ${percent}%,#ece7f5 ${percent}%,#ece7f5 100%)`;
+  duration.style.background = `linear-gradient(90deg,#f0c259 0%,#f0c259 ${percent}%,#253554 ${percent}%,#253554 100%)`;
+  document.querySelectorAll('[data-duration-step]').forEach((btn) => {
+    const active = Number(btn.dataset.durationStep) === Number(duration.value);
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
 }
 
 duration.addEventListener('input', () => {
   state.duration = Number(duration.value);
   saveState();
   updateDuration();
+document.querySelectorAll('[data-duration-step]').forEach((btn) => {
+  if (!btn.dataset.bound) {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      duration.value = btn.dataset.durationStep;
+      state.duration = Number(duration.value);
+      saveState();
+      updateDuration();
+    });
+  }
+});
+  document.querySelectorAll('[data-duration-step]').forEach((btn) => {
+    if (!btn.dataset.bound) {
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => {
+        duration.value = btn.dataset.durationStep;
+        state.duration = Number(duration.value);
+        saveState();
+        updateDuration();
+document.querySelectorAll('[data-duration-step]').forEach((btn) => {
+  if (!btn.dataset.bound) {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      duration.value = btn.dataset.durationStep;
+      state.duration = Number(duration.value);
+      saveState();
+      updateDuration();
+    });
+  }
+});
+      });
+    }
+  });
 });
 
 function dateKey(date) {
@@ -554,8 +612,55 @@ sleepButton.addEventListener('click', () => {
 
 updateSound();
 updateDuration();
+document.querySelectorAll('[data-duration-step]').forEach((btn) => {
+  if (!btn.dataset.bound) {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      duration.value = btn.dataset.durationStep;
+      state.duration = Number(duration.value);
+      saveState();
+      updateDuration();
+    });
+  }
+});
 renderDiary();
 updateSession();
 goTo(location.hash.slice(1) || 'home', false);
 checkAndroidInstallation();
 setInterval(updateSession, 1000);
+
+function finishLoadingScreen() {
+  if (!loadingScreen || loadingScreen.hidden) return;
+  loadingScreen.classList.add('is-done');
+  if (themeColorMeta) themeColorMeta.setAttribute('content', '#152036');
+  setTimeout(() => { loadingScreen.hidden = true; }, 560);
+}
+
+if (loadingScreen) {
+  loadingScreen.addEventListener('click', finishLoadingScreen);
+  setTimeout(finishLoadingScreen, 900);
+}
+
+const tapLayer = document.querySelector('#tap-layer');
+const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+if (tapLayer) {
+  window.addEventListener('pointerdown', (event) => {
+    if (reduceMotionQuery.matches || (loadingScreen && !loadingScreen.hidden)) return;
+    if (tapLayer.childElementCount >= 5) tapLayer.firstElementChild?.remove();
+    const burst = document.createElement('span');
+    burst.className = 'tap-burst';
+    burst.style.left = `${event.clientX}px`;
+    burst.style.top = `${event.clientY}px`;
+    const ring = document.createElement('span');
+    ring.className = 'tap-ring';
+    burst.append(ring);
+    ['m1', 'm2', 'm3'].forEach((cls, idx) => {
+      const mote = document.createElement('span');
+      mote.className = `tap-mote ${cls}`;
+      mote.textContent = idx === 0 ? '✦' : '·';
+      burst.append(mote);
+    });
+    tapLayer.append(burst);
+    setTimeout(() => burst.remove(), 900);
+  }, { passive: true });
+}

@@ -343,3 +343,10 @@
 - Astro本番ビルド、既存219 unittest（skipなし）、相対リンク329件、Mermaid13図の構文とSVG描画、5画面切替が成功。移動47ファイルと非公開7ファイルの保持を確認。
 - mainへ統合し、旧kameyamaをfeature/server-voiceに改名、次の作業はmainからfeature/web-voice-integration。稼働サービスと実行コードは維持し、音声APIを製品UIへ接続する実装は次の作業。
 - 詳細と未実施のDocker/PWA実機等はdocs/development/work-history.md。旧資料の記録と現行の正本を区別する。
+
+### OneDev最新版をHOSSY＿WEBへ同期（2026-10-25）
+
+- 依頼: OneDevのJPHACKS2026_app最新版をローカルへ取得してGitHubを更新。状態: 完了（ソース同期・検証）。
+- 元のローカルmainをb300ac8からcaf3541へ3コミットfast-forward。GitHub作業先も最新HOSSY＿WEBの33bbb7cへfast-forwardし、整理後のapps/hossy-web直下構成と仕様書を保持する。
+- 追跡66ファイル中63ファイルを配置対応させ、コピー後とビルド後のSHA-256一致を確認。2つの.gitignoreとComposeは共有配置用の既存設定を保持。旧PNGの削除、夜空テーマ・新ロゴ・ロード画面・時刻UI・SW v6を反映。
+- npm ci、Astro 7.4.1ビルド、JS構文、11 HTTPパスの200、相対文書リンク・差分を確認。過去のブラウザー操作試験を最新版の再試験と扱わず、公開サイト・サービス・マイク・ESP32は操作しない。

@@ -909,3 +909,12 @@ Programs/
 - 検証状況: この記録時点ではソース読取と文書確認のみ。親エージェントによるローカルUI操作結果は別途追記し、公開版や実端末の成功とは区別する。アプリ自動テスト・実モデル・マイク・サービス・公開設定は操作しない。
 - ローカルUI操作（親エージェント）: npm ci --ignore-scriptsとnpm run build成功後、127.0.0.1:18765でサウンド選択、15分開始、再読込後の残り時間/選択保持、手動終了、日記の1回/1分未満・2イベント・未計測/未連携、再読込保持、月間/未来日無効/前日サンプル、製品紹介を確認。公開版確認ではない。15分期限、100件上限、日跨ぎ、PWA実機等はソースのみで実行未確認。
 - 文書検証: 変更・新規7文書の相対ファイルリンク58件に切れなし、変更前原本6件のSHA256一致、git diff --check成功。
+
+## 2026-10-25 — OneDev最新版をローカルとGitHubのHOSSY＿WEBへ同期
+
+- 利用者がOneDevのJPHACKS2026_appを最新版の所在として指定。OneDev mainはcaf35413d4780ff3860bf62467305a123aab5b2f。元ローカルはクリーンなb300ac8から3コミットをfast-forwardし、origin/mainと一致した。
+- GitHub側の既存更新を先に取得し、HOSSY＿WEBを107b762から33bbb7cへfast-forward。別担当の配置・統合仕様・使い方案内を保持してから同期した。GitHub mainへの直接pushや履歴書換えは行わない。
+- OneDevのastro-site/*をapps/hossy-web/*、Codex-memo/*をdocs/web/history/hossy/*、README/DEPLOYをstandalone履歴、images/*をapps/hossy-web/images/*へ対応。63ファイルが元のバイト列と一致。2つの.gitignoreとComposeの3ファイルは共有配置に合わせた既存版を保持した。削除済みのnengitsune-plush.pngも削除を反映。
+- ロゴ・maskableアイコン・起動ローディング・夜空配色・タップ演出・時刻入力と6段階ボタン・SW v6を反映。現行README、製品Web仕様、使い方、PWA資産の案内を更新し、旧版の操作確認記録は結果を保持して対象版を明記した。
+- 確認: npm ci（191パッケージ）、Astro 7.4.1の本番ビルド、app.js/sw.jsのNode構文成功。生成ページ・manifest・SW・CSS・新画像とアイコン等11 HTTPパスが200。63ファイルのSHA-256はビルド後も一致。相対Markdownリンクとgit diff --checkを確認した。
+- apps/web、server、firmware、testsの実行コードと既存設定は変更しない。ブラウザー操作試験、実端末PWA、Dockerビルド・公開サイト更新、サービス・マイク・ESP32操作は今回の確認に含めない。同期元と検証範囲は日時付きのWeb履歴にも記録した。

@@ -46,7 +46,7 @@ Composeは同じフォルダーのDockerfileを使い、Nodeで生成したdist�
 
 - スマホからは配信PCの実際のLANアドレスまたは配信ドメインを使います。スマホの127.0.0.1はスマホ自身です。
 - 公開時はHTTPSと証明書を用意し、サイトルートから配信します。localhostはPC内の検証用です。
-- `/manifest.json`、`/sw.js`、`/icons/nengitsune-192.png`、`/icons/nengitsune-512.png` とホームが200で返ることを確認します。
+- `/manifest.json`、`/sw.js`、`/icons/nengitsune-192.png`、`/icons/nengitsune-512.png`、`/icons/nengitsune-maskable-512.png`、`/nengitsune.jpg`、`/nengitsune-loading.jpg`とホームが200で返ることを確認します。
 - Androidはブラウザーのインストール、iPhoneはSafariの共有メニューからホーム画面追加を確認します。
 - URLのscheme/host/portを変えるとlocalStorageは別領域になります。元の保存先を消去しないで確認してください。
 

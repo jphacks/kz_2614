@@ -1,6 +1,6 @@
 # ねんぎつね 製品Webアプリ / PWA — HOSSy
 
-スマートフォン向けのホーム、ダイアリー、入眠準備タイマー、サウンド選択、製品紹介を備えるAstroアプリです。ソースはHOSSyの `107b762`（元プロジェクト `b300ac8`）を統合しています。
+スマートフォン向けのホーム、ダイアリー、入眠準備タイマー、サウンド選択、製品紹介を備えるAstroアプリです。OneDevの `JPHACKS2026_app` main `caf3541`（2026-10-25取得）を同期しています。夜空テーマ、ローディング画面、新しいロゴ、時間選択ボタンを含みます。
 
 公開製品Web: [ホーム](https://hiroron-jphacks2026.hiroron.net/) / [ダイアリー（#diary）](https://hiroron-jphacks2026.hiroron.net/#diary)。2026-10-25の未ログイン確認ではhiroron Passportのログイン画面が表示され、ログイン後の本文・音声接続・公開版とこのソースの一致は未確認です。
 
@@ -26,7 +26,7 @@ npm run dev -- --host 127.0.0.1
 - `public/manifest.json`・`public/sw.js`・`public/icons/`：PWA
 - `Dockerfile`・`compose.yaml`：静的ビルドとNginx配信
 
-旧 `astro-site/` の中身をこのフォルダー直下へ移しました。画面コード・画像・保存キーは維持しています。
+OneDevの `astro-site/` の中身をこのフォルダー直下へ対応させています。画面コード・画像・保存キーは元ソースに合わせ、Composeのビルド先 `.` と共有リポジトリ用の除外設定を保持しています。元の開発メモは `docs/web/history/hossy/`、素材原本は `images/` に配置します。
 
 ## 仕様と運用
 

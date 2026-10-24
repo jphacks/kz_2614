@@ -22,7 +22,20 @@ import Layout from '../layouts/Layout.astro';
     <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
   </svg>
 
+  <div class="loading-screen" id="loading-screen" role="status" aria-live="polite" aria-label="ねんぎつねを読み込み中">
+    <img class="loading-art" src="/nengitsune-loading.jpg" alt="ねんぎつね 読み込み中... by JPHACKS" width="687" height="1024" fetchpriority="high" />
+  </div>
+
   <div class="app-shell">
+    <div class="ambient-sky" aria-hidden="true">
+      <span class="sky-star s1">✦</span>
+      <span class="sky-star s2">·</span>
+      <span class="sky-star s3">☆</span>
+      <span class="sky-star s4">·</span>
+      <span class="sky-star s5">✦</span>
+      <span class="sky-star s6">·</span>
+    </div>
+    <div class="tap-layer" id="tap-layer" aria-hidden="true"></div>
     <header class="app-header">
       <button class="round-icon header-profile" type="button" data-go="about" aria-label="ねんぎつねについて">
         <svg><use href="#i-user"></use></svg>
@@ -52,7 +65,7 @@ import Layout from '../layouts/Layout.astro';
             <span class="hero-kicker"><svg><use href="#i-moon"></use></svg> TONIGHT WITH NENGITSUNE</span>
             <h2>そばにいるよ。<br /><span>おやすみまで、ずっと。</span></h2>
           </div>
-          <img class="hero-plush" src="/nengitsune-plush.png" alt="やさしく微笑む、横向きまくらロボットのねんぎつね" width="1536" height="1024" fetchpriority="high" />
+          <img class="hero-plush" src="/nengitsune.jpg" alt="夜空の下で丸くなってすやすや眠るねんぎつね" width="1024" height="572" fetchpriority="high" />
           <div class="hero-bottom">
             <div class="hero-face">♥</div>
             <div><strong>ねんぎつね</strong><span id="hero-status">いっしょに休む準備ができたよ</span></div>
@@ -138,14 +151,14 @@ import Layout from '../layouts/Layout.astro';
 
       <section class="screen inner-screen" id="screen-routine" data-screen="routine" aria-label="ねんぎつね" hidden>
         <div class="inner-heading"><span class="eyebrow">A GENTLE GOOD NIGHT</span><h1>ねんぎつねのじゅんび <span>☾</span></h1><p>あなたにぴったりの、おやすみ時間を。</p></div>
-        <div class="routine-banner"><div><span>TONIGHT'S COMPANION</span><strong>ねんぎつねと、ひとやすみ。</strong><small>横向きの夜も、ふんわりそばに。</small></div><img src="/nengitsune-plush.png" alt="ねんぎつね" width="1536" height="1024" loading="lazy" /></div>
+        <div class="routine-banner"><div><span>TONIGHT'S COMPANION</span><strong>ねんぎつねと、ひとやすみ。</strong><small>横向きの夜も、ふんわりそばに。</small></div><img src="/nengitsune.jpg" alt="ねんぎつね" width="1024" height="572" loading="lazy" /></div>
         <div class="panel-heading"><h2>おやすみプラン</h2><span>01 / 02</span></div>
         <div class="settings-card">
-          <label class="setting-line" for="bedtime"><span class="setting-symbol lavender"><svg><use href="#i-clock"></use></svg></span><span class="setting-label"><strong>寝る時間</strong><small>ベッドに入る時間</small></span><input id="bedtime" type="time" value="22:30" /></label>
+          <label class="setting-line" for="bedtime"><span class="setting-symbol lavender"><svg><use href="#i-clock"></use></svg></span><span class="setting-label"><strong>寝る時間</strong><small>ベッドに入る時間</small></span><span class="time-field"><span class="time-field-text" id="bedtime-display">22:30</span><svg aria-hidden="true"><use href="#i-clock"></use></svg><input id="bedtime" type="time" value="22:30" /></span></label>
           <div class="setting-line duration-line"><span class="setting-symbol peach"><svg><use href="#i-moon"></use></svg></span><span class="setting-label"><strong>ねんぎつねと話す時間</strong><small>いっしょに過ごす長さ</small></span><strong class="duration-value"><span id="duration-value">30</span>分</strong></div>
           <input class="duration-range" id="duration" type="range" min="15" max="90" step="15" value="30" aria-label="ねんぎつねと話す時間の長さ" />
-          <div class="range-labels"><span>15分</span><span>90分</span></div>
-          <label class="setting-line wake-line" for="wake-time"><span class="setting-symbol sunrise"><svg><use href="#i-sun"></use></svg></span><span class="setting-label"><strong>起きる時間</strong><small>朝の目安を決めよう</small></span><input id="wake-time" type="time" value="07:00" /></label>
+          <div class="range-labels" role="group" aria-label="話す時間の候補"><button type="button" data-duration-step="15">15分</button><button type="button" class="active" data-duration-step="30">30分</button><button type="button" data-duration-step="45">45分</button><button type="button" data-duration-step="60">60分</button><button type="button" data-duration-step="75">75分</button><button type="button" data-duration-step="90">90分</button></div>
+          <label class="setting-line wake-line" for="wake-time"><span class="setting-symbol sunrise"><svg><use href="#i-sun"></use></svg></span><span class="setting-label"><strong>起きる時間</strong><small>朝の目安を決めよう</small></span><span class="time-field"><span class="time-field-text" id="wake-time-display">07:00</span><svg aria-hidden="true"><use href="#i-clock"></use></svg><input id="wake-time" type="time" value="07:00" /></span></label>
         </div>
         <div class="panel-heading sound-heading"><h2>おやすみサウンド</h2><button type="button" data-go="sounds">変更する <svg><use href="#i-chevron"></use></svg></button></div>
         <div class="chosen-sound"><span class="setting-symbol lilac"><svg><use href="#i-music"></use></svg></span><div><strong id="routine-sound">みみもとささやき</strong><small>やさしい声で、ゆっくりと</small></div><svg class="chosen-star"><use href="#i-star"></use></svg></div>
@@ -168,7 +181,7 @@ import Layout from '../layouts/Layout.astro';
 
       <section class="screen inner-screen" id="screen-about" data-screen="about" aria-label="ねんぎつねについて" hidden>
         <div class="inner-heading"><span class="eyebrow">HELLO, I'M NENGITSUNE</span><h1>ねんぎつねのこと <span>♥</span></h1><p>あなたのそばで眠る、やさしいまくらロボット。</p></div>
-        <div class="about-hero"><span class="about-spark">✦</span><img src="/nengitsune-plush.png" alt="まくらロボットのねんぎつね" width="1536" height="1024" loading="lazy" /><div><strong>ねんぎつね</strong><span>そばで眠ってくれる、やさしい友だち。</span></div></div>
+        <div class="about-hero"><span class="about-spark">✦</span><img src="/nengitsune.jpg" alt="丸くなって眠るねんぎつね" width="1024" height="572" loading="lazy" /><div><strong>ねんぎつね</strong><span>そばで眠ってくれる、やさしい友だち。</span></div></div>
         <div class="panel-heading"><h2>4つのやさしさ</h2><span>ABOUT NENGITSUNE</span></div>
         <div class="feature-list">
           <div><span class="feature-icon f1">☾</span><span><strong>横向きまくら</strong><small>頭と首をやさしく支えて、横向き寝をサポート。</small></span></div>
@@ -198,5 +211,5 @@ import Layout from '../layouts/Layout.astro';
     </aside>
     <div class="toast" role="status" aria-live="polite" hidden></div>
   </div>
-  <script src="/app.js?v=20261024-1" defer></script>
+  <script src="/app.js?v=20261024-4" defer></script>
 </Layout>
