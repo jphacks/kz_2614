@@ -836,3 +836,12 @@ Programs/
 - 機器READMEを導入案内へ短縮。旧READMEの検証部分をhistory/2026-10-25-readme-validation-record.mdへ保存し、過去メモへ現行入口への案内を追加。受け取り側レビュー、全体入口、API一覧、サーバー/端末要件からも現行仕様を参照できるようにした。
 - 図: ESP32構成、Reader処理、Follower状態遷移、有限タップ受付、現在のMCPシーケンス、提案MCP処理の6図を追加。既存の全体・音声6図を含む計12図をMermaid CLI 12.0.0と既存ChromeでSVG描画し、構成・受付・状態遷移のPNGも確認した。Markdownの相対ファイルリンク切れ0、git diff --check成功。
 - 実行コード・実設定は9036cceから変更しない。今回、Arduino/Pythonの機能試験、過去の219/22テストの再実行、機器へのHTTP要求・書き込み、サービス再起動、マイク・実モデル操作は行わない。現在のIP・姿勢・NVS値、統合後の実会話から機器までの受け入れは未確認として扱う。
+
+## 2026-10-25 — mainのフォルダー再編をemori-ESP32へ同期確認
+
+- 依頼: mainのフォルダー構成変更を現在のemori-ESP32へ安全に取り込む。
+- 事前確認: 作業ツリーはクリーン。両リモート先端をfetchし、origin/mainは9036cceb708f6db89c62102f91b2b19b6256f0e4、origin/emori-ESP32はa78607849a61551faad0239f0d84bb31ec1acf35。mainは既に現在ブランチの祖先で、追加のmainコミットは0だった。
+- git merge --ff-only origin/mainはAlready up to date。apps/、server/、firmware/esp32/、docs/への再配置を既に含むことを確認した。競合・履歴書換え・ファイル移動は発生していない。
+- 保持確認: mainとの差分はMarkdownだけで、Reader/Follower、音声通信部品、サーバー、アプリ、テスト、設定テンプレートを含む非Markdownの差分は0。前回のESP32仕様書更新と履歴を保持した。
+- 検証: Markdown相対リンク233件の存在確認で切れ0、Mermaidブロック12個を保持、git diff --check成功。図の本文変更はなく、前回の12図描画結果を保持する。プログラムテスト、機器への要求・書き込み、サービス再起動、マイク操作は行っていない。
+- 作業場所はこのGitチェックアウト。上位のESP32-Reader/ESP32-Follower/codex-memoは元の実機作業用ファイルとして保持し、自動移動・上書きは行わない。
