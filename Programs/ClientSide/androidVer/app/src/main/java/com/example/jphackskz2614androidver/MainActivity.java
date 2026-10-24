@@ -164,9 +164,7 @@ public class MainActivity extends Activity {
                 if (sameOrigin(Uri.parse(url), trustedServerUri)) {
                     hintView.setVisibility(View.GONE);
                     webView.setVisibility(View.VISIBLE);
-                    showStatus(isHttps(trustedServerUri)
-                            ? "接続しました。会話開始時にマイク利用を許可してください。"
-                            : "接続しました。HTTPではマイクを使えません。音声会話にはHTTPSを使用してください。");
+                    showStatus("接続しました。会話開始時にマイク利用を許可してください。");
                 }
             }
 
@@ -220,9 +218,9 @@ public class MainActivity extends Activity {
 
         Uri uri = Uri.parse(value).normalizeScheme();
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-        if (!("https".equals(scheme) || "http".equals(scheme))
-                || uri.getHost() == null || uri.getUserInfo() != null) {
-            addressField.setError("http:// または https:// のURLを入力してください");
+        if (!"https".equals(scheme) || uri.getHost() == null || uri.getUserInfo() != null) {
+            addressField.setError("音声会話と管理通信にはHTTPSのURLを入力してください");
+            showStatus("HTTPS以外の接続は利用できません。");
             return;
         }
         if (uri.getPath() == null || uri.getPath().isEmpty()) {

@@ -20,6 +20,7 @@
   let chunks = [];
   let stopTimer = null;
   let discardRecording = false;
+  let micRequestPending = false;
   let turnRequest = null;
   let audioObjectUrl = null;
 
@@ -32,9 +33,10 @@
   function refreshButtons() {
     const active = Boolean(sessionId);
     const recording = recorder && recorder.state === "recording";
+    const playing = !audioPlayer.paused && !audioPlayer.ended;
     startButton.disabled = active;
     stopButton.disabled = !active;
-    recordButton.disabled = !active || Boolean(turnRequest);
+    recordButton.disabled = !active || Boolean(turnRequest) || micRequestPending || playing;
     recordButton.textContent = recording ? "録音を止めて送信" : "録音して話す";
     recordButton.classList.toggle("recording", Boolean(recording));
   }
@@ -109,18 +111,26 @@
   }
 
   async function startRecording() {
-    if (!sessionId || turnRequest) return;
+    if (!sessionId || turnRequest || micRequestPending) return;
     if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setStatus("マイクを使うにはHTTPSでこのWeb画面を開いてください。", "error");
       return;
     }
 
+    const requestedSession = sessionId;
+    micRequestPending = true;
+    refreshButtons();
     try {
       resetAudio();
-      stream = await navigator.mediaDevices.getUserMedia({
+      const acquiredStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
       });
+      if (sessionId !== requestedSession) {
+        for (const track of acquiredStream.getTracks()) track.stop();
+        return;
+      }
+      stream = acquiredStream;
       const preferredType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]
         .find((type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type));
       recorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
@@ -130,6 +140,9 @@
         if (event.data && event.data.size > 0) chunks.push(event.data);
       };
       recorder.onerror = () => {
+        clearTimeout(stopTimer);
+        stopTimer = null;
+        chunks = [];
         releaseStream();
         recorder = null;
         setStatus("録音に失敗しました。マイクの許可と端末の入力を確認してください。", "error");
@@ -167,12 +180,16 @@
       releaseStream();
       recorder = null;
       const permissionDenied = error && (error.name === "NotAllowedError" || error.name === "SecurityError");
-      setStatus(
-        permissionDenied
-          ? "マイクが許可されていません。ブラウザーまたはAndroidのアプリ設定で許可してください。"
-          : "録音を開始できませんでした。マイクが利用可能か確認してください。",
-        "error",
-      );
+      if (sessionId === requestedSession) {
+        setStatus(
+          permissionDenied
+            ? "マイクが許可されていません。ブラウザーまたはAndroidのアプリ設定で許可してください。"
+            : "録音を開始できませんでした。マイクが利用可能か確認してください。",
+          "error",
+        );
+      }
+    } finally {
+      micRequestPending = false;
       refreshButtons();
     }
   }
@@ -287,5 +304,8 @@
     else void startRecording();
   });
   stopButton.addEventListener("click", () => void stopCall());
+  audioPlayer.addEventListener("play", refreshButtons);
+  audioPlayer.addEventListener("pause", refreshButtons);
+  audioPlayer.addEventListener("ended", refreshButtons);
   window.addEventListener("pagehide", () => void stopCall({ silent: true, keepalive: true }));
 })();
