@@ -22,6 +22,8 @@ JPHACKS 2026 / チーム `kz_2614`
 
 ## 現在のデモと確認状況
 
+製品Webの公開先は [ねんぎつね 製品Web](https://hiroron-jphacks2026.hiroron.net/)、ダイアリー入口は [#diary](https://hiroron-jphacks2026.hiroron.net/#diary) です。2026-10-25の未ログイン確認ではhiroron Passportのログイン画面で保護されており、ログイン後の製品UI・音声接続は未確認です。PCローカル8765番の音声・設定Webとは別の入口です。[公開環境の結合テスト表](docs/demo.md#公開製品webの結合テスト準備) に確認順序をまとめています。
+
 | 機能 | 状態 |
 | --- | --- |
 | HOSSyの製品Web・PWA | ホーム・ダイアリー・タイマー等のUI。音声API・実機は未接続 |
@@ -29,6 +31,7 @@ JPHACKS 2026 / チーム `kz_2614`
 | 連続PCM入力、返答PCM配信、割込み、短い通信遅延からの復旧 | 実装済み。自動テストと記録済みのHTTP試験あり |
 | ESP32 Reader/Follower・SG90制御 | ファームウェアとEMORI側の実機記録あり |
 | 会話のMCPからESP32を直接動作 | 未完了。現行MCPはPC内の希望頻度の保存・取得 |
+| 3Dプリント部品 | STL 8点を収録。寸法・材料・印刷条件・実機との嵌合は未確認 |
 | Android / ESP32の新しい音声TCP経路 | コードあり。最新版の端末ビルド・実機通話は未確認 |
 
 公開用デモ動画・製品写真はまだ掲載していません。[デモ手順と確認範囲](docs/demo.md) に、再現方法と残っている確認を記載しています。
@@ -57,6 +60,7 @@ ESP32 Reader ─Wi-Fi→ ESP32 Follower → SG90 × 3
 | 音声・設定Web | HTML、CSS、JavaScript、Web Audio / AudioWorklet | [apps/web](apps/web/) |
 | Android | Java、Android SDK、Gradle、TCPソケット | [apps/android](apps/android/) |
 | しっぽ・機器 | ESP32、Arduino C++、Wi-Fi/HTTP、SG90 × 3 | [firmware/esp32](firmware/esp32/) |
+| 筐体・取付部品 | 3Dプリント用STL 8点 | [3Dprint](3Dprint/README.md) |
 | ESP32音声通信部品 | C、ESP-IDF、TCP、PCM16LE | [firmware/esp32/voice_tcp](firmware/esp32/voice_tcp/) |
 
 このPCで使用するモデルは `Systran/faster-whisper-small`、`google/gemma-4-26b-a4b-qat`、`Aratako/Irodori-TTS-v4.1-Small`。モデルの重みや外部ランタイムは配布元から別途取得します。
@@ -72,6 +76,7 @@ ESP32 Reader ─Wi-Fi→ ESP32 Follower → SG90 × 3
 | **kameyama** | AI・音声パイプライン、サーバー側の会話・MCP連携 | `server/ai/`、`server/api/`、`docs/api/` |
 | **HOSSy** | 製品Web・PWA、音声画面・操作UI | `apps/hossy-web/`、`apps/web/`、`tests/web/` |
 | **EMORI** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、機器仕様・API、`docs/esp32/` |
+| 担当者名未指定（`namikawa_3Dprint`由来） | 3Dプリント用の筐体・取付部品 | [3Dprint/](3Dprint/README.md) |
 | 担当者名未指定 | Android音声クライアント | `apps/android/` |
 
 APIや音声形式の変更は双方の担当で確認します。詳細は [担当範囲と連携ルール](docs/development/ownership.md) を参照してください。
@@ -80,13 +85,16 @@ APIや音声形式の変更は双方の担当で確認します。詳細は [担
 
 - [統合仕様書](docs/requirements/system.md) / [仕様書・処理フロー図の一覧](docs/README.md)
 
-- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（独立したUIプロトタイプ）
+- [製品Webの使い方](docs/web/usage.md)（タイマー・日記・保存・PWA）
+- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（公開製品Webのソース。音声API接続は未実装）
 - [Git管理・除外方針](docs/development/gitignore.md)
 
 - [Windows・Ubuntuのセットアップ](docs/setup/server.md)
 - [このPCの環境と起動](docs/setup/local-pc.md)
 - [ESP32の配線・設定・起動](firmware/esp32/README.md)
 - [構成と通信経路](docs/architecture.md)
+- [3Dプリント部品一覧と確認事項](3Dprint/README.md)
+- [公開ブランチの統合対象・状態](docs/development/branches.md)
 - [フォルダー一覧](docs/repository-layout.md)
 - [開発参加・テスト](CONTRIBUTING.md)
 

@@ -22,6 +22,7 @@ kz_2614/
 │   ├── ESP32-Reader/         # 可変抵抗器の読取り
 │   ├── ESP32-Follower/       # SG90・HTTP制御
 │   └── voice_tcp/            # 音声通信部品。機器IOとの統合は別
+├── 3Dprint/                  # namikawa_3Dprint由来: 筐体・取付部品のSTL 8点
 ├── scripts/                  # ローカル起動・MCP設定・音声準備
 ├── tests/
 │   ├── test_*.py             # サーバー・AI境界・HTTP/TCP
@@ -38,6 +39,8 @@ kz_2614/
 ```
 
 `apps/hossy-web/`は別プロジェクトから追加した製品UI・PWAです。[起動と構成](../apps/hossy-web/README.md)を参照してください。`package.json`・`src/`・`public/`・Dockerfile・Composeを直下へ集約しました。開発メモ・画像は`docs/web/history/`へ移動し、既存`apps/web/`のサーバー配信先は維持します。
+
+[3Dprint/README.md](../3Dprint/README.md) に全8点の一覧と用途の確認範囲を記載しています。STLは取り込み元の配置・内容を保持し、寸法・材料・印刷条件・実機との嵌合は未確認です。
 
 ## 旧配置からの対応
 

@@ -1,6 +1,6 @@
 # 仕様書・開発資料
 
-PC音声・HOSSyの製品Web・EMORIの機器仕様を、統合mainの構成で整理しています。まず [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
+PC音声・HOSSyの製品Web・EMORIの機器仕様と、`namikawa_3Dprint`由来の3Dプリント部品を整理しています。公開mainへの反映状況は [ブランチ一覧](development/branches.md) を参照してください。まず [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
 
 ## 読む順序
 
@@ -19,6 +19,7 @@ PC音声・HOSSyの製品Web・EMORIの機器仕様を、統合mainの構成で�
 | サーボの配線・校正・PWM・モード | [ESP32機器仕様](requirements/esp32.md) |
 | 音声HTTP/TCPと機器HTTPの通信 | [API一覧](api/README.md) |
 | LLM/MCPとESP32を接続する | [MCP統合仕様](esp32/mcp-integration.md) |
+| 筐体・取付部品のSTL一覧と確認事項 | [3Dプリント部品](../3Dprint/README.md) |
 | ESP32の実機記録・引き継ぎ | [ESP32担当者向け入口](esp32/README.md) |
 | フォルダー・担当・作業方法 | [配置](repository-layout.md) / [分担](development/ownership.md) / [ブランチ](development/branches.md) |
 | このPCの起動・実測・移行 | [ローカル環境](setup/local-pc.md) / [移行手順](development/layout-migration.md) |
