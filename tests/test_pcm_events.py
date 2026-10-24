@@ -81,8 +81,8 @@ class PCMEventTests(unittest.TestCase):
             self.streams.playback(self.manager.session_id, 0, turn, "ended")
         self.assertEqual(error.exception.code, "playback_not_complete")
         before = self.streams._states[self.manager.session_id].vad.model.calls
-        self.feed(VOICE, 80)
-        self.assertEqual(self.streams._states[self.manager.session_id].vad.model.calls, before)
+        self.feed(SILENCE, 80)
+        self.assertEqual(self.streams._states[self.manager.session_id].vad.model.calls, before + 80)
         self.assertEqual(self.status()["next_sequence"], self.sequence)
         self.manager.final_release.set()
         later = self.until_event("complete", early[-1]["cursor"])

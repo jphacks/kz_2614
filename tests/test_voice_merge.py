@@ -109,6 +109,31 @@ class PipelineMergeTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(pipeline.process_audio_file_stream(Path("recording.wav"), lambda event: None), timeout=0.3)
         await pipeline.close()
 
+    async def test_event_delivery_failure_closes_llm_stream_in_its_producer_task(self):
+        pipeline = make_pipeline([])
+        owners = []
+
+        async def stream(*args, **kwargs):
+            owners.append(asyncio.current_task())
+            try:
+                yield "最初の返答。"
+                await asyncio.Event().wait()
+            finally:
+                owners.append(asyncio.current_task())
+
+        def deliver(event):
+            if event["type"] == "text_delta":
+                raise RuntimeError("event delivery failed")
+
+        pipeline.llm.stream_response = stream
+        try:
+            with self.assertRaisesRegex(RuntimeError, "event delivery failed"):
+                await pipeline.process_audio_file_stream(Path("recording.wav"), deliver)
+            self.assertEqual(len(owners), 2)
+            self.assertIs(owners[0], owners[1])
+        finally:
+            await pipeline.close()
+
     async def test_plain_session_creation_does_not_prewarm_tts(self):
         manager = object.__new__(VoiceSessions)
         pipeline = Mock()

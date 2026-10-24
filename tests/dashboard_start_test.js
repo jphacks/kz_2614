@@ -7,8 +7,8 @@ const { browser, settle, assert } = require("./dashboard_browser_harness");
   app.start(); await settle(); assert.equal(app.stats.starts, 1);
   app.pendingStarts[0].resolve(); await settle(); await app.advance(0);
   assert.equal(app.worklets.length, 1); assert.equal(app.worklets[0].name, "nen-gitsune-pcm");
-  assert.deepEqual(app.stats.modules, ["/voice_pcm_worklet.js"]);
-  assert.equal(app.contexts[0].nodes.at(-1).gain.value, 0, "The capture graph must never monitor the microphone through speakers");
+  assert.deepEqual(app.stats.modules, ["/voice_pcm_worklet.js", "/voice_pcm_output_worklet.js"]);
+  assert.equal(app.worklets[0].connections[0].gain.value, 0, "The capture graph must never monitor the microphone through speakers");
   app.stop(); await settle(); assert.equal(app.idle(), true); assert.equal(app.streams[0].stopped, true); assert.equal(app.contexts[0].state, "closed");
 
   const failed = browser({ failFirstStart: true }); await failed.begin(); assert.equal(failed.idle(), true); await failed.begin(); assert.equal(failed.worklets.length, 1);

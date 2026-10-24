@@ -28,7 +28,7 @@ PREVIEW_INTERVAL_BYTES = SAMPLE_RATE * 2
 COOLDOWN_SECONDS = 0.6
 MAX_STREAM_EVENTS = 256
 MAX_STREAM_EVENT_BYTES = 16 * 1024 * 1024
-_BLOCKED_STAGES = {"stt", "llm", "tts", "reply_ready", "playing", "cooldown", "failed"}
+_REPLY_STAGES = {"stt", "llm", "tts", "reply_ready", "playing"}
 
 
 @dataclass
@@ -56,6 +56,8 @@ class _StreamState:
     playback_started: bool = False
     playback_failed: bool = False
     cancelled: bool = False
+    interruption: dict[str, Any] | None = None
+    vad_failed: bool = False
 
 
 class ServerAudioStreams:
@@ -125,6 +127,10 @@ class ServerAudioStreams:
                 result["speech"] = state.response["speech"]
         if state.error:
             result.update(state.error)
+        if state.interruption is not None:
+            # Also reach a receiver paused by audio-output backpressure. Its
+            # durable event cursor still advances through the event stream only.
+            result["interruption"] = dict(state.interruption)
         return result
 
     def push_audio(
@@ -146,6 +152,8 @@ class ServerAudioStreams:
                                 "invalid_pcm", "PCM16LE音声を1秒以下で送信してください。")
         with self._lock:
             state = self._state_locked(session_id, generation)
+            if state.vad_failed:
+                raise VoiceAPIError(503, "vad_unavailable", state.error["message"], False)
             if sequence < state.next_sequence:
                 return self._snapshot(state, sequence)
             if sequence != state.next_sequence:
@@ -153,33 +161,63 @@ class ServerAudioStreams:
                 error.expected_sequence = state.next_sequence
                 raise error
             self.manager.get_active_session(session_id, generation, touch=True)
-            state.next_sequence += 1
-            if state.stage in _BLOCKED_STAGES:
-                return self._snapshot(state, sequence)
             try:
                 update = state.vad.feed(self._apply_input_gain(pcm_bytes, gain))
             except Exception as exc:
+                # A failed feed may already have changed the recurrent VAD state.
+                # Do not acknowledge it or permit a retry to append it a second time.
+                state.vad_failed = True
                 state.stage = "failed"
-                state.error = {"error": "vad_unavailable", "message": "サーバーの音声判定を利用できません。"}
-                raise VoiceAPIError(503, "vad_unavailable", state.error["message"], True) from exc
+                state.error = {
+                    "error": "vad_unavailable", "message": "サーバーの音声判定を利用できません。会話を開始し直してください。",
+                    "fatal": True,
+                }
+                try:
+                    self._interrupt_manager_turn(state)
+                except VoiceAPIError:
+                    pass  # Stop/expiry must not mask the original VAD failure.
+                self._events_ready.notify_all()
+                raise VoiceAPIError(503, "vad_unavailable", state.error["message"], False) from exc
+            state.next_sequence += 1
             if update.started:
-                state.utterance += 1
-                state.stage = "speaking"
-                state.turn_id = None
-                state.transcript = ""
-                state.response = None
-                state.error = None
-                state.preview_size = 0
-                state.turn_complete = False
-                state.has_audio = False
-                state.playback_started = False
-                state.playback_failed = False
+                state = self._begin_utterance_locked(state)
             if update.completed is not None:
                 self._start_final_locked(state, update.completed)
             elif state.vad.speaking:
                 state.stage = "speaking"
                 self._start_preview_locked(state)
             return self._snapshot(state, sequence)
+
+    def _interrupt_manager_turn(self, state: _StreamState) -> None:
+        if state.turn_id is not None:
+            self.manager.interrupt_turn(state.session_id, state.generation, state.turn_id)
+
+    def _begin_utterance_locked(self, previous: _StreamState) -> _StreamState:
+        """Detach old workers while keeping the continuous VAD and input order."""
+        turn_id = str(uuid.uuid4())
+        interruption = previous.interruption
+        if previous.stage in _REPLY_STAGES and previous.turn_id is not None:
+            self._interrupt_manager_turn(previous)
+            self._append_event_locked(previous, {
+                "type": "interruption", "session_id": previous.session_id,
+                "generation": previous.generation, "turn_id": previous.turn_id,
+                "interrupted_turn_id": previous.turn_id, "new_turn_id": turn_id,
+                "cancellation_requested": True, "native_work_may_continue": True,
+            })
+            interruption = dict(previous.events[-1][0])
+        elif previous.final_future is not None and not previous.final_future.done():
+            self._interrupt_manager_turn(previous)
+        previous.cancelled = True
+        state = _StreamState(
+            previous.session_id, previous.generation, previous.vad,
+            next_sequence=previous.next_sequence, stage="speaking", turn_id=turn_id,
+            utterance=previous.utterance + 1, event_cursor=previous.event_cursor,
+            events=previous.events, event_bytes=previous.event_bytes,
+            interruption=interruption,
+        )
+        self._states[state.session_id] = state
+        self._events_ready.notify_all()
+        return state
 
     @staticmethod
     def _apply_input_gain(pcm: bytes, gain: float) -> bytes:
@@ -213,6 +251,8 @@ class ServerAudioStreams:
         with self._events_ready:
             while True:
                 state = self._state_locked(session_id, generation)
+                if state.vad_failed:
+                    raise VoiceAPIError(503, "vad_unavailable", state.error["message"], False)
                 if after > state.event_cursor:
                     raise VoiceAPIError(409, "invalid_event_cursor", "まだ存在しないイベントです。")
                 if state.events and after < state.events[0][0]["cursor"] - 1:
@@ -228,7 +268,7 @@ class ServerAudioStreams:
                 self._events_ready.wait(timeout=min(remaining, 0.25))
 
     def _append_event_locked(self, state: _StreamState, event: dict[str, Any]) -> bool:
-        if self._states.get(state.session_id) is not state or state.cancelled:
+        if self._states.get(state.session_id) is not state or state.cancelled or state.vad_failed:
             return False
         self.manager.get_active_session(state.session_id, state.generation)
         if (event.get("session_id") != state.session_id or event.get("generation") != state.generation
@@ -329,7 +369,7 @@ class ServerAudioStreams:
     def _start_final_locked(self, state: _StreamState, pcm: bytes) -> None:
         state.utterance += 1  # invalidate an older in-flight preview immediately
         state.stage = "stt"
-        state.turn_id = str(uuid.uuid4())
+        state.turn_id = state.turn_id or str(uuid.uuid4())
         if not self._final_capacity.acquire(blocking=False):
             self._final_start_error(state, VoiceAPIError(503, "server_busy", "音声処理が混み合っています。", True))
             return
@@ -351,7 +391,7 @@ class ServerAudioStreams:
             try:
                 with self._lock:
                     if state.cancelled or self._states.get(state.session_id) is not state:
-                        self.manager.abandon_turn(session)
+                        self._interrupt_manager_turn(state)
                         raise VoiceAPIError(409, "session_stopped", "会話は停止されました。")
                 path = self._write_wav(pcm)
                 events: Queue[dict[str, Any] | None] = Queue()
@@ -364,15 +404,15 @@ class ServerAudioStreams:
                     try:
                         event = events.get(timeout=0.1)
                     except Empty:
-                        if not timed_out and time.monotonic() >= deadline:
+                        if (not timed_out and time.monotonic() >= deadline
+                                and not state.cancelled and self._states.get(state.session_id) is state):
                             timed_out = True
-                            self.manager.timeout_stream_turn(session)
+                            self.manager.timeout_stream_turn(session, generation=generation, turn_id=turn_id)
                         continue
                     if event is None:
                         break
                     with self._lock:
                         if state.cancelled or self._states.get(state.session_id) is not state:
-                            self.manager.cancel_stream_turn(state.session_id, generation)
                             continue
                         if terminal_error is not None:
                             continue
@@ -399,7 +439,7 @@ class ServerAudioStreams:
                 return complete
             except BaseException:
                 if source is None:
-                    self.manager.abandon_turn(session)
+                    self._interrupt_manager_turn(state)
                 raise
             finally:
                 if path is not None:
@@ -409,7 +449,7 @@ class ServerAudioStreams:
         try:
             state.final_future = self._final_workers.submit(final)
         except Exception as exc:
-            self.manager.abandon_turn(session)
+            self._interrupt_manager_turn(state)
             self._final_capacity.release()
             error = self._final_start_error(state, exc)
             if error is exc:
@@ -431,6 +471,8 @@ class ServerAudioStreams:
         return error
 
     def _refresh_locked(self, state: _StreamState) -> None:
+        if state.vad_failed:
+            return  # Late preview/reply completion cannot revive partial VAD state.
         if state.preview_future is not None and state.preview_future.done():
             future, state.preview_future = state.preview_future, None
             try:
@@ -466,7 +508,6 @@ class ServerAudioStreams:
                 except VoiceAPIError:
                     pass
         if state.stage == "cooldown" and self._clock() >= state.cooldown_until:
-            state.vad.reset()
             state.stage = "listening"
 
     def playback(
@@ -493,7 +534,6 @@ class ServerAudioStreams:
                     raise VoiceAPIError(409, "playback_not_complete", "返答音声の生成が続いています。", True)
                 state.stage = "cooldown"
                 state.cooldown_until = self._clock() + COOLDOWN_SECONDS
-                state.vad.reset()
                 state.error = None
             else:
                 state.playback_failed = True

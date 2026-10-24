@@ -1,4 +1,4 @@
-"""Dashboard observation stays authenticated and never starts voice processing."""
+"""Development dashboard observation needs no credentials or voice processing."""
 
 import copy
 import unittest
@@ -9,19 +9,24 @@ from Programs.ServerSide.dashboard.settings_store import DEFAULT_SETTINGS
 
 
 class RuntimeHTTPTests(unittest.TestCase):
-    def handler(self, *, authorized=True):
+    def handler(self):
         handler = object.__new__(DashboardHandler)
         handler.path = "/api/v1/dashboard/runtime"
-        handler._api_auth_or_reject = Mock(return_value=authorized)
+        handler.headers = {}
         handler._send_json = Mock()
         return handler
 
-    def test_unauthenticated_request_cannot_observe_runtime(self):
-        handler = self.handler(authorized=False)
-        with patch("Programs.ServerSide.dashboard.runtime_status.get_runtime_status") as status:
+    def test_request_without_credentials_can_observe_runtime(self):
+        handler = self.handler()
+        with (
+            patch("Programs.ServerSide.dashboard.server._VOICE_SESSIONS", None),
+            patch("Programs.ServerSide.dashboard.server._AUDIO_STREAMS", None),
+            patch("Programs.ServerSide.dashboard.server.get_dashboard_settings", return_value=copy.deepcopy(DEFAULT_SETTINGS)),
+            patch("Programs.ServerSide.dashboard.runtime_status.get_runtime_status", return_value={"components": {}}) as status,
+        ):
             handler.do_GET()
-        status.assert_not_called()
-        handler._send_json.assert_not_called()
+        status.assert_called_once_with(None)
+        self.assertEqual(handler._send_json.call_args.args[0], 200)
 
     def test_empty_server_observation_does_not_start_sessions_or_models(self):
         handler = self.handler()

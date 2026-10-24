@@ -1,5 +1,7 @@
 # ServerSideの構成
 
+2026-10-24 最新指定: AndroidはWebView方式から、音声通話専用のネイティブアプリと直接TCP通信へ変更。[新しい接続・起動手順](VOICE_TCP.md)を優先する。以下のWeb構成説明は既存経路の記録として保持する。APKビルド・実機通話は未確認。
+
 Android Web MVPではスマートフォンが録音・再生とユーザー操作を行います。サーバーがSTT・LLM・TTS、会話セッション、相づち処理、MCP経由のPi 4しっぽ制御を担当します。AndroidはPi 4デバイスAPIへ直接接続しません。ダッシュボードはブラウザーで使うWeb画面です。`dashboard/` にはWeb画面とその配信・HTTP受付を置き、音声処理と会話制御は `STTLLMTTS/` に分けます。依存関係と環境設定例は `ServerSide/` 直下に置きます。
 
 必要な動作、未決事項、受け入れ条件、現行コードとの差分は [REQUIREMENTS.md](REQUIREMENTS.md) を参照してください。音声API契約は [VOICE_API.md](VOICE_API.md)、Raspberry Pi 4のハードウェア契約は [ClientSide/Raspi4Ver/RASPBERRY_PI_API.md](../ClientSide/Raspi4Ver/RASPBERRY_PI_API.md) を参照してください。

@@ -20,7 +20,6 @@ class TurnHTTPCompatibilityTests(unittest.TestCase):
         handler.rfile = io.BytesIO(audio)
         handler.wfile = io.BytesIO()
         handler.connection = Mock()
-        handler._api_auth_or_reject = Mock(return_value=True)
         handler._send_json = Mock()
         handler.send_response = Mock()
         handler.send_header = Mock()

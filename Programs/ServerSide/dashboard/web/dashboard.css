@@ -174,11 +174,6 @@ textarea { min-height: 74px; resize: vertical; line-height: 1.6; }
 .rule-check, .rule-shield { display: grid; width: 21px; height: 21px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #e9eee3; color: #78896a; font-size: 11px; font-weight: 700; }
 .rule-shield { background: #f4e8dd; color: #bd7650; font-size: 13px; }
 .required-tag { padding: 3px 7px; border-radius: 99px; background: #edf0e8; color: #738264; font-size: 8px; font-weight: 700; }
-.access-card { display: grid; grid-template-columns: 1fr minmax(190px, .8fr); align-items: center; gap: 20px; padding: 16px 19px; border: 1px solid #e9e5dd; border-radius: 11px; background: #f3f1ec; }
-.access-card h2 { margin-bottom: 4px; font-size: 13px; }
-.access-card p:not(.eyebrow) { margin: 0; color: #888379; font-size: 9px; line-height: 1.5; }
-.token-field { gap: 5px; }
-.token-field input { min-height: 35px; background: rgba(255,255,255,.8); }
 .form-actions { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 13px; margin-top: 2px; padding: 11px 12px; border: 1px solid #e8e3da; border-radius: 10px; background: rgba(250, 249, 246, .94); box-shadow: 0 -3px 16px rgba(49, 42, 32, .035); backdrop-filter: blur(10px); }
 #save-message { color: #8d887e; font-size: 9.5px; }
 #save-message.error { color: #a85b45; }
@@ -285,7 +280,6 @@ textarea { min-height: 74px; resize: vertical; line-height: 1.6; }
   .rule-row { gap: 8px; padding: 9px; }
   .rule-row strong { font-size: 9px; }
   .rule-row > div span { font-size: 8px; }
-  .access-card { grid-template-columns: 1fr; gap: 12px; padding: 13px; }
   .form-actions { align-items: stretch; flex-direction: column; padding: 9px; }
   #save-message { font-size: 8.5px; }
   .action-buttons { display: grid; grid-template-columns: 1fr 1.25fr; }

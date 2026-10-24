@@ -6,8 +6,11 @@ __pycache__/
 **/*.py[cod]
 dashboard/data/recorded_speech/
 dashboard/data/dashboard_settings.json
+dashboard/data/tail_settings.json
 dashboard/data/reference_voice.wav
 whisper/*
 /whisper
 !whisper/.gitkeep
 !whisper/README.md
+
+dashboard/data/acknowledgements/

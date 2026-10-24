@@ -36,12 +36,17 @@ const { browser, settle, assert } = require("./dashboard_browser_harness");
   }
 
   const overflow = browser({ deferPCM: true }); await overflow.begin(); overflow.emit();
-  for (let index = 0; index < 8; index++) overflow.emit();
+  for (let index = 0; index < 116; index++) overflow.emit();
+  await settle(); assert.equal(overflow.idle(), false, "The bounded input queue must include its in-flight frame and retain 117 complete frames");
+  overflow.emit();
   await settle(); assert.equal(overflow.idle(), true); assert.equal(overflow.streams[0].stopped, true);
-  assert.ok(overflow.status().includes("待機上限")); assert.equal(overflow.frames().length, 1);
+  assert.ok(overflow.status().includes("約30秒") && overflow.status().includes("上限")); assert.equal(overflow.frames().length, 1);
 
-  const exhausted = browser({ pcmFailures: 3 }); await exhausted.begin(); exhausted.emit(); await settle(); await exhausted.advance(750);
-  assert.equal(exhausted.idle(), true); assert.deepEqual(exhausted.frames().map((frame) => frame.options.headers["X-Audio-Sequence"]), ["0", "0", "0"]);
+  const recovering = browser({ pcmFailures: 3 }); await recovering.begin(); recovering.emit(); await settle(); await recovering.advance(750);
+  assert.equal(recovering.idle(), false, "Three short network failures must not exhaust the time-based PCM recovery budget");
+  await recovering.advance(1_000);
+  assert.equal(recovering.idle(), false); assert.equal(recovering.server().received.length, 1);
+  assert.deepEqual(recovering.frames().map((frame) => frame.options.headers["X-Audio-Sequence"]), ["0", "0", "0", "0"]);
 
   const wrongACK = browser({ deferPCM: true }); await wrongACK.begin(); wrongACK.emit(); await settle();
   wrongACK.pendingPCM[0].resolve({ session_id: "session-1", generation: 0, sequence: 99, next_sequence: 100, stage: "listening" }); await settle();

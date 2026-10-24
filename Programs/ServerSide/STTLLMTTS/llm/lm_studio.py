@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import aclosing
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Sequence
@@ -11,24 +12,29 @@ from typing import Any, AsyncIterator, Sequence
 import httpx
 from dotenv import load_dotenv
 
-from ..runtime import VoiceStageTimeout
 from ...dashboard.settings_store import get_dashboard_settings
 from ...dashboard.runtime_status import RuntimeObservation, component_configuration
+from ..runtime import VoiceStageTimeout
+from .tail_tools import stream_tail_chat
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
-COMPANION_SYSTEM_PROMPT = """あなたは、寝る前の寂しさに寄り添う短い会話相手です。
-日本語で、落ち着いた温かい言葉を1〜2文で返してください。相手の気持ちを決めつけず、眠ることを急かさず、会話を続けるためだけの質問を毎回しないでください。
-ユーザーがトントンを明確に希望したときだけ tap_tail を使い、止めてほしいと言われたら stop_tail を使ってください。寂しさを表明しただけで、動作を勝手に始めないでください。
-動作ツールの結果が成功したと確認できたときだけ、しっぽが動いたと伝えてください。サーボ角度や生のハードウェア制御は指定しないでください。
+COMPANION_SYSTEM_PROMPT = """あなたは、親しい人がそばで耳を傾けるように、自然な日本語で話を聴く会話相手です。会話の主役は相手です。自分が話すことより、相手が安心して話せることを優先してください。
+返答は原則1〜2文の短い話し言葉にします。「うん」「そっか」「それは大変だったね」などを文脈に合わせて使い、同じ相づちや定型句を繰り返さないでください。大げさに褒めたり、過度に丁寧な接客口調になったりしないでください。
+まず、相手が話した出来事や言葉の一部を自然に受け止めてください。感情は決めつけず、わからないことは想像で補わないでください。発言を毎回要約したり、そのままオウム返ししたりする必要はありません。
+解決策、助言、分析、説教は、相手から求められた時にだけ伝えてください。愚痴や悩みには、すぐに前向きな結論を出さず、そのまま耳を傾けてください。
+質問は、相手が続きを話しやすくなる時にだけ、短く一つまでにします。毎回質問で終えず、相づちや受け止めだけの返答も使ってください。話題を勝手に変えたり、自分の話へ持っていったりしないでください。
+眠ることや会話の継続を急かさないでください。「おやすみ」「もう終わり」と言われたら、引き留めず短く穏やかに応じてください。
+音声で読み上げる返答だけを出力してください。箇条書き、見出し、絵文字、括弧付きの動作説明は使わないでください。人間であるという虚偽の自己紹介や、実際にはない自分の体験談は作らないでください。
+トントンの頻度の変更を明確に依頼された時だけ、利用可能な頻度設定ツールを使ってください。寂しさを表明しただけで、設定を変えたり動作を始めたりしないでください。
+頻度設定の成功はPC側の設定保存を示します。ESP32の実機反映やしっぽの動作を確認したと伝えないでください。サーボ角度や生のハードウェア制御は指定しないでください。
 """
 
 
 @dataclass(frozen=True)
 class VoiceLLMConfig:
     base_url: str = "http://127.0.0.1:1234"
-    api_key: str = "lm-studio"
     model: str = "google/gemma-4-26b-a4b-qat"
     max_output_tokens: int = 160
     context_length: int = 4096
@@ -36,14 +42,12 @@ class VoiceLLMConfig:
     temperature: float = 0.7
     timeout_seconds: float = 45.0
     tail_mcp_enabled: bool = False
-    tail_mcp_plugin_id: str = "mcp/nen-gitsune-tail"
 
     @classmethod
     def from_env(cls) -> "VoiceLLMConfig":
         settings = get_dashboard_settings()["llm"]
         return cls(
             base_url=os.getenv("LM_STUDIO_BASE_URL", cls.base_url).rstrip("/"),
-            api_key=os.getenv("LM_STUDIO_API_KEY", cls.api_key),
             model=settings["model"],
             max_output_tokens=settings["max_output_tokens"],
             context_length=settings["context_length"],
@@ -51,7 +55,6 @@ class VoiceLLMConfig:
             temperature=settings["temperature"],
             timeout_seconds=settings["timeout_seconds"],
             tail_mcp_enabled=os.getenv("TAIL_MCP_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
-            tail_mcp_plugin_id=os.getenv("TAIL_MCP_PLUGIN_ID", cls.tail_mcp_plugin_id),
         )
 
 
@@ -63,17 +66,15 @@ class VoiceLLMReply:
 
 
 class VoiceLLMClient:
-    """LM Studio native REST APIを使う。ツールを有効にする場合も尾端用MCPだけに限定する。"""
+    """LM Studioと会話し、MCP有効時はPC側で頻度設定ツールを仲介する。"""
 
     def __init__(self, config: VoiceLLMConfig | None = None) -> None:
         self.config = config or VoiceLLMConfig.from_env()
         self._runtime_observation = RuntimeObservation(
             component_configuration(self.config.model, backend="lm_studio"), external=True,
         )
-        headers = {"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {}
         self.client = httpx.AsyncClient(
             base_url=self.config.base_url,
-            headers=headers,
             timeout=httpx.Timeout(self.config.timeout_seconds, connect=5.0),
             trust_env=False,
         )
@@ -130,15 +131,40 @@ class VoiceLLMClient:
             "store": False,
             "stream": stream,
         }
-        if self.config.tail_mcp_enabled:
-            payload["integrations"] = [
-                {
-                    "type": "plugin",
-                    "id": self.config.tail_mcp_plugin_id,
-                    "allowed_tools": ["tap_tail", "stop_tail", "get_tail_status"],
-                }
-            ]
         return payload
+
+    async def _stream_tail_response(self, payload: dict[str, Any]) -> AsyncIterator[str]:
+        self.last_stats = {}
+        self.last_tool_calls = ()
+        has_text = False
+        try:
+            async with aclosing(stream_tail_chat(
+                self.client,
+                model=self.config.model,
+                user_input=payload["input"],
+                system_prompt=payload["system_prompt"],
+                max_output_tokens=self.config.max_output_tokens,
+                context_length=self.config.context_length,
+                timeout_seconds=self.config.timeout_seconds,
+            )) as events:
+                async for event in events:
+                    if event.get("type") == "text_delta":
+                        delta = str(event.get("text", ""))
+                        has_text = has_text or bool(delta.strip())
+                        if delta:
+                            yield delta
+                    elif event.get("type") == "complete":
+                        self.last_tool_calls = tuple(event.get("tool_calls", ()))
+                        self.last_stats = {
+                            **event.get("stats", {}),
+                            "model": self.config.model,
+                            "reasoning": "off",
+                        }
+        except (httpx.TimeoutException, TimeoutError) as exc:
+            raise VoiceStageTimeout("llm", self.config.timeout_seconds) from exc
+        if not has_text:
+            raise RuntimeError("LM Studio returned no spoken response")
+        self._runtime_observation.success()
 
     async def generate_response(
         self,
@@ -173,6 +199,15 @@ class VoiceLLMClient:
         """STTで得た現在のユーザー発話を質問・依頼としてLM Studioへ送る。"""
         if not user_text.strip():
             raise ValueError("user_text must not be empty")
+
+        if self.config.tail_mcp_enabled:
+            payload = self._build_payload(user_text, history, system_prompt, speech_context=speech_context)
+            parts = [part async for part in self._stream_tail_response(payload)]
+            return VoiceLLMReply(
+                text="".join(parts).strip(),
+                tool_calls=self.last_tool_calls,
+                stats=dict(self.last_stats),
+            )
 
         try:
             response = await self.client.post(
@@ -234,10 +269,11 @@ class VoiceLLMClient:
             raise ValueError("user_text must not be empty")
         self._runtime_observation.begin()
         try:
-            async for delta in self._stream_response_impl(
+            async with aclosing(self._stream_response_impl(
                 user_text, history, system_prompt, speech_context,
-            ):
-                yield delta
+            )) as deltas:
+                async for delta in deltas:
+                    yield delta
         except Exception as error:
             self._runtime_observation.failure(error)
             raise
@@ -261,6 +297,11 @@ class VoiceLLMClient:
             stream=True,
             speech_context=speech_context,
         )
+        if self.config.tail_mcp_enabled:
+            async with aclosing(self._stream_tail_response(payload)) as deltas:
+                async for delta in deltas:
+                    yield delta
+            return
         event_data: list[str] = []
         response_parts: list[str] = []
         final_result: dict[str, Any] = {}

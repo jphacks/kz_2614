@@ -4,8 +4,7 @@ const API_SETTINGS = "/api/v1/dashboard/settings";
 const API_HEALTH = "/api/v1/dashboard/health";
 const API_REFERENCE_AUDIO = "/api/v1/dashboard/reference-audio";
 const API_RUNTIME = "/api/v1/dashboard/runtime";
-const TOKEN_KEY = "nen-gitsune-dashboard-token";
-const MAX_REFERENCE_WAV_BYTES = 10 * 1024 * 1024;
+const MAX_REFERENCE_WAV_BYTES = 100 * 1024 * 1024;
 
 const DEFAULTS = {
   vad: {
@@ -47,9 +46,6 @@ const DEFAULTS = {
 };
 
 const form = document.getElementById("settings-form");
-const tokenInput = document.getElementById("dashboard-token");
-const rememberedToken = sessionStorage.getItem(TOKEN_KEY);
-if (rememberedToken) tokenInput.value = rememberedToken;
 const saveButton = document.getElementById("save-button");
 const reloadButton = document.getElementById("reload-button");
 const resetButton = document.getElementById("reset-button");
@@ -94,21 +90,11 @@ function setMessage(message, kind = "") {
   if (kind) saveMessage.classList.add(kind);
 }
 
-function requestHeaders(extra = {}) {
-  const typedToken = tokenInput.value.trim();
-  if (typedToken) sessionStorage.setItem(TOKEN_KEY, typedToken);
-  const savedToken = typedToken || sessionStorage.getItem(TOKEN_KEY) || "";
-  const headers = { ...extra };
-  if (savedToken) headers.Authorization = `Bearer ${savedToken}`;
-  return headers;
-}
-
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
     cache: "no-store",
     credentials: "same-origin",
     ...options,
-    headers: requestHeaders(options.headers || {}),
   });
   let body = {};
   try {
@@ -356,22 +342,28 @@ async function loadReferenceAudio() {
     showReferenceAudio(await requestJson(API_REFERENCE_AUDIO));
   } catch (_) {
     document.getElementById("reference-audio-state").textContent = "読込失敗";
-    document.getElementById("reference-audio-info").textContent = "参照音声の状態を読み込めません。接続と管理トークンを確認してください。";
+    document.getElementById("reference-audio-info").textContent = "参照音声の状態を読み込めません。サーバーとの接続を確認してください。";
   }
 }
 
 async function uploadReferenceAudio() {
   const uploadButton = document.getElementById("upload-reference-audio");
-  if (!referenceFile) return;
+  if (!referenceFile) return false;
   if (!referenceFile.name.toLowerCase().endsWith(".wav")) {
     setMessage("PCM WAVファイルを選択してください。", "error");
-    return;
+    document.getElementById("reference-audio-state").textContent = "保存失敗";
+    document.getElementById("reference-audio-info").textContent = "拡張子が.wavのファイルを選択してください。";
+    return false;
   }
   if (referenceFile.size > MAX_REFERENCE_WAV_BYTES) {
-    setMessage("WAVファイルは10MB以下にしてください。", "error");
-    return;
+    setMessage("WAVファイルは100MB以下にしてください。", "error");
+    document.getElementById("reference-audio-state").textContent = "保存失敗";
+    document.getElementById("reference-audio-info").textContent = "WAVファイルは100MB以下にしてください。";
+    return false;
   }
   uploadButton.disabled = true;
+  document.getElementById("reference-audio-state").textContent = "保存中";
+  document.getElementById("reference-audio-state").classList.remove("saved");
   setMessage("WAVをサーバーへアップロードしています…");
   try {
     const info = await requestJson(API_REFERENCE_AUDIO, {
@@ -385,9 +377,13 @@ async function uploadReferenceAudio() {
     stateTitle.textContent = "参照音声をサーバーに保存しました";
     stateCopy.textContent = "新しい音声処理インスタンスからIrodori-TTSの参照音声として使われます。";
     setMessage("参照音声を保存しました。次の会話から利用されます。", "success");
+    return true;
   } catch (error) {
-    if (error.status === 401) setConnection("error", "管理トークンが必要です");
-    setMessage(error.message || "参照音声を保存できません。", "error");
+    const message = error.message || "参照音声を保存できません。";
+    document.getElementById("reference-audio-state").textContent = "保存失敗";
+    document.getElementById("reference-audio-info").textContent = message;
+    setMessage(message, "error");
+    return false;
   } finally {
     uploadButton.disabled = !referenceFile;
   }
@@ -405,7 +401,6 @@ async function deleteReferenceAudio() {
     stateCopy.textContent = "アップロード音声を削除しました。VOICE_TTS_REFERENCE_AUDIO が設定されている場合は、その音声が使われます。";
     setMessage("サーバーから参照音声を削除しました。", "success");
   } catch (error) {
-    if (error.status === 401) setConnection("error", "管理トークンが必要です");
     setMessage(error.message || "参照音声を削除できません。", "error");
     deleteButton.disabled = false;
   }
@@ -429,17 +424,10 @@ async function loadSettings() {
     setConnection("online", "設定サーバー接続済み");
     updateLoadedState();
   } catch (error) {
-    if (error.status === 401) {
-      setConnection("error", "管理トークンが必要です");
-      stateTitle.textContent = "管理トークンを入力してください";
-      stateCopy.textContent = "NENGITSUNE_DASHBOARD_TOKEN と同じ値を管理アクセス欄へ入力します。";
-      setMessage("認証されていません。トークンを確認してください。", "error");
-    } else {
-      setConnection("offline", "設定サーバー未接続");
-      stateTitle.textContent = "サーバー設定を読み込めません";
-      stateCopy.textContent = "ダッシュボードサーバーを起動し、接続先を確認してください。";
-      setMessage("設定は保存されていません。サーバーに接続してから再読み込みしてください。", "error");
-    }
+    setConnection("offline", "設定サーバー未接続");
+    stateTitle.textContent = "サーバー設定を読み込めません";
+    stateCopy.textContent = "ダッシュボードサーバーを起動し、接続先を確認してください。";
+    setMessage("設定は保存されていません。サーバーに接続してから再読み込みしてください。", "error");
   } finally {
     loading = false;
     reloadButton.disabled = false;
@@ -469,6 +457,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
   saveButton.disabled = true;
+  uploadButton.disabled = true;
   setMessage("サーバーへ設定を保存しています…");
   try {
     const result = await requestJson(API_SETTINGS, {
@@ -476,6 +465,7 @@ form.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(collectSettings()),
     });
+    if (referenceFile && !(await uploadReferenceAudio())) return;
     displaySettings(result.settings);
     setConnection("online", "設定サーバー接続済み");
     stateTitle.textContent = "サーバーに設定を保存しました";
@@ -484,15 +474,11 @@ form.addEventListener("submit", async (event) => {
     cancelRuntimeRequest();
     void loadRuntimeStatus();
   } catch (error) {
-    if (error.status === 401) {
-      setConnection("error", "管理トークンが必要です");
-      setMessage("認証されていません。管理トークンを確認してください。", "error");
-    } else {
-      setConnection("offline", "設定を保存できません");
-      setMessage(error.message || "設定を保存できません。サーバーとの接続を確認してください。", "error");
-    }
+    setConnection("offline", "設定を保存できません");
+    setMessage(error.message || "設定を保存できません。サーバーとの接続を確認してください。", "error");
   } finally {
     saveButton.disabled = false;
+    uploadButton.disabled = !referenceFile;
   }
 });
 
@@ -508,19 +494,13 @@ referenceInput.addEventListener("change", () => {
   uploadButton.disabled = !referenceFile;
   if (referenceFile) {
     document.getElementById("reference-audio-info").textContent = `選択中: ${referenceFile.name} · ${formatBytes(referenceFile.size)}`;
-    setMessage("選択したWAVをサーバーへ保存できます。");
+    document.getElementById("reference-audio-state").textContent = "未保存";
+    document.getElementById("reference-audio-state").classList.remove("saved");
+    setMessage("参照音声は未保存です。「設定を保存」または音声欄の「サーバーに保存」で送信します。");
   }
 });
 uploadButton.addEventListener("click", uploadReferenceAudio);
 document.getElementById("delete-reference-audio").addEventListener("click", deleteReferenceAudio);
-tokenInput.addEventListener("input", () => {
-  const token = tokenInput.value.trim();
-  if (token) sessionStorage.setItem(TOKEN_KEY, token);
-  else sessionStorage.removeItem(TOKEN_KEY);
-  cancelRuntimeRequest();
-  if (runtimeSummary) runtimeSummary.textContent = "管理トークン変更後の状態は未確認です。入力を確定すると更新します。";
-});
-tokenInput.addEventListener("change", () => { void loadSettings(); void loadRuntimeStatus(); });
 vadSensitivity.addEventListener("change", () => {
   const preset = VAD_PRESETS[vadSensitivity.value];
   if (preset) {
@@ -542,17 +522,14 @@ window.addEventListener("pagehide", () => { runtimePageActive = false; cancelRun
 window.addEventListener("pageshow", () => { runtimePageActive = true; void loadRuntimeStatus(); });
 form.elements.namedItem("behavior.custom_instruction").addEventListener("input", updateInstructionCount);
 for (const field of form.elements) {
-  if (field !== tokenInput) {
-    field.addEventListener("input", () => {
-      if (!loading) setMessage("未保存の変更があります。");
-    });
-    field.addEventListener("change", () => {
-      if (!loading) setMessage("未保存の変更があります。");
-    });
-  }
+  if (field === referenceInput) continue;
+  field.addEventListener("input", () => {
+    if (!loading) setMessage("未保存の変更があります。");
+  });
+  field.addEventListener("change", () => {
+    if (!loading) setMessage("未保存の変更があります。");
+  });
 }
-
-tokenInput.value = sessionStorage.getItem(TOKEN_KEY) || "";
 checkHealth();
 loadSettings();
 loadRuntimeStatus();

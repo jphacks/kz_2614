@@ -200,7 +200,7 @@ class ClientObservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(status["precision"])
 
     async def test_llm_success_observes_instance_but_not_device(self):
-        client = VoiceLLMClient(VoiceLLMConfig(api_key="secret", model="requested"))
+        client = VoiceLLMClient(VoiceLLMConfig(model="requested"))
         await client.client.aclose()
         def respond(request):
             self.assertEqual(client.runtime_status()["state"], "processing")
@@ -220,7 +220,7 @@ class ClientObservationTests(unittest.IsolatedAsyncioTestCase):
             await client.close()
 
     async def test_llm_failure_is_recorded_safely(self):
-        client = VoiceLLMClient()
+        client = VoiceLLMClient(VoiceLLMConfig(tail_mcp_enabled=False))
         await client.client.aclose()
         client.client = httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(
             lambda request: httpx.Response(401, json={"error": "secret"}),
@@ -235,7 +235,7 @@ class ClientObservationTests(unittest.IsolatedAsyncioTestCase):
             await client.close()
 
     async def test_llm_stream_reports_processing_until_final_result(self):
-        client = VoiceLLMClient()
+        client = VoiceLLMClient(VoiceLLMConfig(tail_mcp_enabled=False))
         await client.client.aclose()
         content = (
             'data: {"type":"message.delta","content":"返事"}\n\n'

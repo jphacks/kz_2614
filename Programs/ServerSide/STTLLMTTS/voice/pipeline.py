@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import aclosing
 import inspect
 import logging
 import re
@@ -318,37 +319,38 @@ class VoicePipeline:
                 character_count = 0
                 llm_started = time.perf_counter()
                 try:
-                    async for delta in self.llm.stream_response(
+                    async with aclosing(self.llm.stream_response(
                         transcription.text,
                         self._history,
                         system_prompt=self.system_prompt,
                         speech_context=vocal_analysis,
-                    ):
-                        remaining = max_response_characters - character_count
-                        if remaining <= 0:
-                            continue
-                        delta = delta[:remaining]
-                        character_count += len(delta)
-                        response_parts.append(delta)
-                        on_event({"type": "text_delta", "text": delta})
-                        buffer += delta
-                        while True:
-                            terminal = re.search(r"[。！？!?]", buffer)
-                            comma = re.search(r"、", buffer)
-                            boundaries = [
-                                match.end()
-                                for match in (terminal, comma)
-                                if match and (match is terminal or match.end() >= 28)
-                            ]
-                            if boundaries:
-                                boundary = min(boundaries)
-                            elif len(buffer) >= 56:
-                                boundary = 56
-                            else:
-                                break
-                            phrase, buffer = buffer[:boundary], buffer[boundary:]
-                            if phrase.strip():
-                                await speech_queue.put(phrase.strip())
+                    )) as deltas:
+                        async for delta in deltas:
+                            remaining = max_response_characters - character_count
+                            if remaining <= 0:
+                                continue
+                            delta = delta[:remaining]
+                            character_count += len(delta)
+                            response_parts.append(delta)
+                            on_event({"type": "text_delta", "text": delta})
+                            buffer += delta
+                            while True:
+                                terminal = re.search(r"[。！？!?]", buffer)
+                                comma = re.search(r"、", buffer)
+                                boundaries = [
+                                    match.end()
+                                    for match in (terminal, comma)
+                                    if match and (match is terminal or match.end() >= 28)
+                                ]
+                                if boundaries:
+                                    boundary = min(boundaries)
+                                elif len(buffer) >= 56:
+                                    boundary = 56
+                                else:
+                                    break
+                                phrase, buffer = buffer[:boundary], buffer[boundary:]
+                                if phrase.strip():
+                                    await speech_queue.put(phrase.strip())
                     if buffer.strip():
                         await speech_queue.put(buffer.strip())
                 except asyncio.CancelledError:

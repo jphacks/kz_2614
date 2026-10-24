@@ -57,11 +57,6 @@
           <button id="reload-button" class="button button-quiet" type="button">再読み込み</button>
         </section>
 
-        <section id="server-access" class="access-card" aria-labelledby="server-access-title">
-          <div><p class="eyebrow">SERVER ACCESS</p><h2 id="server-access-title">管理アクセス</h2><p>ネットワーク越しに開く場合は、サーバー起動時に設定した管理トークンを入力します。音声会話と設定の通信に使います。</p></div>
-          <label class="field token-field"><span class="field-label">管理トークン <small>必要な場合のみ</small></span><input id="dashboard-token" type="password" autocomplete="current-password" placeholder="トークンはこのタブ内だけに保存"></label>
-        </section>
-
         <section id="voice-call" class="voice-call-card" aria-labelledby="voice-call-title">
           <div class="voice-call-heading">
             <div class="section-title-row">
@@ -92,6 +87,15 @@
               </div>
               <span id="voice-input-gain-help" class="field-hint">会話中も変更できます。周囲がうるさいときは小さく、小さい声は大きく調整してください。</span>
             </div>
+          </div>
+          <div class="field">
+            <label><input id="voice-heartbeat-enabled" type="checkbox"> 心音をOnにする</label>
+            <label for="voice-heartbeat-volume">心音の音量</label>
+            <input id="voice-heartbeat-volume" type="range" min="0" max="100" value="20" aria-label="心音の音量">
+            <span id="voice-heartbeat-status" role="status" aria-live="polite">心音はOffです。</span>
+            <audio id="voice-heartbeat-audio" src="/sounds/heartbeat.ogg" loop preload="none" hidden></audio>
+            <span class="field-hint">Onの間は会話中の待ち受け・返答に心音を重ねます。</span>
+            <small>心音: <a href="https://commons.wikimedia.org/wiki/File:Heartbeat.ogg" target="_blank" rel="noopener">Heartbeat / HerbertBoland</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>（音量調整・繰り返し再生）</small>
           </div>
           <div class="voice-call-actions">
             <button id="voice-start-button" class="button button-primary" type="button">会話を始める</button>
@@ -268,7 +272,7 @@
                   <button id="upload-reference-audio" class="button button-primary" type="button" disabled>サーバーに保存</button>
                   <button id="delete-reference-audio" class="button button-quiet" type="button" disabled>削除</button>
                 </div>
-                <span class="field-hint">PCM WAV、16-bit、モノラル／ステレオ、16〜48kHz、1〜30秒、最大10MB。保存音声は次の音声処理インスタンスからTTSへ渡されます。</span>
+                <span class="field-hint">PCM WAV、16-bit、モノラル／ステレオ、16〜48kHz、1秒〜5分、最大100MB。保存音声は次の会話から使い、声質抽出には先頭の短い区間（既定5秒）を使用します。</span>
               </div>
               <div class="inline-note"><span aria-hidden="true">♪</span> 参照音声はサーバーに保存され、TTS生成時にIrodori-TTSへ送信されます。不要になったら削除してください。</div>
             </section>

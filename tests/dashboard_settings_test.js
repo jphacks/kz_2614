@@ -11,8 +11,9 @@ const settle = () => new Promise(setImmediate);
 const defaults = {
   vad: { threshold: 0.65, end_threshold: 0.35, min_speech_ms: 384, silence_ms: 896, preroll_ms: 640, max_speech_seconds: 20 },
   stt: { model_id: "whisper", language: "ja", device: "cuda", compute_type: "float16", vad_filter: true },
-  tts: { checkpoint: "irodori-v4", caption: "静かな声" },
-  behavior: { persona: "gentle", response_length: "short", question_frequency: "rarely", custom_instruction: "", backchannel_enabled: true },
+  llm: { model: "local-llm", max_output_tokens: 160, context_length: 4096, max_history_messages: 8, temperature: 0.7, timeout_seconds: 45 },
+  tts: { checkpoint: "irodori-v4", caption: "静かな声", output_volume_percent: 100 },
+  behavior: { persona: "gentle", response_length: "short", question_frequency: "rarely", custom_instruction: "", backchannel_enabled: true, ack_delay_seconds: 0.9 },
 };
 const runtime = {
   checked_at: "2026-10-24T08:00:00Z", active_sessions: 1,
@@ -206,18 +207,17 @@ async function runtimeFailureAndTimeoutDoNotBlockSettings() {
   assert.equal(b.element("save-button").disabled, false);
 }
 
-async function hiddenPagesAndTokenChangesFenceOldResponses() {
+async function hiddenPagesFenceOldResponsesWithoutAuthentication() {
   const b = browser(); await settle();
   b.setRuntime("pending", runtime, true); b.element("runtime-refresh").fire("click"); await settle();
   const old = b.pendingRuntime.shift();
-  b.element("dashboard-token").value = "new-token";
-  b.element("dashboard-token").fire("input"); b.element("dashboard-token").fire("change"); await settle();
+  await b.hidden(true);
   const stale = structuredClone(runtime); stale.components.tts.configured.model = "stale-secret-model";
   old.resolve(stale); await settle();
   assert.doesNotMatch(b.element("runtime-tts-configured").textContent, /stale-secret/);
-  b.setRuntime("ok"); await b.tick(0);
+  b.setRuntime("ok"); await b.hidden(false);
   const lastRuntime = b.calls.filter((call) => call.url.endsWith("/runtime")).at(-1);
-  assert.equal(lastRuntime.request.headers.Authorization, "Bearer new-token");
+  assert.equal(lastRuntime.request.headers?.Authorization, undefined);
   assert.equal(b.stats.maxRuntimeInFlight, 1);
   await b.hidden(true); const count = b.stats.runtimeCalls; await b.tick(30000);
   assert.equal(b.stats.runtimeCalls, count);
@@ -246,7 +246,7 @@ async function malformedSnapshotAndAbortedJsonBodyKeepLastObservation() {
 }
 
 (async () => {
-  for (const test of [savedVadIsNumericAndLegacySettingsRemainUsable, invalidVadCannotBeSaved, arbitraryValidCustomVadValuesRemainSavable, runtimeDistinguishesConfiguredAndObservedState, runtimeFailureAndTimeoutDoNotBlockSettings, hiddenPagesAndTokenChangesFenceOldResponses, malformedSnapshotAndAbortedJsonBodyKeepLastObservation]) {
+  for (const test of [savedVadIsNumericAndLegacySettingsRemainUsable, invalidVadCannotBeSaved, arbitraryValidCustomVadValuesRemainSavable, runtimeDistinguishesConfiguredAndObservedState, runtimeFailureAndTimeoutDoNotBlockSettings, hiddenPagesFenceOldResponsesWithoutAuthentication, malformedSnapshotAndAbortedJsonBodyKeepLastObservation]) {
     await test(); process.stdout.write(`PASS ${test.name}\n`);
   }
 })().catch((error) => { console.error(error); process.exitCode = 1; });

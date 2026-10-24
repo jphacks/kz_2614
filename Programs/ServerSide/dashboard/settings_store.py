@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import Any
 
 
-MAX_REFERENCE_WAV_BYTES = 10 * 1024 * 1024
+MAX_REFERENCE_WAV_BYTES = 100 * 1024 * 1024
 MIN_REFERENCE_SECONDS = 1.0
-MAX_REFERENCE_SECONDS = 30.0
+MAX_REFERENCE_SECONDS = 300.0
 
 
 def _settings_path() -> Path:
@@ -225,7 +225,7 @@ def _reference_wav_info(audio: bytes) -> dict[str, Any]:
         raise ValueError("サンプルレートは16kHzから48kHzにしてください。")
     duration = frame_count / sample_rate
     if not MIN_REFERENCE_SECONDS <= duration <= MAX_REFERENCE_SECONDS:
-        raise ValueError("参照音声の長さは1秒から30秒にしてください。")
+        raise ValueError("参照音声の長さは1秒から5分にしてください。")
     expected_data_bytes = frame_count * channels * sample_width
     if expected_data_bytes > len(audio):
         raise ValueError("WAVの音声データが途中で切れています。")
@@ -260,9 +260,9 @@ def get_reference_voice_info() -> dict[str, Any]:
 def save_reference_voice(audio: bytes) -> dict[str, Any]:
     info = _reference_wav_info(audio)
     path = reference_voice_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: Path | None = None
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent, delete=False) as temporary_file:
             temporary_file.write(audio)
             temporary_path = Path(temporary_file.name)

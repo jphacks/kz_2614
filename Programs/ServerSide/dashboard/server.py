@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import hmac
 import ipaddress
 import json
 import logging
 import math
 import mimetypes
-import os
 import re
 import tempfile
 import threading
@@ -31,6 +29,7 @@ from .settings_store import (
     save_reference_voice,
     save_settings,
 )
+from .tail_settings import get_tail_frequency, set_tail_frequency
 from ..STTLLMTTS.voice.sessions import (
     MAX_AUDIO_BYTES,
     TURN_TIMEOUT_SECONDS,
@@ -123,19 +122,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
     server_version = "NenGitsuneDashboard/1.0"
     protocol_version = "HTTP/1.1"
 
-    @property
-    def dashboard_server(self) -> "DashboardHTTPServer":
-        return self.server  # type: ignore[return-value]
-
-    def _authorized(self) -> bool:
-        expected = self.dashboard_server.dashboard_token
-        if not expected:
-            return True
-        supplied = self.headers.get("Authorization", "")
-        if not supplied.startswith("Bearer "):
-            return False
-        return hmac.compare_digest(supplied[7:], expected)
-
     def _send_bytes(self, status: int, body: bytes, content_type: str) -> None:
         self.send_response(status)
         # HTTP/1.1 errors may reject an upload before its body is consumed.
@@ -161,22 +147,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
         self._send_bytes(status, body, "application/json; charset=utf-8")
 
-    def _api_auth_or_reject(self) -> bool:
-        if self._authorized():
-            return True
-        self._send_json(401, {"error": "unauthorized", "message": "管理トークンを確認してください。"})
-        return False
-
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         route = urlsplit(self.path).path
+        if route == "/api/v1/tail/frequency":
+            try:
+                self._send_json(200, get_tail_frequency())
+            except (OSError, RuntimeError, ValueError):
+                self._send_json(500, {"error": "tail_settings_unavailable", "message": "トントンの頻度を取得できません。"})
+            return
         events_match = _SESSION_EVENTS_ROUTE.fullmatch(route)
         if events_match:
             self._stream_audio_events(events_match.group(1))
             return
         stream_match = _SESSION_STREAM_ROUTE.fullmatch(route)
         if stream_match:
-            if not self._api_auth_or_reject():
-                return
             try:
                 generation = self._stream_header_integer("X-Voice-Generation")
                 self._send_json(200, _audio_streams().get_status(stream_match.group(1), generation))
@@ -184,8 +168,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_voice_error(exc)
             return
         if route == "/api/v1/dashboard/settings":
-            if not self._api_auth_or_reject():
-                return
             try:
                 self._send_json(
                     200,
@@ -201,14 +183,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if route == "/api/v1/dashboard/health":
-            if not self._api_auth_or_reject():
-                return
             self._send_json(200, {"status": "ok", "settings_api": "ready"})
             return
 
         if route == "/api/v1/dashboard/runtime":
-            if not self._api_auth_or_reject():
-                return
             try:
                 from .runtime_status import get_runtime_status
 
@@ -231,8 +209,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if route == "/api/v1/dashboard/reference-audio":
-            if not self._api_auth_or_reject():
-                return
             try:
                 self._send_json(200, get_reference_voice_info())
             except (RuntimeError, ValueError):
@@ -241,8 +217,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if route == "/api/v1/voice/status":
-            if not self._api_auth_or_reject():
-                return
             try:
                 self._send_json(200, _voice_sessions().status())
             except VoiceAPIError as exc:
@@ -251,8 +225,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         progress_match = _SESSION_PROGRESS_ROUTE.fullmatch(route)
         if progress_match:
-            if not self._api_auth_or_reject():
-                return
             try:
                 self._send_json(200, _voice_sessions().get_turn_status(*progress_match.groups()))
             except VoiceAPIError as exc:
@@ -261,8 +233,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         audio_match = _SESSION_AUDIO_ROUTE.fullmatch(route)
         if audio_match:
-            if not self._api_auth_or_reject():
-                return
             try:
                 audio, media_type = _voice_sessions().get_speech(*audio_match.groups())
                 self._send_bytes(200, audio, media_type)
@@ -283,8 +253,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._receive_playback_event(playback_match.group(1))
             return
         if route == "/api/v1/voice/sessions":
-            if not self._api_auth_or_reject():
-                return
             try:
                 self._send_json(201, _voice_sessions().create_session())
             except VoiceAPIError as exc:
@@ -332,13 +300,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _stream_audio_events(self, session_id: str) -> None:
         """Receive reply audio independently of the continuously uploaded PCM."""
-        if not self._api_auth_or_reject():
-            return
         acquired = False
         started = False
         cursor = 0
         generation = 0
         try:
+            from ..STTLLMTTS.voice.audio_frames import PCM_STREAM_PROFILE, iter_audio_frames
+            audio_profile = self.headers.get("X-Voice-Audio-Profile", "")
+            if audio_profile not in {"", PCM_STREAM_PROFILE}:
+                raise VoiceAPIError(400, "invalid_audio_profile", "返答音声の送信形式を確認してください。")
             generation = self._stream_header_integer("X-Voice-Generation")
             values = parse_qs(urlsplit(self.path).query, keep_blank_values=True).get("after", ["0"])
             try:
@@ -361,7 +331,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             while True:
                 if pending:
                     for event in pending:
-                        self._write_ndjson_event(event)
+                        outgoing = iter_audio_frames(event) if audio_profile else (event,)
+                        for frame in outgoing:
+                            self._write_ndjson_event(frame)
                         cursor = int(event["cursor"])
                 else:
                     self._write_ndjson_event({
@@ -422,8 +394,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             pass
 
     def _receive_pcm_frame(self, session_id: str) -> None:
-        if not self._api_auth_or_reject():
-            return
         try:
             parts = [part.strip().lower() for part in self.headers.get("Content-Type", "").split(";")]
             parameters = dict(part.split("=", 1) for part in parts[1:] if "=" in part)
@@ -448,8 +418,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_voice_error(exc)
 
     def _receive_playback_event(self, session_id: str) -> None:
-        if not self._api_auth_or_reject():
-            return
         try:
             if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
                 raise VoiceAPIError(415, "unsupported_playback_format", "再生通知はapplication/jsonで送信してください。")
@@ -468,8 +436,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_voice_error(exc)
 
     def _receive_transcription(self, session_id: str) -> None:
-        if not self._api_auth_or_reject():
-            return
         try:
             raw_generation = self.headers.get("X-Voice-Generation")
             if raw_generation is None:
@@ -528,8 +494,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 temporary_path.unlink(missing_ok=True)
 
     def _receive_voice_turn(self, session_id: str, turn_id: str) -> None:
-        if not self._api_auth_or_reject():
-            return
         audio_format = _audio_upload_format(self.headers.get("Content-Type", ""))
         if audio_format is None:
             self._send_json(
@@ -586,7 +550,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except VoiceAPIError as exc:
             self._send_voice_error(exc)
         except OSError:
-            manager.abandon_turn(session)
+            manager.abandon_turn(session, turn_id=turn_id)
             LOGGER.warning("Voice request could not use a temporary audio file")
             self._send_json(500, {"error": "temporary_audio_unavailable", "message": "音声を一時処理できません。"})
         finally:
@@ -621,7 +585,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    manager.timeout_stream_turn(session)
+                    manager.timeout_stream_turn(session, generation=generation, turn_id=turn_id)
                     write_event(
                         {
                             "type": "error",
@@ -711,8 +675,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
         route = urlsplit(self.path).path
         session_match = _SESSION_ROUTE.fullmatch(route)
         if session_match:
-            if not self._api_auth_or_reject():
-                return
             try:
                 stopped = _voice_sessions().stop_session(session_match.group(1))
                 if _AUDIO_STREAMS is not None:
@@ -723,8 +685,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route != "/api/v1/dashboard/reference-audio":
             self._send_json(404, {"error": "not_found"})
-            return
-        if not self._api_auth_or_reject():
             return
         try:
             delete_reference_voice()
@@ -742,13 +702,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         route = urlsplit(self.path).path
+        if route == "/api/v1/tail/frequency":
+            self._receive_tail_frequency()
+            return
         if route == "/api/v1/dashboard/reference-audio":
             self._upload_reference_audio()
             return
         if route != "/api/v1/dashboard/settings":
             self._send_json(404, {"error": "not_found"})
-            return
-        if not self._api_auth_or_reject():
             return
 
         try:
@@ -773,9 +734,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         self._send_json(200, {"settings": settings, "applies": "new_pipeline_instance"})
 
+    def _receive_tail_frequency(self) -> None:
+        try:
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                raise VoiceAPIError(415, "unsupported_media_type", "頻度はapplication/jsonで送信してください。")
+            try:
+                payload = json.loads(self._stream_body(MAX_REQUEST_BYTES))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise VoiceAPIError(400, "invalid_tail_frequency", "頻度のJSONを確認してください。") from exc
+            if not isinstance(payload, dict) or set(payload) != {"rate_hz"}:
+                raise VoiceAPIError(400, "invalid_tail_frequency", "rate_hzだけを指定してください。")
+            try:
+                result = set_tail_frequency(payload["rate_hz"])
+            except ValueError as exc:
+                raise VoiceAPIError(400, "invalid_tail_frequency", "頻度は0.3〜1.0Hzで指定してください。") from exc
+            self._send_json(200, result)
+        except VoiceAPIError as exc:
+            self._send_voice_error(exc)
+        except (OSError, RuntimeError):
+            self._send_json(500, {"error": "tail_settings_unavailable", "message": "トントンの頻度を保存できません。"})
+
     def _upload_reference_audio(self) -> None:
-        if not self._api_auth_or_reject():
-            return
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
         if content_type not in {"audio/wav", "audio/x-wav", "application/octet-stream"}:
             self._send_json(415, {"error": "unsupported_media_type", "message": "WAVファイルを選択してください。"})
@@ -834,8 +813,7 @@ class DashboardHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address: tuple[str, int], dashboard_token: str) -> None:
-        self.dashboard_token = dashboard_token
+    def __init__(self, address: tuple[str, int]) -> None:
         super().__init__(address, DashboardHandler)
 
 
@@ -845,14 +823,8 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: loopback only)")
     parser.add_argument("--port", type=int, default=8765, help="HTTP port (default: 8765)")
     args = parser.parse_args()
-    token = os.getenv("NENGITSUNE_DASHBOARD_TOKEN", "").strip()
-    if not _is_loopback(args.host) and not token:
-        parser.error("NENGITSUNE_DASHBOARD_TOKEN is required when binding outside loopback")
-    if not _is_loopback(args.host) and len(token) < 32:
-        parser.error("NENGITSUNE_DASHBOARD_TOKEN must be at least 32 characters outside loopback")
-
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    server = DashboardHTTPServer((args.host, args.port), token)
+    server = DashboardHTTPServer((args.host, args.port))
     LOGGER.info("Dashboard listening at http://%s:%d/", args.host, args.port)
     if not _is_loopback(args.host):
         LOGGER.warning("Use a trusted network and HTTPS reverse proxy for remote browser access")

@@ -20,9 +20,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 SERVER_DIR = PROJECT_DIR / "Programs" / "ServerSide"
 
 
-def api_models(base_url: str, api_key: str) -> set[str] | None:
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-    request = Request(f"{base_url}/v1/models", headers=headers)
+def api_models(base_url: str) -> set[str] | None:
+    request = Request(f"{base_url}/v1/models")
     try:
         with build_opener(ProxyHandler({})).open(request, timeout=3) as response:
             payload = json.load(response)
@@ -48,7 +47,6 @@ def loaded_models(lms: Path) -> set[str] | None:
 
 def ensure_lm_studio() -> None:
     base_url = os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234").rstrip("/")
-    api_key = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
     model = os.getenv("VOICE_LLM_MODEL", "google/gemma-4-26b-a4b-qat")
     context_length = int(os.getenv("VOICE_LLM_CONTEXT_LENGTH", "4096"))
     gpu_ratio = float(os.getenv("VOICE_LLM_GPU_RATIO", "0.05"))
@@ -56,7 +54,7 @@ def ensure_lm_studio() -> None:
         raise RuntimeError("VOICE_LLM_CONTEXT_LENGTH と VOICE_LLM_GPU_RATIO の設定を確認してください。")
 
     lms = Path(os.getenv("LMS_BIN", str(Path.home() / ".lmstudio/bin/lms"))).expanduser()
-    available = api_models(base_url, api_key)
+    available = api_models(base_url)
     if not lms.is_file():
         if available is not None and model in available:
             return
@@ -109,7 +107,7 @@ def ensure_lm_studio() -> None:
 
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
-        available = api_models(base_url, api_key)
+        available = api_models(base_url)
         if available is not None and model in available:
             return
         time.sleep(1)

@@ -1,5 +1,9 @@
 # クライアント要件定義
 
+2026-10-24 最新指定: AndroidはWebView方式から、音声通話専用のネイティブアプリと直接TCP通信へ変更。[新しい接続・起動手順](../ServerSide/VOICE_TCP.md)を優先する。以下のWeb構成説明は既存経路の記録として保持する。APKビルド・実機通話は未確認。
+
+2026-10-24の追加指定: 現在の機器側実装はESP32の別担当に委ね、PCはMCP経由の希望頻度設定だけを提供する。[頻度API仕様](../ServerSide/TAIL_FREQUENCY_API.md) の成功はPCの保存を示し、AndroidやESP32での実機反映確認とは区別する。以下のPi 4操作は従来の将来案として保持する。
+
 レビュー反映日: 2026-10-24。Android Web MVPではスマートフォンが録音・再生、設定・操作、サーバー状態表示を担当する。アプリサーバーがSTT・LLM・TTS・セッション管理に加え、相づちの選択・生成準備・配信判断とPi 4しっぽ制御を担当する。Androidは相づちを生成・選択せず、Pi 4へ直接接続しない。Debug APKのHWV33への導入・起動とAndroid Studioのデバッガー接続を確認したが、WebView・音声機能の実機確認は未完了。
 
 ## 1. 役割と対象
@@ -55,7 +59,7 @@ AndroidアプリのWebViewは、同一LocalNET内にあるServerSideのURLを開
 
 ## 6. サーバーとの契約
 
-サーバー側の [音声会話API契約](../ServerSide/VOICE_API.md) と [外部インターフェース要件](../ServerSide/REQUIREMENTS.md#6-クライアントとの契約) に従う。セッション開始、Raw audio upload、NDJSON逐次応答、DELETE停止を実装した。入力はWebM/Ogg/WAV/MP4、最大25MB・60秒で、管理Bearer tokenを使う。クライアントへサーバー上の任意ファイルパス、サービス用APIキー、Pi 4接続情報を渡さない。PCM入力には `/audio-stream` と再生結果通知APIを追加した。PCM経路のWeb UIは独立した `/audio-stream/events?after=cursor` からNDJSONの差分と文節音声を受信する。返答生成・再生中もPCM送信を継続する。NDJSON逐次返答は従来のファイル送信APIにも残す。サーバー経由のしっぽ操作APIは未実装。
+サーバー側の [音声会話API契約](../ServerSide/VOICE_API.md) と [外部インターフェース要件](../ServerSide/REQUIREMENTS.md#6-クライアントとの契約) に従う。セッション開始、Raw audio upload、NDJSON逐次応答、DELETE停止を実装した。入力はWebM/Ogg/WAV/MP4、最大25MB・60秒。クライアントへサーバー上の任意ファイルパス、内部サービス設定、Pi 4接続情報を渡さない。PCM入力には `/audio-stream` と再生結果通知APIを追加した。PCM経路のWeb UIは独立した `/audio-stream/events?after=cursor` からNDJSONの差分と文節音声を受信する。返答生成・再生中もPCM送信を継続する。NDJSON逐次返答は従来のファイル送信APIにも残す。サーバー経由のしっぽ操作APIは未実装。
 
 参照音声は `PUT /api/v1/dashboard/reference-audio` を使い、PCM WAVの形式・長さ・サイズをサーバー側で検証する。参照音声の保存先パスはクライアントに指定させない。
 
@@ -67,7 +71,7 @@ AndroidアプリのWebViewは、同一LocalNET内にあるServerSideのURLを開
 | 画面ロック・バックグラウンド | 暫定運用は画面表示中。画面非表示で端末音声を止め、セッション終了を要求するコードを追加 | 対象端末で画面ロック・アプリ切替時の停止と、復帰後に手動再開できることを確認 |
 | 録音操作 | 自動PCM送信とサーバーVADを実装。稼働中画面への反映は未実施 | 対象端末で権限、録音上限、録音中の再生回り込みを確認 |
 | 音声形式・容量 | API契約はWebM/Ogg/WAV/MP4、25MB・60秒。サーバーが16kHzモノラルへ復号し無音区間で発話分割 | 実端末の録音形式、サーバー分割・STT、TTS音声逐次再生を確認 |
-| HTTPS・認証 | Android接続先はHTTPS限定、APIは管理Bearer tokenを使用 | HTTPS終端、設定・音声APIへの接続、認証の実端末確認 |
+| HTTPS・接続 | Android接続先はHTTPS限定。設定・音声APIは資格情報の入力なしで利用 | HTTPS終端、設定・音声APIへの接続を実端末で確認 |
 | 応答・停止 | サーバー総処理期限は180秒。端末側の停止処理を実装 | 実応答時間、停止競合、切断・再接続を確認 |
 | 相づち | サーバーは候補音声を事前生成し、遅延時にNDJSONで配信。Android Webは返答TTSと順番に再生 | サーバーが発話・停止世代に応じて配信し、Android実機で再生順・停止を確認。再生完了通知APIは未実装 |
 

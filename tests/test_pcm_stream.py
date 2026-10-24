@@ -161,7 +161,7 @@ class FakeManager:
     def cancel_stream_turn(self, session_id, generation):
         self.stream_cancelled.set()
 
-    def timeout_stream_turn(self, session):
+    def timeout_stream_turn(self, session, **kwargs):
         self.active = False
         self.stream_cancelled.set()
 
@@ -190,8 +190,18 @@ class FakeManager:
         if self.session.busy:
             raise VoiceAPIError(409, "session_busy", "busy")
         self.session.busy = True
+        self.session.active_turn_id = turn_id
         self.session.turn_ids.add(turn_id)
         return self.session, self.session.generation
+
+    def interrupt_turn(self, session_id, generation, turn_id):
+        self.get_active_session(session_id, generation)
+        if self.session.active_turn_id != turn_id:
+            return False
+        self.stream_cancelled.set()
+        self.session.active_turn_id = None
+        self.session.busy = False
+        return True
 
     def process_turn(self, session, generation, turn_id, path):
         self.paths.append(path)
@@ -303,7 +313,7 @@ class PCMStreamTests(unittest.TestCase):
             self.push(original)
             self.assertEqual(feed.call_args.args[0], original)
 
-    def test_duplicate_sequence_and_discarded_input_do_not_apply_gain_again(self):
+    def test_duplicate_gain_is_not_reapplied_and_reply_pcm_still_reaches_vad(self):
         with patch.object(self.streams, "_apply_input_gain", wraps=self.streams._apply_input_gain) as apply:
             self.push(VOICE, input_gain=0.5)
             duplicate = self.streams.push_audio(self.manager.session_id, 0, 0, VOICE, input_gain=2.0)
@@ -311,7 +321,7 @@ class PCMStreamTests(unittest.TestCase):
             self.assertEqual(apply.call_count, 1)
             self.streams._states[self.manager.session_id].stage = "tts"
             self.push(VOICE, input_gain=2.0)
-            self.assertEqual(apply.call_count, 1)
+            self.assertEqual(apply.call_count, 2)
 
     def test_invalid_input_gain_is_rejected_without_consuming_a_sequence(self):
         for gain in (None, "1.0", False, True, float("nan"), float("inf"), -float("inf"),
@@ -321,6 +331,57 @@ class PCMStreamTests(unittest.TestCase):
                     self.streams.push_audio(self.manager.session_id, 0, 0, SILENCE, input_gain=gain)
                 self.assertEqual((error.exception.status, error.exception.code), (400, "invalid_input_gain"))
         self.assertEqual(self.status()["next_sequence"], 0)
+
+    def test_partially_mutated_vad_failure_never_acknowledges_or_refeeds_the_packet(self):
+        self.push(SILENCE * 8)
+        state = self.streams._states[self.manager.session_id]
+
+        def fail_after_mutation(pcm):
+            state.vad._audio.extend(pcm[:FRAME_BYTES])
+            raise RuntimeError("simulated native VAD failure")
+
+        with patch.object(state.vad, "feed", side_effect=fail_after_mutation) as feed:
+            with self.assertRaises(VoiceAPIError) as error:
+                self.push(VOICE * 8)
+            self.assertEqual((error.exception.code, error.exception.retryable), ("vad_unavailable", False))
+            partial = state.vad.audio_bytes
+            snapshot = self.status()
+            self.assertEqual((snapshot["next_sequence"], snapshot["stage"]), (1, "failed"))
+            self.assertTrue(snapshot["fatal"])
+            for sequence in (1, 1, 2, 0):
+                with self.subTest(sequence=sequence), self.assertRaises(VoiceAPIError) as retry:
+                    self.streams.push_audio(self.manager.session_id, 0, sequence, VOICE * 8)
+                self.assertEqual((retry.exception.status, retry.exception.code, retry.exception.retryable),
+                                 (503, "vad_unavailable", False))
+            self.assertEqual(feed.call_count, 1)
+            self.assertEqual(state.vad.audio_bytes, partial)
+            self.assertEqual(self.status()["next_sequence"], 1)
+        with self.assertRaises(VoiceAPIError) as reader:
+            self.streams.read_events(self.manager.session_id, 0, 0, timeout=0)
+        self.assertEqual((reader.exception.code, reader.exception.retryable), ("vad_unavailable", False))
+
+    def test_terminal_vad_failure_cannot_be_revived_by_old_reply_progress_or_events(self):
+        reply = self.reply_ready()
+        state = self.streams._states[self.manager.session_id]
+        cursor = state.event_cursor
+        with patch.object(state.vad, "feed", side_effect=RuntimeError("VAD failure")):
+            with self.assertRaises(VoiceAPIError):
+                self.push(SILENCE * 8)
+        self.manager.progress = {"stage": "llm", "transcript": "late progress"}
+        pending = Future()
+        state.final_future = pending
+        self.assertEqual(self.status()["stage"], "failed")
+        late = {
+            "session_id": self.manager.session_id, "generation": 0, "turn_id": reply["turn_id"],
+            "type": "complete", "transcript": "late result", "response_text": "late reply",
+        }
+        pending.set_result(late)
+        with self.streams._lock:
+            self.assertFalse(self.streams._append_event_locked(state, late))
+        snapshot = self.status()
+        self.assertEqual((snapshot["stage"], snapshot["error"]), ("failed", "vad_unavailable"))
+        self.assertTrue(snapshot["fatal"])
+        self.assertEqual(snapshot["event_cursor"], cursor)
 
     def test_gain_changes_reach_preview_and_final_wav_without_stopping_the_session(self):
         self.feed(VOICE, 50, input_gain=0.5)
@@ -368,15 +429,15 @@ class PCMStreamTests(unittest.TestCase):
         self.manager.final_release.set()
         self.assertEqual(self.wait_stage("reply_ready")["transcript"], "確定した文字")
 
-    def test_processing_reply_and_playback_drop_pcm_until_confirmed_end_and_cooldown(self):
+    def test_processing_and_playback_continue_vad_without_interrupting_on_silence(self):
         reply = self.reply_ready()
         before = self.models[0].calls
-        self.feed(VOICE, 100)
-        self.assertEqual(self.models[0].calls, before)
+        self.feed(SILENCE, 100)
+        self.assertEqual(self.models[0].calls, before + 100)
         turn = reply["turn_id"]
         self.assertEqual(self.streams.playback(self.manager.session_id, 0, turn, "started")["stage"], "playing")
-        self.feed(VOICE, 32)
-        self.assertEqual(self.models[0].calls, before)
+        self.feed(SILENCE, 32)
+        self.assertEqual(self.models[0].calls, before + 132)
         self.streams.playback(self.manager.session_id, 0, turn, "ended")
         self.now = 0.59
         self.assertEqual(self.feed(VOICE, 8)["stage"], "cooldown")
@@ -392,7 +453,7 @@ class PCMStreamTests(unittest.TestCase):
         self.assertEqual(error.exception.code, "playback_turn_mismatch")
         failed = self.streams.playback(self.manager.session_id, 0, reply["turn_id"], "failed")
         self.assertEqual((failed["stage"], failed["error"]), ("reply_ready", "playback_failed"))
-        self.feed(VOICE, 100)
+        self.feed(SILENCE, 100)
         self.assertEqual(self.status()["stage"], "reply_ready")
         self.assertEqual(len(self.manager.finals), 1)
 

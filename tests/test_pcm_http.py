@@ -14,7 +14,7 @@ class PCMHTTPTests(unittest.TestCase):
     session_id = str(uuid.uuid4())
     pcm_type = "audio/pcm;rate=16000;channels=1;format=s16le"
 
-    def handler(self, body=b"\x00\x00" * 4096, *, headers=None, authorized=True):
+    def handler(self, body=b"\x00\x00" * 4096, *, headers=None):
         handler = object.__new__(DashboardHandler)
         handler.headers = {
             "Content-Type": self.pcm_type, "Content-Length": str(len(body)),
@@ -23,7 +23,6 @@ class PCMHTTPTests(unittest.TestCase):
         }
         handler.rfile = io.BytesIO(body)
         handler.connection = Mock()
-        handler._api_auth_or_reject = Mock(return_value=authorized)
         handler._send_json = Mock()
         return handler
 
@@ -55,13 +54,6 @@ class PCMHTTPTests(unittest.TestCase):
                 self.assertEqual(handler.rfile.tell(), 0)
                 self.assertEqual(handler._send_json.call_args.args[0], 400)
 
-    def test_authentication_precedes_audio_read_and_controller_access(self):
-        handler = self.handler(authorized=False)
-        with patch("Programs.ServerSide.dashboard.server._audio_streams") as factory:
-            handler._receive_pcm_frame(self.session_id)
-        self.assertEqual(handler.rfile.tell(), 0)
-        factory.assert_not_called()
-
     def test_incompatible_endian_rate_size_and_headers_are_rejected(self):
         cases = [
             ({"Content-Type": "audio/L16;rate=16000;channels=1"}, b"\x00\x00", 415),
@@ -85,7 +77,6 @@ class PCMHTTPTests(unittest.TestCase):
             ({"Content-Type": "audio/L16"}, 415),
             ({"X-Audio-Sequence": ""}, 400),
             ({"Content-Length": str(MAX_PCM_FRAME_BYTES + 2)}, 413),
-            ({"Authorization": "invalid"}, 401),
         ]
         for headers, status in cases:
             with self.subTest(status=status):
@@ -95,9 +86,6 @@ class PCMHTTPTests(unittest.TestCase):
                 handler.send_response = Mock()
                 handler.send_header = Mock()
                 handler.end_headers = Mock()
-                if status == 401:
-                    del handler._api_auth_or_reject
-                    handler._authorized = Mock(return_value=False)
                 handler._receive_pcm_frame(self.session_id)
                 handler.send_response.assert_called_once_with(status)
                 self.assertEqual(handler.rfile.tell(), 0)

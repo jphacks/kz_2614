@@ -6,9 +6,59 @@ from pathlib import Path
 import shutil
 import subprocess
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from Programs.ServerSide.dashboard.server import DashboardHandler
+from Programs.ServerSide.dashboard.server import DashboardHandler, main
+
+
+MODULE = "Programs.ServerSide.dashboard.server"
+
+
+class DevelopmentAPITests(unittest.TestCase):
+    def handler(self, path, body=b""):
+        handler = object.__new__(DashboardHandler)
+        handler.path = path
+        handler.headers = {"Content-Length": str(len(body))}
+        handler.rfile = io.BytesIO(body)
+        handler._send_json = Mock()
+        return handler
+
+    def test_health_and_settings_are_accessible_with_plain_requests(self):
+        handler = self.handler("/api/v1/dashboard/health")
+        handler.do_GET()
+        handler._send_json.assert_called_once_with(200, {"status": "ok", "settings_api": "ready"})
+
+        handler = self.handler("/api/v1/dashboard/settings", b'{"volume": 30}')
+        with patch(f"{MODULE}.save_settings", return_value={"volume": 30}) as save:
+            handler.do_PUT()
+        save.assert_called_once_with({"volume": 30})
+        handler._send_json.assert_called_once_with(200, {
+            "settings": {"volume": 30}, "applies": "new_pipeline_instance",
+        })
+
+    def test_voice_sessions_start_and_stop_with_plain_requests(self):
+        session_id = "12345678-1234-1234-1234-123456789abc"
+        handler = self.handler("/api/v1/voice/sessions")
+        created = {"session_id": session_id, "generation": 0}
+        with patch(f"{MODULE}._voice_sessions") as manager, patch(f"{MODULE}._AUDIO_STREAMS", None):
+            manager.return_value.create_session.return_value = created
+            handler.do_POST()
+            handler._send_json.assert_called_once_with(201, created)
+
+            handler.path = f"/api/v1/voice/sessions/{session_id}"
+            stopped = {"session_id": session_id, "stage": "stopped"}
+            manager.return_value.stop_session.return_value = stopped
+            handler.do_DELETE()
+            manager.return_value.stop_session.assert_called_once_with(session_id)
+            handler._send_json.assert_called_with(200, stopped)
+
+    def test_startup_accepts_private_network_bind(self):
+        with patch("sys.argv", ["dashboard", "--host", "0.0.0.0", "--port", "8765"]), \
+             patch(f"{MODULE}.load_dotenv"), patch(f"{MODULE}.DashboardHTTPServer") as server:
+            main()
+        server.assert_called_once_with(("0.0.0.0", 8765))
+        server.return_value.serve_forever.assert_called_once_with()
+        server.return_value.server_close.assert_called_once_with()
 
 
 class ReplyPlaybackPolicyTests(unittest.TestCase):
@@ -56,6 +106,18 @@ class VoiceBrowserRecoveryTests(unittest.TestCase):
 
     def test_browser_pcm_silence_sequence_retry_overflow_and_stale_acks(self):
         self.run_browser_checks("dashboard_recording_test.js")
+
+    def test_browser_independent_transport_lanes_and_bounded_pcm_retry(self):
+        self.run_browser_checks("dashboard_transport_lanes_test.js")
+
+    def test_browser_barge_in_keeps_pcm_and_rejects_old_reply(self):
+        self.run_browser_checks("dashboard_barge_in_test.js")
+
+    def test_browser_pcm_output_frames_reconnect_and_interruption(self):
+        self.run_browser_checks("dashboard_pcm_output_test.js")
+
+    def test_pcm_output_worklet_resampling_drain_reset_and_limits(self):
+        self.run_browser_checks("test_pcm_output_worklet.js")
 
     def test_pcm_worklet_resampling_frames_and_unconditional_silence(self):
         self.run_browser_checks("test_pcm_worklet.js")

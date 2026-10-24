@@ -38,7 +38,7 @@ fi
 
 echo "Starting the ServerSide web application on ${BIND_ADDRESS}:${PORT_NUMBER}. Press Ctrl+C to stop."
 if [[ "${BIND_ADDRESS}" != "127.0.0.1" && "${BIND_ADDRESS}" != "::1" && "${BIND_ADDRESS,,}" != "localhost" ]]; then
-    echo "Non-loopback binding requires NENGITSUNE_DASHBOARD_TOKEN (32+ characters) and a restricted private network."
+    echo "Use a restricted private network for non-loopback binding."
 fi
 
 cd -- "${REPO_ROOT}"

@@ -82,6 +82,7 @@ class LocalTTSTests(unittest.TestCase):
         request = self.runtime.synthesize.call_args.args[0]
         self.assertTrue(request.no_ref)
         self.assertEqual(request.caption, "静かな声")
+        self.assertEqual(request.max_ref_seconds,5.0)
 
     def test_serializes_shared_runtime_between_instances(self):
         state_lock = threading.Lock()
@@ -242,3 +243,34 @@ class LocalTTSTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReferenceAudioLoaderTests(unittest.TestCase):
+    def test_missing_torchcodec_falls_back_to_existing_soundfile(self):
+        from Programs.ServerSide.STTLLMTTS.tts.local_backend import load_audio_with_soundfile_fallback
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/"reference.wav"
+            with wave.open(str(path), "wb") as audio:
+                audio.setnchannels(2); audio.setsampwidth(2); audio.setframerate(44100)
+                audio.writeframes(b"\x00\x00" * 44100 * 2)
+            primary = Mock(side_effect=ImportError("TorchCodec is required"))
+            fake_torch = types.SimpleNamespace(from_numpy=lambda samples:samples)
+            with patch.dict(sys.modules, {"torch": fake_torch}):
+                samples, rate = load_audio_with_soundfile_fallback(path, primary)
+            self.assertEqual(rate,44100)
+            self.assertEqual(samples.shape,(2,44100))
+            self.assertEqual(samples.dtype,np.float32)
+
+    def test_normal_loader_and_unrelated_errors_are_preserved(self):
+        from Programs.ServerSide.STTLLMTTS.tts.local_backend import load_audio_with_soundfile_fallback
+        expected = (object(),16000)
+        self.assertIs(load_audio_with_soundfile_fallback("unused",Mock(return_value=expected)),expected)
+        with self.assertRaises(ValueError):
+            load_audio_with_soundfile_fallback("unused",Mock(side_effect=ValueError("invalid audio")))
+
+
+class CPUReferenceBudgetTests(unittest.TestCase):
+    def test_reference_and_thread_budgets_are_validated(self):
+        config=TTSConfig(backend="local")
+        for changes in ({"reference_max_seconds":0},{"reference_max_seconds":float("nan")},{"cpu_threads":0},{"cpu_threads":17}):
+            with self.assertRaises(ValueError): LocalIrodoriBackend(replace(config,**changes))

@@ -7,11 +7,13 @@ import os
 from dataclasses import dataclass
 
 from ..tts.irodori import IrodoriTTS, SynthesizedSpeech
+from .acknowledgement_assets import load_assets
 
 
 DEFAULT_ACKNOWLEDGEMENT_PHRASES = (
-    "うん、聞いてるよ。",
-    "そっか、話してくれてありがとう。",
+    "うんうん",
+    "ふーん",
+    "へー",
 )
 
 
@@ -58,6 +60,11 @@ class VoiceAcknowledgementSystem:
                 return
             self._ready_event.clear()
             try:
+                assets = load_assets(self.tts, self.phrases)
+                if assets is not None:
+                    self._cache = tuple(VoiceAcknowledgement(text=text, speech=speech) for text, speech in assets)
+                    self._next_index = 0
+                    return
                 generated = []
                 for phrase in self.phrases:
                     speech = await self.tts.synthesize_async(phrase)

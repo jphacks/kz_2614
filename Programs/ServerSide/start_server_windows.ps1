@@ -23,7 +23,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $serverSideRoot '.env'))) {
 
 Write-Host "Starting the ServerSide web application on ${BindAddress}:$Port. Press Ctrl+C to stop."
 if ($BindAddress -ne '127.0.0.1' -and $BindAddress -ne '::1' -and $BindAddress -ne 'localhost') {
-    Write-Host 'Non-loopback binding requires NENGITSUNE_DASHBOARD_TOKEN (32+ characters) and a restricted private network.'
+    Write-Host 'Use a restricted private network for non-loopback binding.'
 }
 
 $exitCode = 1

@@ -70,6 +70,7 @@ class VoiceSession:
     turn_ids: set[str] = field(default_factory=set)
     speeches: dict[str, StoredSpeech] = field(default_factory=dict)
     task: asyncio.Task[Any] | None = None
+    active_turn_id: str | None = None
     progress: TurnProgress | None = None
     preview_busy: bool = False
 
@@ -120,6 +121,7 @@ class VoiceSessions:
         session.generation += 1
         session.speeches.clear()
         session.progress = None
+        session.active_turn_id = None
         session.busy = False
         task = session.task
         if task is not None and self._loop is not None:
@@ -208,6 +210,7 @@ class VoiceSessions:
             if len(session.turn_ids) >= MAX_TURNS_PER_SESSION:
                 raise VoiceAPIError(409, "session_turn_limit", "この会話の発話数上限に達しました。")
             session.turn_ids.add(turn_id)
+            session.active_turn_id = turn_id
             session.busy = True
             session.last_activity = time.monotonic()
             session.progress = TurnProgress(
@@ -218,6 +221,33 @@ class VoiceSessions:
                 expires_at=session.last_activity + TURN_TIMEOUT_SECONDS,
             )
             return session, session.generation
+
+    def _owns_turn(self, session: VoiceSession, generation: int, turn_id: str) -> bool:
+        return (
+            self._sessions.get(session.session_id) is session and session.active
+            and session.generation == generation and session.active_turn_id == turn_id
+        )
+
+    def interrupt_turn(self, session_id: str, generation: int, turn_id: str) -> bool:
+        """Fence one reply without stopping the conversation or its new input.
+
+        Native work may finish after cancellation. Its coroutine still owns the
+        STT completion sentinel and temporary recording until that work releases it.
+        """
+        with self._lock:
+            session = self.get_active_session(session_id, generation)
+            if session.active_turn_id != turn_id:
+                return False
+            task = session.task
+            session.active_turn_id = None
+            session.progress = None
+            session.speeches.pop(turn_id, None)
+            session.busy = False
+            session.task = None
+            session.last_activity = time.monotonic()
+            if task is not None and self._loop is not None:
+                self._loop.call_soon_threadsafe(self._cancel_task_once, task)
+            return True
 
     def transcribe_preview(
         self, session_id: str, generation: int, audio_path: Path,
@@ -392,7 +422,7 @@ class VoiceSessions:
     ) -> dict[str, Any]:
         current_task = asyncio.current_task()
         with self._lock:
-            if not session.active or session.generation != generation:
+            if not self._owns_turn(session, generation, turn_id):
                 raise VoiceAPIError(409, "session_stopped", "停止後の発話は処理しません。")
             session.task = current_task
             pipeline = session.pipeline
@@ -421,7 +451,7 @@ class VoiceSessions:
                 "timings_seconds": result.timings_seconds,
             }
             with self._lock:
-                if not session.active or session.generation != generation:
+                if not self._owns_turn(session, generation, turn_id):
                     raise VoiceAPIError(409, "session_stopped", "停止後の返答は破棄しました。")
                 session.speeches[turn_id] = StoredSpeech(
                     audio=result.speech.audio_bytes,
@@ -436,7 +466,7 @@ class VoiceSessions:
             return response
         except VoiceStageTimeout as exc:
             with self._lock:
-                timed_out = session.active and session.generation == generation
+                timed_out = self._owns_turn(session, generation, turn_id)
                 if timed_out:
                     self._retire_locked(session, cancel_task=False)
             if not timed_out:
@@ -457,9 +487,10 @@ class VoiceSessions:
             raise
         finally:
             with self._lock:
-                session.busy = False
-                session.task = None
-                session.last_activity = time.monotonic()
+                if session.task is current_task:
+                    session.busy = False
+                    session.task = None
+                    session.last_activity = time.monotonic()
                 should_close = not session.active
                 pipeline_to_close = session.pipeline
             if should_close and pipeline_to_close is not None:
@@ -475,14 +506,14 @@ class VoiceSessions:
         try:
             future = self._submit(self._process_turn(session, generation, turn_id, audio_path))
         except VoiceAPIError:
-            self.abandon_turn(session)
+            self.abandon_turn(session, turn_id=turn_id)
             raise
         try:
             return future.result(timeout=TURN_TIMEOUT_SECONDS)
         except FutureTimeoutError as exc:
             future.cancel()
             with self._lock:
-                if session.active:
+                if self._owns_turn(session, generation, turn_id):
                     self._retire_locked(session)
             raise VoiceAPIError(504, "turn_timeout", "音声処理がタイムアウトしました。もう一度お試しください。", True) from exc
         except VoiceAPIError:
@@ -517,7 +548,7 @@ class VoiceSessions:
         reply_speeches: list[SynthesizedSpeech] = []
         reply_bytes = 0
         with self._lock:
-            if not session.active or session.generation != generation:
+            if not self._owns_turn(session, generation, turn_id):
                 events.put({
                     "type": "error",
                     "error": "session_stopped",
@@ -532,7 +563,7 @@ class VoiceSessions:
         def publish(event: dict[str, object]) -> None:
             nonlocal reply_bytes
             with self._lock:
-                if not session.active or session.generation != generation:
+                if not self._owns_turn(session, generation, turn_id):
                     raise asyncio.CancelledError
             payload = dict(event)
             speech = payload.get("speech")
@@ -581,7 +612,7 @@ class VoiceSessions:
             speech_metadata: dict[str, Any] | None = None
             if combined is not None:
                 with self._lock:
-                    if not session.active or session.generation != generation:
+                    if not self._owns_turn(session, generation, turn_id):
                         raise asyncio.CancelledError
                     session.speeches[turn_id] = StoredSpeech(
                         combined.audio_bytes, combined.media_type, generation,
@@ -615,7 +646,7 @@ class VoiceSessions:
             })
         except VoiceStageTimeout as exc:
             with self._lock:
-                timed_out = session.active and session.generation == generation
+                timed_out = self._owns_turn(session, generation, turn_id)
                 if timed_out:
                     self._retire_locked(session, cancel_task=False)
             if not timed_out:
@@ -657,7 +688,7 @@ class VoiceSessions:
         except Exception as exc:
             logger.warning("voice_stream_turn_failed error_type=%s", type(exc).__name__)
             with self._lock:
-                active = session.active and session.generation == generation
+                active = self._owns_turn(session, generation, turn_id)
             publish_terminal({
                 "type": "error",
                 "error": "voice_processing_failed" if active else "session_stopped",
@@ -671,9 +702,10 @@ class VoiceSessions:
                 await asyncio.sleep(0.05)
             self._update_turn_progress(session, generation, turn_id, "failed")
             with self._lock:
-                session.busy = False
-                session.task = None
-                session.last_activity = time.monotonic()
+                if session.task is current_task:
+                    session.busy = False
+                    session.task = None
+                    session.last_activity = time.monotonic()
                 should_close = not session.active
                 pipeline_to_close = session.pipeline
             if should_close and pipeline_to_close is not None:
@@ -750,7 +782,7 @@ class VoiceSessions:
                 self._process_stream_turn(session, generation, turn_id, audio_path, events)
             )
         except VoiceAPIError:
-            self.abandon_turn(session)
+            self.abandon_turn(session, turn_id=turn_id)
             events.put({
                 "type": "error",
                 "error": "voice_unavailable",
@@ -760,14 +792,19 @@ class VoiceSessions:
             events.put(None)
             return None
 
-    def timeout_stream_turn(self, session: VoiceSession) -> None:
+    def timeout_stream_turn(
+        self, session: VoiceSession, *, generation: int | None = None, turn_id: str | None = None,
+    ) -> None:
         """Fence and cancel a stream whose whole-turn deadline has elapsed."""
         with self._lock:
-            if session.active:
+            if (session.active and (turn_id is None or self._owns_turn(
+                    session, session.generation if generation is None else generation, turn_id))):
                 self._retire_locked(session)
 
-    def abandon_turn(self, session: VoiceSession) -> None:
+    def abandon_turn(self, session: VoiceSession, *, turn_id: str | None = None) -> None:
         with self._lock:
+            if turn_id is not None and session.active_turn_id != turn_id:
+                return
             if session.progress is not None:
                 self._update_turn_progress(
                     session, session.progress.generation, session.progress.turn_id, "failed"

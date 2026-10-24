@@ -25,20 +25,19 @@ def chunked_events(data):
 
 
 class PCMEventHTTPTests(unittest.TestCase):
-    def handler(self, after="0", authorized=True):
+    def handler(self, after="0"):
         handler = object.__new__(DashboardHandler)
         handler.path = f"/api/v1/voice/sessions/{uuid.uuid4()}/audio-stream/events?after={after}"
         handler.headers = {"X-Voice-Generation": "0"}
         handler.connection = Mock()
         handler.wfile = io.BytesIO()
-        handler._api_auth_or_reject = Mock(return_value=authorized)
         handler._send_json = Mock()
         handler.send_response = Mock()
         handler.send_header = Mock()
         handler.end_headers = Mock()
         return handler
 
-    def test_auth_cursor_generation_and_reader_limits_precede_stream_headers(self):
+    def test_cursor_generation_and_reader_limits_precede_stream_headers(self):
         for after in ("-1", "", "NaN", "1&after=2", "9007199254740992"):
             with self.subTest(after=after):
                 handler = self.handler(after)
@@ -47,11 +46,6 @@ class PCMEventHTTPTests(unittest.TestCase):
                 factory.assert_not_called()
                 self.assertEqual(handler._send_json.call_args.args[0], 400)
                 handler.send_response.assert_not_called()
-        handler = self.handler(authorized=False)
-        with patch(f"{MODULE}._audio_streams") as factory:
-            handler.do_GET()
-        factory.assert_not_called()
-
         handler = self.handler()
         handler.headers = {}
         with patch(f"{MODULE}._audio_streams") as factory:
@@ -152,12 +146,12 @@ class PCMEventConcurrencyTests(unittest.TestCase):
     def test_reply_is_readable_before_completion_and_silence_upload_is_not_blocked(self):
         session_id = str(uuid.uuid4())
         streams = BlockingReply(session_id)
-        server = DashboardHTTPServer(("127.0.0.1", 0), "test-token")
+        server = DashboardHTTPServer(("127.0.0.1", 0))
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         reader = http.client.HTTPConnection(*server.server_address, timeout=3)
         sender = http.client.HTTPConnection(*server.server_address, timeout=3)
         route = f"/api/v1/voice/sessions/{session_id}/audio-stream"
-        headers = {"Authorization": "Bearer test-token", "X-Voice-Generation": "0"}
+        headers = {"X-Voice-Generation": "0"}
         try:
             with patch(f"{MODULE}._audio_streams", return_value=streams):
                 thread.start()

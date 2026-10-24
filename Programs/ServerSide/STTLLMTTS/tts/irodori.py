@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import mimetypes
+import logging
 import os
 import tempfile
 import threading
@@ -14,13 +15,15 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from ...dashboard.settings_store import get_saved_settings, reference_voice_path
 from ...dashboard.runtime_status import RuntimeObservation, component_configuration
+from ...dashboard.settings_store import MAX_REFERENCE_WAV_BYTES, get_saved_settings, reference_voice_path
 from ..runtime import run_blocking_stage
+from .cancellation import SynthesisCancelled, check_synthesis_cancelled, synthesis_lock
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
-MAX_REFERENCE_AUDIO_BYTES = 10 * 1024 * 1024
+MAX_REFERENCE_AUDIO_BYTES = MAX_REFERENCE_WAV_BYTES
+LOGGER = logging.getLogger(__name__)
 
 
 class SpeechSynthesisError(RuntimeError):
@@ -48,6 +51,8 @@ class TTSConfig:
     num_steps: int | None = None
     max_seconds: float = 30.0
     output_volume_percent: int = 100
+    reference_max_seconds: float = 5.0
+    cpu_threads: int = 2
 
     @classmethod
     def from_env(cls) -> "TTSConfig":
@@ -93,6 +98,8 @@ class TTSConfig:
             in {"1", "true", "yes", "on"},
             num_steps=int(steps) if steps else None,
             max_seconds=float(os.getenv("IRODORI_MAX_SECONDS", "30")),
+            reference_max_seconds=float(os.getenv("IRODORI_REFERENCE_MAX_SECONDS", "5")),
+            cpu_threads=int(os.getenv("IRODORI_CPU_THREADS", "2")),
         )
 
 
@@ -138,8 +145,8 @@ class IrodoriTTS:
                 # Keep the configured path so synthesize() can report the missing/unreadable file.
                 pass
 
-    def _get_client(self) -> Any:
-        with self._client_lock:
+    def _get_client(self, cancel_event: threading.Event | None = None) -> Any:
+        with synthesis_lock(self._client_lock, cancel_event):
             if self._client is None:
                 try:
                     from gradio_client import Client
@@ -219,17 +226,21 @@ class IrodoriTTS:
         except (OSError, RuntimeError):
             pass
 
-    def synthesize(self, text: str) -> SynthesizedSpeech:
+    def synthesize(self, text: str, *, cancel_event: threading.Event | None = None) -> SynthesizedSpeech:
+        check_synthesis_cancelled(cancel_event)
         if not text.strip():
             raise ValueError("text must not be empty")
         if len(text.strip()) > 1_000:
             raise ValueError("text must be at most 1000 characters")
         self._runtime_observation.begin()
         try:
-            speech = self._synthesize_impl(text)
+            speech = self._synthesize_impl(text, cancel_event=cancel_event)
             speech = self._apply_output_volume(speech)
+            check_synthesis_cancelled(cancel_event)
             self._runtime_observation.success()
             return speech
+        except SynthesisCancelled:
+            raise
         except Exception as error:
             self._runtime_observation.failure(error)
             raise
@@ -237,7 +248,7 @@ class IrodoriTTS:
             self._runtime_observation.finish()
 
     def _apply_output_volume(self, speech: SynthesizedSpeech) -> SynthesizedSpeech:
-        """Scale synthesized PCM before it is sent to the client; 100% preserves original bytes."""
+        """Scale synthesized PCM before delivery; 100% preserves original bytes."""
         if self.config.output_volume_percent == 100:
             return speech
         try:
@@ -281,8 +292,9 @@ class IrodoriTTS:
     def runtime_status(self) -> dict[str, Any]:
         return self._runtime_observation.snapshot()
 
-    def _synthesize_impl(self, text: str) -> SynthesizedSpeech:
+    def _synthesize_impl(self, text: str, *, cancel_event: threading.Event | None = None) -> SynthesizedSpeech:
         """短い返答を合成し、音声バイト列と配信形式を返す。"""
+        check_synthesis_cancelled(cancel_event)
         spoken_text = text.strip()
         if not spoken_text:
             raise ValueError("text must not be empty")
@@ -300,11 +312,19 @@ class IrodoriTTS:
                     spoken_text,
                     reference_audio=self._reference_audio_bytes,
                     reference_suffix=self._reference_audio_suffix,
+                    cancel_event=cancel_event,
                 )
-                self._runtime_observation.loaded(**backend.runtime_details)
+            except SynthesisCancelled:
+                raise
             except Exception as exc:
+                # Exception messages may contain user text or local paths; log types only.
+                LOGGER.warning("voice_local_tts_failed error_type=%s cause_type=%s",
+                               type(exc).__name__, type(exc.__cause__).__name__ if exc.__cause__ else "none")
                 raise SpeechSynthesisError("Local Irodori-TTS voice generation failed") from exc
-            return self._read_audio(audio)
+            check_synthesis_cancelled(cancel_event)
+            speech = self._read_audio(audio)
+            check_synthesis_cancelled(cancel_event)
+            return speech
 
         reference_audio: Any = None
         temporary_reference_path: Path | None = None
@@ -327,8 +347,9 @@ class IrodoriTTS:
                         raise SpeechSynthesisError("VOICE_TTS_REFERENCE_AUDIO does not exist")
                     reference_audio = handle_file(str(reference_path))
 
-            client = self._get_client()
-            with self._synthesis_lock:
+            check_synthesis_cancelled(cancel_event)
+            client = self._get_client(cancel_event) if cancel_event is not None else self._get_client()
+            with synthesis_lock(self._synthesis_lock, cancel_event):
                 result = client.predict(
                     checkpoint=self.config.checkpoint,
                     model_device=self.config.model_device,
@@ -362,6 +383,13 @@ class IrodoriTTS:
                     lora_adapter_raw="",
                     api_name="/_run_generation",
                 )
+            # Reading also removes Gradio's downloaded temporary file. Even after
+            # cancellation this worker retains that cleanup responsibility.
+            speech = self._read_audio(result)
+            check_synthesis_cancelled(cancel_event)
+            return speech
+        except SynthesisCancelled:
+            raise
         except SpeechSynthesisError:
             raise
         except Exception as exc:
@@ -374,13 +402,20 @@ class IrodoriTTS:
                     temporary_reference_path.unlink(missing_ok=True)
                 except OSError:
                     pass
-        return self._read_audio(result)
 
     async def synthesize_async(self, text: str) -> SynthesizedSpeech:
         """TTSをイベントループ外で実行し、設定した期限内に結果を返す。"""
-        return await run_blocking_stage(
-            "tts",
-            self.config.timeout_seconds,
-            self.synthesize,
-            text,
-        )
+        cancel_event = threading.Event()
+        try:
+            return await run_blocking_stage(
+                "tts",
+                self.config.timeout_seconds,
+                self.synthesize,
+                text,
+                cancel_event=cancel_event,
+            )
+        except BaseException:
+            # The native worker may still be running. Do not release its lock or
+            # files here; signal only pending work and let its finally blocks run.
+            cancel_event.set()
+            raise

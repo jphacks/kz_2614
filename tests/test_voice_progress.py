@@ -193,19 +193,10 @@ class ProgressHTTPHandlerTests(unittest.TestCase):
         self.session_id, self.turn_id = str(uuid.uuid4()), str(uuid.uuid4())
         self.handler = object.__new__(DashboardHandler)
         self.handler.path = f"/api/v1/voice/sessions/{self.session_id}/turns/{self.turn_id}/status"
-        self.handler.server = types.SimpleNamespace(dashboard_token="test-admin-token")
+        self.handler.headers = {}
         self.handler._send_json = Mock()
 
-    def test_progress_route_requires_same_bearer_token(self):
-        for authorization in (None, "Bearer wrong-token"):
-            self.handler.headers = {"Authorization": authorization} if authorization else {}
-            with patch("Programs.ServerSide.dashboard.server._voice_sessions") as manager:
-                self.handler.do_GET()
-                manager.assert_not_called()
-            self.assertEqual(self.handler._send_json.call_args.args[0], 401)
-
-    def test_authorized_progress_route_returns_status_and_404_for_expired_turns(self):
-        self.handler.headers = {"Authorization": "Bearer test-admin-token"}
+    def test_progress_route_returns_status_and_404_for_expired_turns(self):
         expected = {"stage": "llm", "transcript": "recognized"}
         with patch("Programs.ServerSide.dashboard.server._voice_sessions") as manager:
             manager.return_value.get_turn_status.return_value = expected
@@ -366,17 +357,16 @@ class LiveTranscriptionHTTPTests(unittest.TestCase):
         self.session_id = str(uuid.uuid4())
         self.handler = object.__new__(DashboardHandler)
         self.handler.path = f"/api/v1/voice/sessions/{self.session_id}/transcription"
-        self.handler.server = types.SimpleNamespace(dashboard_token="preview-test-token")
         self.handler._send_json = Mock()
         self.handler.connection = Mock()
         self.audio = b"\x1a\x45\xdf\xa3preview-prefix"
         self.handler.rfile = io.BytesIO(self.audio)
         self.handler.headers = {
-            "Authorization": "Bearer preview-test-token", "Content-Type": "audio/webm",
+            "Content-Type": "audio/webm",
             "X-Voice-Generation": "0", "Content-Length": str(len(self.audio)),
         }
 
-    def test_authenticated_raw_prefix_and_generation_are_passed_to_manager(self):
+    def test_raw_prefix_and_generation_are_passed_to_manager(self):
         def preview(session_id, generation, path):
             self.assertEqual(path.read_bytes(), self.audio)
             path.unlink()
@@ -389,9 +379,8 @@ class LiveTranscriptionHTTPTests(unittest.TestCase):
             "session_id": self.session_id, "generation": 0, "transcript": "途中",
         })
 
-    def test_auth_generation_size_type_and_signature_are_validated(self):
+    def test_generation_size_type_and_signature_are_validated(self):
         scenarios = (
-            ({"Authorization": "Bearer wrong"}, None, 401),
             ({"X-Voice-Generation": ""}, None, 400),
             ({"X-Voice-Generation": "-1"}, None, 400),
             ({"Content-Type": "text/plain"}, None, 415),
