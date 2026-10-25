@@ -166,6 +166,7 @@ class ServerAudioStreams:
             except Exception as exc:
                 # A failed feed may already have changed the recurrent VAD state.
                 # Do not acknowledge it or permit a retry to append it a second time.
+                self.manager.stop_tail_for_session(session_id, generation)
                 state.vad_failed = True
                 state.stage = "failed"
                 state.error = {
@@ -536,6 +537,7 @@ class ServerAudioStreams:
                 state.cooldown_until = self._clock() + COOLDOWN_SECONDS
                 state.error = None
             else:
+                self.manager.stop_tail_for_session(session_id, generation)
                 state.playback_failed = True
                 if state.turn_complete:
                     state.stage = "reply_ready"

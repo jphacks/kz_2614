@@ -78,7 +78,7 @@ Discord Gateway、DAVE、Opus デコード、Discord 専用音声再生はこの
 
 `llm/lm_studio.py` は、テキストと直近の会話履歴を LM Studio に送り、短い返答を返します。応答本文に加え、呼び出されたツール名と生成統計を `VoiceLLMReply` で返します。会話本文をこのクライアントがログやファイルへ保存する処理はありません。`store=false` で要求し、LM Studio のAPI設定に従って処理します。
 
-`TAIL_MCP_ENABLED=true` にすると、アプリがstdio MCPクライアントを起動し、頻度の保存・取得だけをLM Studioへ公開します。モデルとの通信は `/v1/chat/completions` のtool calling、ツールの実行は `llm/tail_tools.py` が担当します。LM StudioのMCP登録や認証設定の変更は不要です。無効時は従来のnative Chat APIを使用します。既定はfalseです。
+`TAIL_MCP_ENABLED=true` で、音声サーバーが所有するin-process MCPを介して `tap_tail`・`stop_tail`・`get_tail_status` を公開します。LM Studioの互換Chat APIとツール結果を往復する処理は `llm/tail_tools.py` にあります。LM Studioへのnative MCP登録は不要です。無効時のnative Chat APIと通常の文字差分配信は維持します。既定はfalseです。
 
 ## 相づちの音声設計
 
@@ -86,36 +86,19 @@ Discord Gateway、DAVE、Opus デコード、Discord 専用音声再生はこの
 
 STT後のLLM待機中のみ通知し、最初の返答音声が先に準備できた場合は省略します。遅延時には会話ごとに最大1回の音声をNDJSONストリームへ送り、Android Webが返答TTSと順番に再生します。「おやすみ」や停止要求には追加の相づちを出しません。再生完了通知APIと実機再生・停止は未確認です。待ち時間、声、音量は実機で調整します。
 
-## トントン頻度のMCP
+## v2の有限トントンと独立停止
 
-今回のESP32接続では頻度設定だけをPCに保存します。ESP32の実装は別担当です。[ESP32担当者向けAPI仕様](../../docs/api/tail-frequency.md) に接続契約をまとめています。
+PC実装は [MVP v2契約](../../docs/api/mvp-tail-control-v2.md) に従います。実機対応・配備・通し受け入れは未確認です。[修理記録と引き継ぎ](../../docs/development/pc-ai-mvp-v2.md) を参照してください。
 
-```text
-音声サーバー ←→ LM Studio (互換Chat API / tool calling)
-        │ MCP (stdio; アプリがローカルサーバーを起動)
-        ▼
-tail_mcp_server.py
-        │ HTTP (PC内のloopback)
-        ▼
-dashboard /api/v1/tail/frequency → 希望頻度のJSON保存
-        ▲
-        └─ ESP32担当側からGETで取得可能（端末実装は別担当）
-```
+- 最終STTの今回の発話だけから、短い明示要求を判定します。引用・否定・履歴・感情だけでは開始しません。認識できる明示要求はMCPへ直接渡し、LLMの選択待ちを省きます。LLMによるtool callにも同じ検査を適用します。
+- `tap_tail(duration_seconds)` は0.5〜5秒、既定5秒。機器側の速度は0.3Hz固定。1発話1回、PC側も直近60秒で10000msまで。未知の開始失敗を再送しません。
+- `TailCoordinator` が固定したHTTP originと現在の音声session/turn/generationを所有します。MCPの引数にURL・識別子・速度・角度を公開しません。MCPを同じプロセスに置くことで、HTTP送信直前にも現在の会話を検査できます。
+- v2 stateの版・capability・exclusiveモード・epoch・revision・開始許可・校正・上限を検査してからopen/tapします。旧機器へフォールバックしません。中立・脱力やモードは変更しません。
+- 音声終了・割込み・期限・障害は、LLMやopen/tapの完了を待たず機器stopへ進みます。409だけ再照会後に停止を再試行し、停止全体を4.5秒以内で打ち切ります。音声DELETEに別の `tail_control` を返します。
+- 停止未確認と機器epoch変更は、そのプロセスの実機開始を禁止します。旧タスクは新しいrevisionへ付け替えて開始できません。機器再起動の検出では音声会話も終了します。
+- `feedback=command_only` は指令状態です。物理的な動作・停止・電源遮断を確認したとは扱いません。
 
-会話に公開するツールは2つです。MCPサーバーから取得した定義をこの2つに制限し、動作用ツールはモデルへ渡しません。ツール呼出し後の結果をモデルに戻して返答を作り、通常会話の文字差分配信も保持します。1応答につき最大4ラウンド・8回の呼出しと全体期限を設けます。
-
-| MCP ツール | 用途 | 制限 |
-| --- | --- | --- |
-| `set_tail_frequency` | PCに希望頻度を保存する | 毎秒0.3〜1.0回。角度・動作開始は指定不可 |
-| `get_tail_frequency` | PCに保存した希望頻度を取得する | 実機の状態確認とは区別 |
-
-頻度変更の明確な依頼で設定ツールを利用し、PCでの保存成功をESP32の実機反映と伝えないよう指示します。保存処理自体は動作を開始しません。MCPセッションは応答ごとに作成し、完了・失敗・取消時に同じタスク内で閉じます。
-
-### 旧機器操作と将来の接続
-
-互換用の `tap_tail`・`stop_tail`・`get_tail_status` はMCPサーバーに残っていますが、現在の会話へは公開しません。旧 `/api/tail/...` を呼ぶこれらの操作と、今回の頻度設定APIは別機能です。以前のPi 4デバイスAPI案は [Raspberry Pi 4 API仕様](../../docs/archive/raspberry-pi/RASPBERRY_PI_API.md) に保持しています。
-
-Pi 4デバイスサービス、セッション／停止世代との連携、遅着開始の拒否、機構の制限と手元停止は未実装・未確認です。停止制御と実機安全確認が終わるまでは `TAIL_CONTROL_ENABLED=false` のままにします。
+`TAIL_CONTROL_ENABLED` はPC側の追加ゲートです。trueだけでは開始できず、毎回機器の契約と許可の確認が必要です。実機試験前はfalseを維持します。既存のPC頻度HTTP APIと単体stdioの `set_tail_frequency` / `get_tail_frequency` は設定互換用として残し、会話の動作指令には使用しません。単体stdioから実機開始はできません。
 
 ## 設定と起動
 
@@ -127,7 +110,7 @@ py -3.11 -m venv server\.venv
 Copy-Item server\.env.example server\.env
 ```
 
-`.env` にLM Studioの設定を記入します。今回の頻度設定を有効にする場合は `TAIL_MCP_ENABLED=true` と、PC内のダッシュボードURL `TAIL_DASHBOARD_URL=http://127.0.0.1:8765` を設定して音声サーバーを起動します。`TAIL_CONTROL_ENABLED=false` は維持し、`TAIL_DEVICE_URL` は不要です。MCP単独の起動コマンドは次です。
+`.env` にLM Studioの設定を記入します。会話MCPのフラグは `TAIL_MCP_ENABLED`、実機開始の追加ゲートは `TAIL_CONTROL_ENABLED`、管理者が固定するFollower originは `TAIL_DEVICE_URL` です。実機受け入れ前は開始を無効に保ちます。`TAIL_DASHBOARD_URL` は頻度設定互換だけに使用します。以下の単体MCP起動は頻度設定用です。
 
 ```powershell
 .\server\.venv\Scripts\python.exe server\ai\tail_mcp_server.py
@@ -142,10 +125,10 @@ LM StudioのGUIでもMCPを使う場合に限り、リポジトリルートか�
 - 実装済み: PyAV復号と無音区間分割、faster-whisper STT・認識品質・声の高さ・話し方の分析、LM Studio同期応答とSSE差分取得、分析要約を含むLLM入力、Irodori-TTS文節合成、NDJSONイベント配信、Android Webの逐次再生キュー、相づちの事前生成・配信判断、同一設定モデルのプロセス内共有・推論直列化、段階時間と本文を記録しない失敗ログ、段階別期限・停止世代の破棄、限定ツール連携のリクエスト生成、MCPサーバー、旧クライアント向けJSON応答。
 - 同期STT・TTSの既定タイムアウトは各90秒、LLMは45秒、音声ターン全体は最大180秒です。タイムアウト後にネイティブ推論スレッドが動作を続ける場合がありますが、そのセッションは破棄し、後着結果を配信しません。実際に処理を強制中断できるとは扱いません。
 - 文書化済み・未実装: Raspberry Pi 4向けバージョン付きHTTP API契約（[RASPBERRY_PI_API.md](../../docs/archive/raspberry-pi/RASPBERRY_PI_API.md)）。現在のクライアントのパス・応答形式、セッション停止世代との連携は未整合。
-- 出力開始・完了・失敗通知APIはPCM経路に実装し、自動テストと実モデルHTTPで確認済みです。従来turn APIの個別通知は未実装です。Pi 4しっぽデバイスサービス、MCPとセッション停止世代の連携も未実装です。
+- 出力開始・完了・失敗通知APIはPCM経路に実装し、自動テストと実モデルHTTPで確認済みです。従来turn APIの個別通知は未実装です。Pi 4しっぽデバイスサービスは対象外です。ESP32 v2のPC停止連携は模擬試験までで、実機は未確認です。
 - 未確認: Android／ESP32端末での受け入れ、実サーボの強さ・速度・接触位置・騒音・発熱。PC上での実モデル確認はリポジトリルートの `docs/setup/local-pc.md` と `docs/development/work-history.md` を参照してください。
 
-MCP SDK は公式 Python SDK の v2 API (`MCPServer`, stdio transport) を使用しています。音声アプリのMCP経路はLM Studioの互換tool callingを利用します。
+MCP SDK は公式 Python SDK の v2 API (`MCPServer`, in-process Client／設定互換stdio) を使用しています。音声アプリのMCP経路はLM Studioの互換tool callingを利用します。
 
 ## 参考資料
 

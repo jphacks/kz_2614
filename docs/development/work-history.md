@@ -971,3 +971,13 @@ Programs/
 - 接続: 音声API契約とPC HTTP 8765番は確定している。「upstream未確定」という過去の記述は、公開配信側の実設定・到達性が未確認という意味に訂正。公開サービスの設定・配備・再起動、マイクやESP32操作は行わない。
 - 残る条件: 公開環境からの疎通・実スマホの往復/割込み/停止、Docker/Nginx実行、PWA実機、本人/人形所有権・モード切替・接触/BLE・会話からの実機制御。未実装機能は利用不可表示を維持する。Webのコード統合完了を製品全体のMVP合格とは扱わない。
 - 公開統合は利用者の明示依頼に基づきPR #25を通常mergeする。最終SHAとGitHubの結果はPRと私用作業ログで確認する。
+
+
+### 2026-10-25: RyuuzinnRaikaのPC・AI最小MVP v2修理
+
+- 依頼: 最新mainのMVP/v2契約を読み、既存変更を保全、指定branchへmainを取り込んで実装・試験・commit/push/main向けPR。再起動・実機操作・勝手なmergeは禁止。
+- 参照main: `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`。独立worktreeのRyuuzinnRaikaへfast-forward。稼働側40変更ファイルはarchive/binary diff/SHA256で保全し、全refsをbundle保存。作業後も40ファイル一致。未pushローカルcommitなし。
+- PC側の明示要求・v2 MCP・lease・固定機器・epoch/revision検査・予算・独立stop・DELETEのtail_controlを実装。wire契約は不変。停止未確認をdisabled/成功へ置き換えず、新規実機開始を禁止。古い開始を新revisionで再送しない。
+- 検証: 全266 Python試験skipなしPASS（13.084秒）、製品Webの独立Node4試験PASS、npm ciとAstro build PASS、diff check PASS。模擬機器で遅延open/tap、停止競合、旧turn/次session/再起動/重複/応答喪失を確認。
+- AC-01/03/04/05はPC模擬範囲、AC-02/06は既存回帰を検証。AC-07の通し証跡、実機ファームと物理停止、公開認証/HTTPS/proxy、実スマホ、Webのtail_control表示/記録は未確認。サービス・私有設定・マイク・実機は未操作。
+- 詳細、コマンド、途中失敗の解消、Happy-Emori/naminaminaへの引き継ぎ: [pc-ai-mvp-v2](pc-ai-mvp-v2.md)。PRはmain向けに提出し、mergeしない。

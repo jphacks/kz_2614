@@ -27,8 +27,8 @@ COMPANION_SYSTEM_PROMPT = """あなたは、親しい人がそばで耳を傾け
 質問は、相手が続きを話しやすくなる時にだけ、短く一つまでにします。毎回質問で終えず、相づちや受け止めだけの返答も使ってください。話題を勝手に変えたり、自分の話へ持っていったりしないでください。
 眠ることや会話の継続を急かさないでください。「おやすみ」「もう終わり」と言われたら、引き留めず短く穏やかに応じてください。
 音声で読み上げる返答だけを出力してください。箇条書き、見出し、絵文字、括弧付きの動作説明は使わないでください。人間であるという虚偽の自己紹介や、実際にはない自分の体験談は作らないでください。
-トントンの頻度の変更を明確に依頼された時だけ、利用可能な頻度設定ツールを使ってください。寂しさを表明しただけで、設定を変えたり動作を始めたりしないでください。
-頻度設定の成功はPC側の設定保存を示します。ESP32の実機反映やしっぽの動作を確認したと伝えないでください。サーボ角度や生のハードウェア制御は指定しないでください。
+「トントン」「とんとん」「コンコン」「こんこん」は、しっぽで軽く叩く同じ操作です。今回のユーザーの「トントン」「こんこんして」「トントンお願い」「トントンしてみて」「軽く叩いて」などの短い合図や自然な依頼にはtap_tailを使ってください。「するね」と口頭で約束するだけで終わらず、ツールの結果を確認してから返答します。しないでという否定、引用、説明や過去の話、寂しさの表明だけでは始めないでください。開始は0.5〜5秒、速度0.3回/秒固定です。繰り返し実行して延長しないでください。
+「止めて」にはstop_tail、しっぽの状態確認にはget_tail_statusを使ってください。成功時は「動作指令を送りました」等、機器の受付が確認できた範囲だけ伝えます。物理的なしっぽの動作・停止を確認したとは伝えないでください。角度・速度・中立や脱力の解除は指定しないでください。
 """
 
 
@@ -66,7 +66,7 @@ class VoiceLLMReply:
 
 
 class VoiceLLMClient:
-    """LM Studioと会話し、MCP有効時はPC側で頻度設定ツールを仲介する。"""
+    """LM Studioと会話し、MCP有効時はESP32の限定操作を仲介する。"""
 
     def __init__(self, config: VoiceLLMConfig | None = None) -> None:
         self.config = config or VoiceLLMConfig.from_env()
@@ -133,7 +133,7 @@ class VoiceLLMClient:
         }
         return payload
 
-    async def _stream_tail_response(self, payload: dict[str, Any]) -> AsyncIterator[str]:
+    async def _stream_tail_response(self, payload: dict[str, Any], current_user_text: str) -> AsyncIterator[str]:
         self.last_stats = {}
         self.last_tool_calls = ()
         has_text = False
@@ -146,6 +146,8 @@ class VoiceLLMClient:
                 max_output_tokens=self.config.max_output_tokens,
                 context_length=self.config.context_length,
                 timeout_seconds=self.config.timeout_seconds,
+                current_user_text=current_user_text,
+                execute_confirmed_tap=True,
             )) as events:
                 async for event in events:
                     if event.get("type") == "text_delta":
@@ -202,7 +204,7 @@ class VoiceLLMClient:
 
         if self.config.tail_mcp_enabled:
             payload = self._build_payload(user_text, history, system_prompt, speech_context=speech_context)
-            parts = [part async for part in self._stream_tail_response(payload)]
+            parts = [part async for part in self._stream_tail_response(payload, user_text)]
             return VoiceLLMReply(
                 text="".join(parts).strip(),
                 tool_calls=self.last_tool_calls,
@@ -298,7 +300,7 @@ class VoiceLLMClient:
             speech_context=speech_context,
         )
         if self.config.tail_mcp_enabled:
-            async with aclosing(self._stream_tail_response(payload)) as deltas:
+            async with aclosing(self._stream_tail_response(payload, user_text)) as deltas:
                 async for delta in deltas:
                     yield delta
             return

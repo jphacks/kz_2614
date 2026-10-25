@@ -1,0 +1,24 @@
+{
+  "state": {
+    "protocol_version": 2,
+    "capabilities": ["revision_fence"],
+    "control_mode": "v2_exclusive",
+    "device_epoch": "7ef65580e6e346de8b503259d4e1f40c",
+    "revision": 0,
+    "session_id": null,
+    "phase": "closed",
+    "motion": "idle",
+    "start_enabled": true,
+    "calibrated": true,
+    "feedback": "command_only",
+    "limits": {"min_duration_ms": 500, "max_duration_ms": 5000, "rate_hz": 0.3, "window_ms": 60000, "budget_ms": 10000}
+  },
+  "session_id": "4e933206-d53c-49b3-8f8a-e86603c88aba",
+  "command_id": "7ed373b7-b211-4f16-8cb5-0623fe19a3d2",
+  "normal_sequence": [
+    {"action": "open", "phase": "open", "motion": "idle", "revision": 1},
+    {"action": "tap", "phase": "open", "motion": "tapping", "revision": 2},
+    {"action": "expire", "phase": "open", "motion": "idle", "revision": 3},
+    {"action": "stop", "phase": "closed", "motion": "idle", "revision": 4}
+  ]
+}

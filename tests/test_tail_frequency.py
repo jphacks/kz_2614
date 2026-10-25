@@ -88,7 +88,7 @@ class TailFrequencyToolTests(unittest.IsolatedAsyncioTestCase):
         client = httpx.AsyncClient
         with patch.dict(os.environ, {"TAIL_DASHBOARD_URL": "http://127.0.0.1:8765"}), \
              patch.object(tail.httpx, "AsyncClient", side_effect=lambda **kwargs: client(transport=httpx.MockTransport(handle), **kwargs)), \
-             patch.object(tail, "_request", side_effect=AssertionError("Hardware API must not be called")):
+             patch("server.ai.llm.tail_v2.V2Device.request", side_effect=AssertionError("Hardware API must not be called")):
             changed = await tail.set_tail_frequency(0.8)
             current = await tail.get_tail_frequency()
         self.assertEqual(changed, current)
@@ -170,7 +170,7 @@ class TailFrequencyStdioTests(unittest.TestCase):
                         await session.initialize()
                         tools = await session.list_tools()
                         self.assertEqual({tool.name for tool in tools.tools}, {
-                            "set_tail_frequency", "get_tail_frequency", "tap_tail", "stop_tail", "get_tail_status",
+                            "set_tail_frequency", "get_tail_frequency",
                         })
                         self.assertEqual(body(await session.call_tool("get_tail_frequency", {}))["rate_hz"], 0.6)
                         saved = body(await session.call_tool("set_tail_frequency", {"rate_hz": 0.8}))

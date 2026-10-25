@@ -23,21 +23,23 @@ class TailLLMBridgeTests(unittest.IsolatedAsyncioTestCase):
         async def helper(client, **kwargs):
             received.update(kwargs)
             self.assertIs(client, self.llm.client)
-            yield {"type": "text_delta", "text": "頻度を"}
-            yield {"type": "text_delta", "text": "保存しました。"}
-            yield {"type": "complete", "tool_calls": ("set_tail_frequency",), "stats": {"rounds": 2}}
+            yield {"type": "text_delta", "text": "動作指令を"}
+            yield {"type": "text_delta", "text": "送りました。"}
+            yield {"type": "complete", "tool_calls": ("tap_tail",), "stats": {"rounds": 2}}
 
         with patch.object(lm_studio, "stream_tail_chat", helper), \
                 patch.object(self.llm.client, "post", side_effect=AssertionError("native integration must not run")):
             result = await self.llm.generate_response(
-                "0.8Hzにしてください", [{"role": "user", "content": "以前の発話"}],
+                "トントンして", [{"role": "user", "content": "以前の発話"}],
                 speech_context={"pitch": "低め", "delivery": "ゆっくり"},
             )
-        self.assertEqual(result.text, "頻度を保存しました。")
-        self.assertEqual(result.tool_calls, ("set_tail_frequency",))
+        self.assertEqual(result.text, "動作指令を送りました。")
+        self.assertEqual(result.tool_calls, ("tap_tail",))
         self.assertEqual(result.stats["rounds"], 2)
         self.assertEqual(result.stats["reasoning"], "off")
-        self.assertIn("今回のユーザー発話（質問・依頼）:\n0.8Hzにしてください", received["user_input"])
+        self.assertIn("今回のユーザー発話（質問・依頼）:\nトントンして", received["user_input"])
+        self.assertEqual(received["current_user_text"], "トントンして")
+        self.assertTrue(received["execute_confirmed_tap"])
         self.assertIn("以前の発話", received["user_input"])
         self.assertIn("声の高さ: 低め", received["user_input"])
         self.assertNotIn("integrations", self.llm._build_payload("test"))

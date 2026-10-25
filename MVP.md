@@ -95,6 +95,8 @@ Webを新規に作り直す前提には戻さない。
 
 ## 6. しっぽの現状と修正目標
 
+PC側の後続修理・模擬試験は [PC・AI v2修理記録](docs/development/pc-ai-mvp-v2.md) を参照。以下の「現状」は修理基点mainの状態を記録しています。PC実装の追加をESP32対応・配備・全AC合格とは扱いません。通信契約と合格条件は変更していません。
+
 **現状**: 会話MCPのallowlistは `set_tail_frequency` / `get_tail_frequency` の2操作。
 PC内の希望頻度の保存・取得であり、ESP32への動作成功ではない。
 子MCPの環境には `TAIL_CONTROL_ENABLED=false` が強制される。
