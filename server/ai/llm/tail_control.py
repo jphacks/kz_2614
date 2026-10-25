@@ -42,9 +42,17 @@ class TailLease:
     dispatch_allowed: bool = False
     dispatched: bool = False
     duration: int = 0
+    playback_owned: bool = False
+    playback_enabled: bool = False
+    playback_active: bool = False
+    playback_started: bool = False
+    playback_terminal: bool = False
+    inhibit_playback: Callable[[], None] = lambda: None
 
-    async def call_tap(self, callback, duration_seconds):
-        self.coordinator.check(self)
+    async def call_tap(self, callback, duration_seconds, *, playback=False):
+        if self.playback_owned and not playback:
+            raise TailControlError("Voice motion is owned by actual audio playback")
+        self.coordinator.check_start(self)
         if self.attempted:
             raise TailControlError("This turn already attempted a start; do not retry")
         self.duration = duration_ms(duration_seconds)
@@ -123,6 +131,13 @@ class TailCoordinator:
             if self._owner not in (None, lease.session_id):
                 raise TailControlError("The fixed doll belongs to another active conversation")
 
+    def check_start(self, lease):
+        self.check(lease)
+        with self._lock:
+            if lease.playback_owned and (not lease.playback_enabled or not lease.playback_active
+                                         or lease.playback_terminal):
+                raise TailControlError("Actual audio playback is not active or enabled")
+
     def _transport(self):
         if self._device is None:
             self._device = V2Device(self._origin)
@@ -143,8 +158,23 @@ class TailCoordinator:
         return {"device_epoch": state["device_epoch"], "expected_revision": state["revision"],
                 "command_id": str(uuid.uuid4()), **extra}
 
+    @staticmethod
+    def _known_start_rejection(exc):
+        if not isinstance(exc, httpx.HTTPStatusError):
+            return False
+        codes = {400: {"invalid_request"}, 403: {"start_disabled"},
+                 409: {"stale_epoch", "stale_revision", "invalid_phase", "session_mismatch", "mode_not_ready"},
+                 429: {"budget_exceeded"}, 503: {"not_calibrated"}}
+        try:
+            value = exc.response.json()
+        except ValueError:
+            return False
+        return (isinstance(value, dict) and set(value) == {"error"}
+                and isinstance(value["error"], str)
+                and value["error"] in codes.get(exc.response.status_code, set()))
+
     async def tap(self, lease, seconds):
-        self.check(lease)
+        self.check_start(lease)
         duration = duration_ms(seconds)
         with self._lock:
             if not lease.dispatch_allowed or lease.dispatched or lease.duration != duration:
@@ -159,12 +189,17 @@ class TailCoordinator:
                 raise TailControlError("60-second movement budget exceeded")
             self._busy = True
             self._owner = lease.session_id
+        mutation_sent = False
         try:
             async with asyncio.timeout(START_DEADLINE_SECONDS):
                 def guard():
-                    self.check(lease)
+                    self.check_start(lease)
                     if not lease.dispatch_allowed:
                         raise TailControlError("The MCP caller cancelled its start permit")
+                def mutation_guard():
+                    nonlocal mutation_sent
+                    guard()
+                    mutation_sent = True  # Called at the final HTTP send boundary.
                 state = await self._transport().request("state", guard=guard)
                 guard()
                 with self._lock:
@@ -179,7 +214,8 @@ class TailCoordinator:
                     with self._lock:
                         self._used = True
                         self._results[lease.session_id] = stop_state("unconfirmed", self._device_epoch)
-                    state = await self._transport().request("open", self._body(state, session_id=lease.session_id), guard=guard)
+                    state = await self._transport().request("open", self._body(state, session_id=lease.session_id), guard=mutation_guard)
+                    mutation_sent = False
                     guard()
                     with self._lock:
                         self._remember(state)
@@ -190,12 +226,15 @@ class TailCoordinator:
                     # Conservative reservation: unknown starts are never refunded.
                     self._reservations.append((self._clock(), duration))
                 state = await self._transport().request("tap", self._body(state, session_id=lease.session_id,
-                                                                           duration_ms=duration), guard=guard)
+                                                                           duration_ms=duration), guard=mutation_guard)
+                mutation_sent = False
                 guard()
                 with self._lock:
                     self._remember(state)
                 return state
         except BaseException as exc:
+            if lease.playback_owned and mutation_sent and not self._known_start_rejection(exc):
+                lease.inhibit_playback()
             if isinstance(exc, DeviceEpochChanged):
                 lease.end_session()
             ticket = self.revoke_session(lease.session_id, lease)
@@ -230,6 +269,8 @@ class TailCoordinator:
         with self._lock:
             if lease is not None:
                 lease.revoked = True
+                lease.playback_active = False
+                lease.playback_terminal = True
                 if lease.epoch != self._epoch:
                     return None
             if self._owner != session_id:

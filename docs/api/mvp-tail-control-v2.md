@@ -8,6 +8,8 @@
 
 [共通MVP仕様](../../MVP.md)の有限トントン・停止・遅着拒否を、PC担当 `RyuuzinnRaika` とESP32担当 `Happy-Emori` が同じ形式で実装しています。Web担当 `naminamina` はPCの結果を表示し、機器HTTPを直接呼びません。既存の[機器HTTP API](esp32-http.md)は互換用v1の説明として保持します。
 
+PC側の開始条件は[AIの実再生開始](../development/playback-tail.md)へ更新します。端末playback.startedに対する1返答1回・最大5000msのtapを使い、ended/failed/割込みで期限前でもstopします。この変更は機器のURL・JSON・revision/epoch処理を変更しません。モデルによる任意開始や旧APIへのフォールバックは行いません。
+
 ## 1. 対象と前提
 
 - 指定操作者・固定PC controller・固定人形各1、同時会話1つ。機器のURLと対応個体はPCの管理設定で固定し、ブラウザーやLLMの任意URL・device指定を採用しません。
