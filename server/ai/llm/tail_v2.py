@@ -20,6 +20,10 @@ class TailControlError(RuntimeError):
     pass
 
 
+class TailBudgetExceeded(TailControlError):
+    pass
+
+
 class DeviceEpochChanged(TailControlError):
     pass
 
@@ -71,6 +75,10 @@ def validate_state(value: Any) -> dict[str, Any]:
             raise TailControlError("Inconsistent closed state")
     elif not valid_uuid(value.get("session_id")):
         raise TailControlError("Invalid open session")
+    if "session_prepare" in value["capabilities"]:
+        if "permission_session_id" not in value or (value["permission_session_id"] is not None
+                and not valid_uuid(value["permission_session_id"])):
+            raise TailControlError("Invalid session preparation permission")
     limits = value.get("limits")
     if (not isinstance(limits, dict) or set(limits) != set(LIMITS)
             or any(type(limits[key]) not in (int, float) if key == "rate_hz"
@@ -86,7 +94,16 @@ def validate_ack(value: Any, action: str, body: dict[str, Any]) -> dict[str, Any
             or state["device_epoch"] != body["device_epoch"]
             or state["revision"] != body["expected_revision"] + 1):
         raise TailControlError("Device acknowledgement does not match this command")
-    if action == "stop":
+    if action == "prepare":
+        if ("session_prepare" not in state["capabilities"] or state["phase"] != "closed"
+                or not state["start_enabled"] or not state["calibrated"]
+                or state.get("permission_session_id") != body["session_id"]):
+            raise TailControlError("Preparation acknowledgement does not match this session")
+    elif action == "disarm":
+        if (state["phase"] != "closed" or state["start_enabled"]
+                or state.get("permission_session_id") is not None):
+            raise TailControlError("Disarm acknowledgement still has permission")
+    elif action == "stop":
         if state["phase"] != "closed":
             raise TailControlError("Stop acknowledgement is not closed")
     elif (state["phase"] != "open" or state["session_id"] != body["session_id"]

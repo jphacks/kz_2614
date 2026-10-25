@@ -15,7 +15,7 @@ constexpr uint32_t MIN_DURATION_MS = 500;
 constexpr uint32_t MAX_DURATION_MS = 5000;
 constexpr size_t MAX_BODY = 1024;
 
-enum class Operation { Open, Tap, Stop };
+enum class Operation { Open, Tap, Stop, Prepare, Disarm };
 struct Request {
   char epoch[33] = {};
   uint64_t revision = 0;
@@ -32,6 +32,8 @@ struct State {
   bool enabled = false;
   bool calibrated = false;
   bool ready = false;
+  bool sessionPrepare = false;
+  char permissionSession[37] = {};
 };
 struct Result {
   int status;
@@ -42,6 +44,7 @@ struct Configuration {
   bool enabled = false, calibrated = false, ready = false;
   int low = 90, high = 90;
   int32_t position = 90000;
+  bool sessionPrepare = false;
 };
 using EpochSource = void (*)(void*, char*);
 using PwmWriter = bool (*)(void*, int32_t);
@@ -64,12 +67,27 @@ class Controller {
     if (state_.revision >= MAX_REVISION - 1) rotateEpoch();
     if (strcmp(r.epoch, state_.epoch)) return result(409, "stale_epoch");
     if (r.revision != state_.revision) return result(409, "stale_revision");
-    if (op == Operation::Stop) {
+    if (op == Operation::Stop || op == Operation::Disarm) {
       close();
+      if (op == Operation::Disarm) disarm();
       advance();
       return result(200, nullptr);
     }
+    if (op == Operation::Prepare) {
+      if (!state_.sessionPrepare) return result(403, "start_disabled");
+      if (!state_.calibrated) return result(503, "not_calibrated");
+      if (state_.open || state_.tapping || state_.permissionSession[0])
+        return result(409, "invalid_phase");
+      if (position_ < low_ * 1000 || position_ > high_ * 1000)
+        return result(409, "mode_not_ready");
+      state_.enabled = state_.ready = true;
+      memcpy(state_.permissionSession, r.session, sizeof(state_.permissionSession));
+      advance();
+      return result(200, nullptr); // Permission only: never a PWM write.
+    }
     if (!state_.enabled) return result(403, "start_disabled");
+    if (state_.permissionSession[0] && strcmp(r.session, state_.permissionSession))
+      return result(409, "session_mismatch");
     if (!state_.calibrated) return result(503, "not_calibrated");
     if (!state_.ready) return result(409, "mode_not_ready");
     if (op == Operation::Open) {
@@ -102,8 +120,8 @@ class Controller {
     advance();
     return result(200, nullptr);
   }
-  // Only the explicit local preparation path may change permission/mode.
-  // Neither HTTP open nor stop arms PWM or releases neutral/relax.
+  // Local preparation and opt-in, fenced session preparation own permission.
+  // Neither HTTP open nor stop writes PWM.
   void configure(bool enabled, bool calibrated, bool ready, int low, int high,
                  int32_t position) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -125,7 +143,7 @@ class Controller {
   State localStop(bool disarm = false) {
     std::lock_guard<std::mutex> lock(mutex_);
     close();
-    if (disarm) { state_.enabled = false; state_.ready = false; }
+    if (disarm || state_.permissionSession[0]) this->disarm();
     advance();
     return state_;
   }
@@ -159,6 +177,8 @@ class Controller {
  private:
   friend struct ControllerTestAccess; // Host boundary test injects near-overflow revision.
   void setConfiguration(Configuration config) {
+    state_.permissionSession[0] = '\0';
+    state_.sessionPrepare = config.sessionPrepare;
     state_.enabled = config.enabled;
     state_.calibrated = config.calibrated && config.low >= 0 && config.high <= 180 && config.low < config.high;
     state_.ready = config.ready && config.position >= config.low * 1000 && config.position <= config.high * 1000;
@@ -183,7 +203,12 @@ class Controller {
     state_.session[0] = '\0';
     positionFineValid_ = false;
   }
+  void disarm() {
+    state_.enabled = state_.ready = false;
+    state_.permissionSession[0] = '\0';
+  }
   void rotateEpoch() {
+    disarm();
     close();
     state_.enabled = false;
     state_.ready = false;

@@ -45,6 +45,22 @@ int main() {
     assert(!c.state(0).open && !c.state(0).tapping);
     assert(c.apply(i % 2 ? Operation::Tap : Operation::Open, r, 0).status == 409);
   }
+  // Network preparation cannot overtake a concurrent permission-releasing stop.
+  for (int i = 0; i < 500; ++i) {
+    Controller prepared(epoch, noop, nullptr, {false, true, false, 0, 180, 90000, true});
+    Request r = request(prepared.state(0));
+    Result start{}, stop{};
+    std::atomic<bool> go{false};
+    std::thread a([&] { while (!go.load()) std::this_thread::yield();
+      start = prepared.apply(Operation::Prepare, r, 0); });
+    std::thread b([&] { while (!go.load()) std::this_thread::yield();
+      stop = prepared.apply(Operation::Disarm, r, 0); });
+    go = true; a.join(); b.join();
+    assert((start.status == 200) != (stop.status == 200));
+    if (stop.status == 409) assert(prepared.apply(Operation::Disarm, request(prepared.state(0)), 0).status == 200);
+    assert(!prepared.state(0).enabled && !prepared.state(0).permissionSession[0]);
+    assert(prepared.apply(Operation::Prepare, r, 0).status == 409);
+  }
   // PWM write and stop use the same lock: ACK cannot precede an in-flight write.
   Hardware h;
   Controller c(epoch, blockedWrite, &h, {true, true, true, 0, 180, 90000});
@@ -80,5 +96,5 @@ int main() {
   assert(localStop.status == 409); // The local change advanced the revision first.
   assert(c2.apply(Operation::Stop, request(c2.state(0)), 0).status == 200);
   assert(!c2.state(0).open);
-  std::cout << "PASS: 500 concurrent request races + PWM/local-preparation/stop serialization\n";
+  std::cout << "PASS: 1000 concurrent request races + PWM/local-preparation/stop serialization\n";
 }

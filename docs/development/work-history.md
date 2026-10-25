@@ -1,5 +1,59 @@
 # JPHACKS 制作作業・会話履歴
 
+## 2026-10-25 — 再生連動を2秒ずつへ配分
+
+利用者が物理的な動作を確認した後、次の返答で動かないと報告。実ログは5秒tapを短時間に2回受理し、その後開始を拒否。早期停止でも5秒予約を保持するため、60秒10000msを早々に使い切っていた。後の60秒窓では再び指令受付が記録されており、常時の通信断とは異なる。
+
+`PLAYBACK_TAIL_SECONDS=2.0` に変更し、同じ予算で最大5返答分を確保。上限・速度・振れ幅・予算返却なし・停止フェンスを保持。PCの予算不足をTailBudgetExceededとして専用ログにした。無期限動作や予算解除は行わない。
+
+検証: Python290件（skipなし）14.710秒PASS、うち再生連動15件。5回の2000ms受理、6回目の拒否、60秒経過後の旧started非再実行、新turnの開始を検証。実機試験の初回は切替直前の5秒指令2回分が残り受付されず、失敗結果を保存してDELETE/disarmで後片付け。予算が自然失効した後、配備したVoiceSessions/PCM playback処理に模擬再生通知を与え、実Followerの連続2回受付・各約2秒でidle・返答終了stop・最終DELETEで許可OFFを確認した。STT/LLM/TTS/実ブラウザー再生はこの試験では模擬で、物理観察を自動確認したとはしない。
+
+音声サーバーの元会話はDELETEで正常停止してから切替。旧ファイルを私用バックアップし、ファーム再書込み・Wi-Fi/校正/振れ幅の変更なし。通常の音声画面からの再観察は利用者待ち。PR29へ追記、未マージ。
+
+## 2026-10-25 — 会話開始/終了からFollowerの許可を制御
+
+- 利用者が「開始ボタンでON、終了でOFF」を指定。参照main `d0ceb31e225fc221e95c1237f9bf71dcd2b4bcc4` をHappy-Emoriへ通常merge（`787ef56`）。Agent/履歴の競合は双方保持。既存の私用設定・他checkout・未push作業を削除しない。
+- v2の任意拡張 `session_prepare`、prepare/disarmと会話UUIDに束縛した許可を両端に実装。prepareではPWMなし。終了と返答stopの競合時も許可解除を確認してからcommand_stoppedを返す。Reader/旧API遮断、有限時間、速度、予算、epoch/revision、重複・遅着拒否は維持。
+- 対象AC: AC-01の開始、AC-03の実再生連動、AC-04の停止。公開製品/実スマホ/物理観察を含む全ACの合格とは扱わない。
+- Python回帰290件（skipなし）成功。制限環境では104件の一部が実行遅延で失敗し、ホスト環境で全件再実行して成功を確認。新しい8件は無動作の準備、DELETE、次会話、次返答、未対応/未校正、準備ACK喪失、準備中DELETE、stop中DELETEなどを検証。
+- 実ファームのnative26件（skipなし）、1000競合、PWM/準備とstopの排他、HTTP7ケース、振れ幅変換をASan/UBSan/LSanで成功。Arduino core3.3.12でビルド成功（Flash988843/RAM47996 bytes）。
+- 既知FollowerのMACと直前の150%アプリを照合し、アプリ領域だけ書込み。partition/OTA/NVSは前後バイト一致。Wi-Fi・校正値・振れ幅設定を保持。秘密値/バックアップ/私用ビルドはcommit対象外。
+- 起動時OFFを実機HTTPで確認。更新済み音声サーバーへ実際のPOST session→DELETEを2回実施し、開始でstart_enabled=true/permission_session_id一致/closed/idle、終了でfalse/null、command_stoppedを確認。ローカルarm・tapは送っていない。
+- 新版の実マイク→返事の端末再生→物理サーボ動作は操作者の再試験待ち。今回の実機確認は会話許可と解除の通信経路であり、物理動作の確認ではない。公開配備・実スマホも未確認。
+
+PC設定: `TAIL_MCP_ENABLED=true`、`TAIL_CONTROL_ENABLED=true`、`TAIL_SESSION_PREPARE_ENABLED=true`、固定の `TAIL_DEVICE_URL`。Followerは私用TailConfig.hで `TAIL_SESSION_PREPARE_ENABLED=true`、既存の校正/動作範囲とTAIL_MCP_API_ENABLEDも必要。両端の既定値はfalse。機器は管理PCからのネットワークに限定する。
+
+要求例: stateで得たepoch/revisionを使い `POST /api/v2/tail/prepare` に `{device_epoch, expected_revision, command_id, session_id}` を送る。200はclosed/idle、start_enabled=true、permission_session_id=session_id、revision+1、同じcommand_id。返答は既存open/tap/stop。会話終了は `POST /api/v2/tail/disarm` に共通3項目のみ。200後のGETでclosed/idle/false/nullを確認する。重複prepare・停止前の古いprepareは409。LLM/ブラウザーへ機器URLやprepare工具を公開しない。
+
+再確認手順: 画面を再読み込み→会話開始→任意の一言→AIの声と同時に尻尾を観察→停止。1返答最大5秒、直近60秒10秒の予算は維持。再起動だけではOFFのまま、新たな会話開始が必要。
+
+## Followerの振れ幅調整（2026-10-25）
+
+- 利用者が従来の試験で物理的なしっぽの動きを確認し、方向を維持した振れ幅拡大を依頼。main `2a14c766d5d7f19199da908c895892b56fb433f5` を基点に、100〜150%の私用設定を追加した。既定100%は従来と同じPWM。
+- 手元準備とv2のミリ度出力を共通変換にし、1500µsを中心に丸まり補正込みの偏差を拡大。保存済みmin/maxで制限し、方向・中立・NVS校正値を保持。v2 wire契約・0.3回/秒・有限時間・予算・停止フェンスは変更なし。個体の設定値はGitに含めない。
+- GCC 15.2 / ASan・UBSan・LSanで、角度変換の全校正組合せと最大幅の全ミリ度、従来100%の一致、単調性・中立・上下限を検証。既存24テスト（skip 0）、500競合＋排他、HTTP 7ケースも成功。制限環境でLSanが実行できなかった初回を合格とせず、ホスト環境で全再実行した。
+- Arduino CLI 1.5.1 / core 3.3.12の私用ビルド成功（Flash 988379 bytes、RAM 47996 bytes）。Followerを識別し、直前アプリを保存済みバイナリと照合してからアプリ領域だけ更新。partition/OTA/NVSは読み戻しでバイト単位一致。起動診断で増幅版を確認し、操作者が許可した準備を行った。
+- 新epochに合わせて音声サービスを再起動。合成テスト音声「コンコンして。」を実STTで認識し、MCPの受付1回、実機tapping→約5秒後idle、LLM返答・TTS生成・DELETEのcommand_stoppedまで成功（合計17.739秒）。拡大後の見え方は操作者確認待ち。
+
+## 既存音声画面とv2 Followerの実接続（2026-10-25）
+
+- 利用者は新しいESP32を維持する構成を選び、サーバー切替・再起動・サーボ動作を承認した。main `2a14c766d5d7f19199da908c895892b56fb433f5` のPCバックエンドを独立起動先へ展開し、以前の音声画面をファイル内容一致で再利用。元checkout・設定・モデルを保全。
+- FollowerのシリアルとHTTPのepoch一致確認後、手元準備を実行してstart_enabled=trueを確認。ファーム・校正は変更していない。
+- 音声試行でGPUメモリ不足が発生。停止済みLM Studioの孤立モデルを識別して終了し、LLMのGPU offloadを減らして解消した。
+- 合成した短いテスト音声を実音声HTTPへ投入し、実STT→音声所有MCP tap_tail受付1回→実Follower tapping→約5秒後idle→LLM返答/TTS音声取得→DELETEのcommand_stoppedを確認。合計14.747秒、返答WAV 368684 bytes。
+- 実マイク・ブラウザー再生・物理サーボの最終観察は操作者確認待ち。合成音声のAPI試験と区別する。秘密設定・個体値・音声はGitへ追加していない。
+
+## Follower main 2a14c76 の実機配備・状態API確認（2026-10-25）
+
+利用者の書込み依頼に基づき、最新origin/main `2a14c766d5d7f19199da908c895892b56fb433f5` のFollowerを対象個体へ書き込んだ。Happy-Emoriはclean状態からfast-forwardし、他checkoutの未コミット・未push作業を保持した。Readerと音声サービスには変更なし。
+
+事前に旧状態APIから設定を確認し、識別済みのFollower全4MiBを非公開領域へ退避。高速読取りは途中失敗したため115200bpsで完全取得し、サイズ・SHA-256を記録。保存済みWi-Fi設定をNVSからローカルに復元し、旧アプリ内の値とも一致を確認。校正値はNVSのまま保持し、Tail設定も旧状態APIで観測した値を引き継いだ。個体設定・認証情報・バックアップはGit管理外。
+
+指定SHAのソースをそのまま使い、Arduino CLI 1.5.1 / Arduino-ESP32 3.3.12の実設定ビルドが成功（Flash 988207 bytes、RAM 47996 bytes）。既存のpartition配置とflash設定の一致を検査し、標準の4領域だけを書き込んだ。全消去・merged全領域イメージの書込みなし。esptoolの書込みhash検証成功後、再起動前にNVS全領域を読み戻し、書込み前とバイト単位で完全一致した。
+
+通常起動後、同じWi-Fiへ接続し、実機の `GET /api/v2/tail/state` はHTTP 200・Content-Type application/json・Cache-Control no-store。`protocol_version=2, control_mode=v2_exclusive, revision=0, session_id=null, phase=closed, motion=idle, start_enabled=false, calibrated=true` を確認した。
+
+実施範囲は書込み・設定保全・状態読取りまで。serial a、open/tapなどの動作指令は送っていない。機構の動作、速度・電流、物理停止時間、再起動をまたぐ遅着要求、PC音声からの通し受け入れは引き続き未実施。動作試験は操作者・対象機器を確認し、手元準備後に既存のMVP v2試験手順で行う。
 ## AI実再生開始に合わせるしっぽ動作（2026-10-25）
 
 - 利用者が「トントンして」の明示要求より「AIが話し始める」タイミングを指定。参照main `593103d2a97ef1f5133d7502ab031e0b4dbc4601`から分離worktree/branch `feature/playback-tail`で実装。[仕様・検証・引き継ぎ](playback-tail.md)とMVPのAC-03/04/05を更新した。

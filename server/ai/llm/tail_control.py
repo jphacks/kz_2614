@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import httpx
 
-from .tail_v2 import TailControlError, DeviceEpochChanged, V2Device, duration_ms, valid_uuid
+from .tail_v2 import TailControlError, TailBudgetExceeded, DeviceEpochChanged, V2Device, duration_ms, valid_uuid
 
 STOP_DEADLINE_SECONDS = 4.5  # Includes GET/retries; leaves margin inside Web's five seconds.
 START_DEADLINE_SECONDS = 6.0
@@ -91,6 +91,7 @@ class StopTicket:
     epoch: str | None
     used: bool
     task: asyncio.Task | None = None
+    disarm: bool = False
 
 
 class TailCoordinator:
@@ -113,6 +114,7 @@ class TailCoordinator:
         self._results: OrderedDict[str, dict] = OrderedDict()
         self._reservations = deque()
         self._background = set()
+        self._prepared_owner = None
 
     def lease(self, session_id, generation, turn_id, owns, end_session=lambda: None):
         with self._lock:
@@ -128,7 +130,8 @@ class TailCoordinator:
                 raise TailControlError("Stopped/stale request or device stop unconfirmed")
             if not self._enabled() or not valid_uuid(lease.session_id):
                 raise TailControlError("Tail control is disabled or session invalid")
-            if self._owner not in (None, lease.session_id):
+            if (self._owner not in (None, lease.session_id)
+                    or self._prepared_owner not in (None, lease.session_id)):
                 raise TailControlError("The fixed doll belongs to another active conversation")
 
     def check_start(self, lease):
@@ -173,6 +176,51 @@ class TailCoordinator:
                 and isinstance(value["error"], str)
                 and value["error"] in codes.get(exc.response.status_code, set()))
 
+    def preparation_enabled(self):
+        return self._enabled() and os.getenv("TAIL_SESSION_PREPARE_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+
+    async def prepare_session(self, lease):
+        """Only new explicit voice-session creation calls this; never an LLM tool."""
+        self.check(lease)
+        with self._lock:
+            if self._busy or self._owner is not None or self._prepared_owner is not None:
+                raise TailControlError("Previous conversation still owns the device")
+            self._busy = True
+            self._owner = self._prepared_owner = lease.session_id
+        try:
+            async with asyncio.timeout(START_DEADLINE_SECONDS):
+                def guard():
+                    self.check(lease)
+                state = await self._transport().request("state", guard=guard)
+                guard()
+                if ("session_prepare" not in state["capabilities"] or not state["calibrated"]
+                        or state["phase"] != "closed" or state["motion"] != "idle"
+                        or state.get("permission_session_id") is not None):
+                    raise TailControlError("Device cannot prepare a new conversation")
+                with self._lock:
+                    # A new explicit session may adopt a new boot only with no old
+                    # owner/ticket/unconfirmed stop. check() fenced those above.
+                    self._device_epoch = state["device_epoch"]
+                    self._state = state
+                def mutation_guard():
+                    guard()
+                    with self._lock:
+                        self._used = True
+                        self._results[lease.session_id] = stop_state("unconfirmed", self._device_epoch)
+                state = await self._transport().request("prepare", self._body(state, session_id=lease.session_id), guard=mutation_guard)
+                guard()
+                with self._lock:
+                    self._remember(state)
+                return state
+        except BaseException:
+            ticket = self.revoke_session(lease.session_id, release=True)
+            if ticket is not None:
+                await asyncio.shield(self.schedule_stop(ticket))
+            raise
+        finally:
+            with self._lock:
+                self._busy = False
+
     async def tap(self, lease, seconds):
         self.check_start(lease)
         duration = duration_ms(seconds)
@@ -186,7 +234,7 @@ class TailCoordinator:
             while self._reservations and self._reservations[0][0] <= now - 60:
                 self._reservations.popleft()
             if sum(ms for _, ms in self._reservations) + duration > 10000:
-                raise TailControlError("60-second movement budget exceeded")
+                raise TailBudgetExceeded("60-second movement budget exceeded")
             self._busy = True
             self._owner = lease.session_id
         mutation_sent = False
@@ -203,12 +251,18 @@ class TailCoordinator:
                 state = await self._transport().request("state", guard=guard)
                 guard()
                 with self._lock:
+                    if (self._used and self._prepared_owner == lease.session_id
+                            and state["phase"] == "closed" and self._state is not None
+                            and state["revision"] != self._state["revision"]):
+                        raise TailControlError("Device stopped outside this conversation; no automatic reopen")
                     self._remember(state)
                 if not state["start_enabled"] or not state["calibrated"] or state["motion"] != "idle":
                     raise TailControlError("Device start permission, calibration or idle state missing")
+                if self._prepared_owner == lease.session_id and state.get("permission_session_id") != lease.session_id:
+                    raise TailControlError("Conversation permission was revoked on the device")
                 if state["phase"] == "closed":
                     # A local stop cannot silently authorize a new open in this session.
-                    if self._used:
+                    if self._used and self._prepared_owner != lease.session_id:
                         raise TailControlError("Device closed unexpectedly; no automatic reopen")
                     guard()
                     with self._lock:
@@ -265,13 +319,20 @@ class TailCoordinator:
         with self._lock:
             return dict(self._results.get(session_id, stop_state()))
 
-    def revoke_session(self, session_id, lease=None):
+    def revoke_session(self, session_id, lease=None, *, release=False):
         with self._lock:
+            releasing = release and self._prepared_owner == session_id
+            if releasing and self._owner is None:
+                self._owner = session_id
+                self._used = True
+            if releasing and self._ticket is not None and self._ticket.session_id == session_id:
+                self._ticket.disarm = True
+                return self._ticket
             if lease is not None:
                 lease.revoked = True
                 lease.playback_active = False
                 lease.playback_terminal = True
-                if lease.epoch != self._epoch:
+                if lease.epoch != self._epoch and not releasing:
                     return None
             if self._owner != session_id:
                 return None
@@ -280,6 +341,7 @@ class TailCoordinator:
             self._epoch += 1  # Fence immediately, before cancellation/scheduling/HTTP.
             ticket = StopTicket(self._epoch, session_id, self._clock() + STOP_DEADLINE_SECONDS,
                                 self._device_epoch, self._used)
+            ticket.disarm = releasing
             self._ticket = ticket
             self._results[session_id] = stop_state("unconfirmed" if ticket.used else "disabled", ticket.epoch)
             return ticket
@@ -320,7 +382,8 @@ class TailCoordinator:
                             raise TailControlError("Epoch changed while stopping")
                         body = self._body(state)
                         try:
-                            ack = await self._stop_request(ticket, "stop", body)
+                            action = "disarm" if ticket.disarm else "stop"
+                            ack = await self._stop_request(ticket, action, body)
                         except httpx.HTTPStatusError as exc:
                             if exc.response.status_code != 409:
                                 raise
@@ -331,10 +394,21 @@ class TailCoordinator:
                                 or state["phase"] != "closed" or state["motion"] != "idle"
                                 or state["session_id"] is not None):
                             raise TailControlError("Fresh GET did not confirm command stop")
-                        result = stop_state("command_stopped", ticket.epoch, ack["revision"])
-                        break
+                        with self._lock:
+                            if ticket.disarm and action != "disarm":
+                                continue  # Session ended while ordinary stop was in flight.
+                            if ticket.disarm and (state["start_enabled"] or state.get("permission_session_id") is not None):
+                                raise TailControlError("Fresh GET did not confirm disarm")
+                            result = stop_state("command_stopped", ticket.epoch, ack["revision"])
+                            # Commit under the same lock as the upgrade check. A
+                            # concurrent DELETE either upgrades this ticket or creates
+                            # a new disarm after the ordinary stop completes.
+                            return self._complete_stop(ticket, result)
             except (Exception, asyncio.CancelledError):
                 pass  # Never turn an uncertain stop into disabled/success.
+        return self._complete_stop(ticket, result)
+
+    def _complete_stop(self, ticket, result):
         with self._lock:
             if self._ticket is ticket:
                 self._results[ticket.session_id] = result
@@ -342,6 +416,8 @@ class TailCoordinator:
                 while len(self._results) > 256:
                     self._results.popitem(last=False)
                 self._blocked = self._blocked or result["status"] == "unconfirmed"
+                if ticket.disarm:
+                    self._prepared_owner = None
                 self._owner = None
                 self._used = False
                 self._ticket = None

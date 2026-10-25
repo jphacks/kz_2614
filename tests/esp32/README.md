@@ -40,6 +40,9 @@ firmware boot is separately tested as closed/idle, revision 0, permission off.
   narrow-range speed, expiry, local/legacy stop, and disabled/uncalibrated modes.
 - 500 concurrent C++ races cover both open/stop and tap/stop. Blocked PWM/local
   preparation callbacks prove that stop cannot ACK before the write completes.
+- Servo mapping tests cover supported calibration/curl combinations, neutral,
+  monotonic direction, unchanged 100% output, expanded 100–150% amplitude,
+  calibrated pulse bounds, and every milli-degree at the widest synthetic range.
 - The real HTTP adapter compiled with IDF I/O stubs rejects partial/slow/oversized/
   chunked/wrong-type bodies, including a late final chunk, and accepts fragments.
   It checks no-store and connection closure. Actual IDF socket scheduling and

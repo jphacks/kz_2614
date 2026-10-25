@@ -116,3 +116,16 @@ PCの模擬機器とESP32実装は同じJSON fixtures・期待状態で比較し
 | v1機器・不正capability・範囲外・未校正・予算超過 | 開始しない。成功表示しない |
 
 模擬試験後に操作者立会いで有限動作・途中停止・期限・再起動を確認します。ファームビルド、実機試験、公開配備はこの文書の追加では実施していません。
+
+## 7. 明示した会話開始での準備（2026-10-25 拡張）
+
+利用者の指定により、任意capability `session_prepare` を追加する。固定PC・固定人形の管理ネットワーク限定。公開認証/経路制限は従来どおり必要。既定は無効で、Followerの私用設定 `TAIL_SESSION_PREPARE_ENABLED` とPCの `TAIL_SESSION_PREPARE_ENABLED` を双方で明示して使う。
+
+- `POST /api/v2/tail/prepare`: 共通3項目＋session_id。closed/idle・校正・PWM準備済みを検査し、開始許可と `permission_session_id` を設定する。PWMは出さず、phaseはclosedのまま。既存の許可sessionがあれば拒否。epoch/revision検査から更新まで同じ排他区間。成功でrevision+1。
+- このcapabilityを持つstateには `permission_session_id`（UUIDまたはnull）が加わる。openは許可sessionと一致する場合だけ成功。既存の手元準備との互換は維持する。
+- `POST /api/v2/tail/disarm`: stopと同じ本文・停止フェンス・応答検査に加え、開始許可とpermission_session_idを解除。最後のPWMは保持。重複・古い要求は拒否する。
+- 通常stopは返答終了/割込み用で、動作だけ停止し、会話の許可を保持する。会話DELETE/期限/障害終了はdisarm。次の返答は新しい有効なturnだけでopen/tap可能。古い通知・失敗した開始の自動再送は不可。
+- prepareは音声会話の新規作成時に1回だけ実行。LLM工具には公開しない。前会話の停止未確認、別会話の所有、未対応機器、準備失敗では開始を失敗にし、曖昧な準備は独立disarmで片付ける。
+- 再起動時は許可OFF・PWM off。進行中会話で再起動を検出したら再準備しない。停止確認済みで所有会話がないときの、新しい開始ボタン操作だけが新epochを採用できる。
+
+必須追加試験: prepareでPWMなし、会話終了で許可OFF、他session拒否、prepare/disarm競合、遅着prepare・重複prepare・旧epoch拒否、準備応答喪失、準備中会話終了、返答終了後の次turn、未校正/未対応拒否。
