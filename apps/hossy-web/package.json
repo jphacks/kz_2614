@@ -6,8 +6,11 @@
     "node": ">=22.22.0"
   },
   "scripts": {
+    "predev": "node scripts/sync-voice-assets.mjs",
     "dev": "astro dev",
+    "prebuild": "node scripts/sync-voice-assets.mjs",
     "build": "astro build",
+    "prepreview": "node scripts/sync-voice-assets.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },

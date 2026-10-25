@@ -1,33 +1,56 @@
 const defaults = { sound: 'みみもとささやき', bedtime: '22:30', duration: 30, wakeTime: '07:00', sessionStart: null, sessions: [] };
 const STORAGE_KEY = 'nengitsune-ui';
 const LEGACY_STORAGE_KEY = 'nemuri-ui';
-
-function loadState() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? '{}');
-    const sessions = Array.isArray(stored.sessions)
-      ? stored.sessions.filter((item) => Number.isFinite(item?.start) && Number.isFinite(item?.end) && item.end >= item.start)
-      : [];
-    return {
-      ...defaults,
-      ...stored,
-      bedtime: /^([01]\d|2[0-3]):[0-5]\d$/.test(stored.bedtime) ? stored.bedtime : defaults.bedtime,
-      duration: [15, 30, 45, 60, 75, 90].includes(stored.duration) ? stored.duration : defaults.duration,
-      wakeTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(stored.wakeTime) ? stored.wakeTime : defaults.wakeTime,
-      sessionStart: Number.isFinite(stored.sessionStart) ? stored.sessionStart : null,
-      sessions,
-    };
-  } catch {
-    return { ...defaults };
-  }
+const SETTINGS_KEY = 'nengitsune-settings-v2';
+const RECORD_PREFIX = 'nengitsune-session-v2:';
+const unsavedRecords = new Map();
+let settingsSaveFailed = false;
+let storageReadFailed = false;
+function readJSON(key) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { storageReadFailed = true; return null; }
 }
-
-const state = loadState();
+function validRecord(item) {
+  return Number.isFinite(item?.start) && Number.isFinite(item?.end) && item.start > 0 && item.end >= item.start;
+}
+function loadRecords(limit = 100) {
+  const records = new Map();
+  const legacy = readJSON(STORAGE_KEY) || readJSON(LEGACY_STORAGE_KEY) || {};
+  for (const item of Array.isArray(legacy.sessions) ? legacy.sessions : []) {
+    if (validRecord(item)) records.set(`legacy-${item.start}-${item.end}`, { start: item.start, end: item.end, legacy: true });
+  }
+  try {
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(RECORD_PREFIX)) continue;
+      const item = readJSON(key);
+      if (validRecord(item)) records.set(key.slice(RECORD_PREFIX.length), {
+        id: key.slice(RECORD_PREFIX.length), start: item.start, end: item.end,
+        deadlineAt: Number.isFinite(item.deadlineAt) ? item.deadlineAt : null,
+        reason: ['manual', 'deadline', 'hidden', 'pagehide', 'error', 'other-tab'].includes(item.reason) ? item.reason : 'manual',
+      });
+    }
+  } catch { storageReadFailed = true; }
+  for (const [id, item] of unsavedRecords) records.set(id, item);
+  return [...records.values()].sort((a, b) => b.start - a.start).slice(0, limit);
+}
+function loadSettings() {
+  const stored = readJSON(SETTINGS_KEY) || readJSON(STORAGE_KEY) || readJSON(LEGACY_STORAGE_KEY) || {};
+  return {
+    sound: ['みみもとささやき', 'やさしい雨音', 'ふわふわの雲', 'しずかな波音'].includes(stored.sound) ? stored.sound : defaults.sound,
+    bedtime: /^([01]\d|2[0-3]):[0-5]\d$/.test(stored.bedtime) ? stored.bedtime : defaults.bedtime,
+    duration: [15, 30, 45, 60, 75, 90].includes(stored.duration) ? stored.duration : defaults.duration,
+    wakeTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(stored.wakeTime) ? stored.wakeTime : defaults.wakeTime,
+  };
+}
+// A reload never restores a microphone session from storage.
+const state = { ...defaults, ...loadSettings(), sessions: loadRecords() };
 const screens = [...document.querySelectorAll('[data-screen]')];
 const navigation = [...document.querySelectorAll('.nav-item')];
 const soundOptions = [...document.querySelectorAll('[data-sound]')];
 const toast = document.querySelector('.toast');
 let toastTimer;
+const loadingScreen = document.querySelector('#loading-screen');
+const themeColorMeta = document.querySelector('#theme-color-meta');
 const installBanner = document.querySelector('#install-banner');
 const installAction = document.querySelector('#install-action');
 const installGuide = document.querySelector('#install-guide');
@@ -118,8 +141,24 @@ window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 });
 
+function updateStorageNotice() {
+  const notice = document.querySelector('#storage-status');
+  if (!notice) return;
+  const failed = unsavedRecords.size || settingsSaveFailed || storageReadFailed;
+  notice.hidden = !failed;
+  notice.textContent = unsavedRecords.size
+    ? '記録を保存できませんでした。この画面だけに表示しています。再読み込みすると失われます。'
+    : settingsSaveFailed ? '設定を保存できませんでした。この画面だけに反映しています。'
+    : '保存済みの記録を読み取れませんでした。ブラウザーの保存設定を確認してください。';
+}
 function saveState() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* Storage is optional. */ }
+  try {
+    const { sound, bedtime, duration, wakeTime } = state;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sound, bedtime, duration, wakeTime }));
+    settingsSaveFailed = false;
+  } catch { settingsSaveFailed = true; }
+  updateStorageNotice();
+  return !settingsSaveFailed;
 }
 
 function showToast(message) {
@@ -170,9 +209,9 @@ function updateSound() {
 soundOptions.forEach((option) => {
   option.addEventListener('click', () => {
     state.sound = option.dataset.sound;
-    saveState();
+    const saved = saveState();
     updateSound();
-    showToast(`今夜のサウンドを「${state.sound}」にしました。`);
+    if (saved) showToast(`今夜のサウンドを「${state.sound}」にしました。`);
   });
 });
 
@@ -182,25 +221,56 @@ const wakeTime = document.querySelector('#wake-time');
 bedtime.value = state.bedtime;
 duration.value = String(state.duration);
 wakeTime.value = state.wakeTime;
+const bedtimeDisplay = document.querySelector('#bedtime-display');
+const wakeTimeDisplay = document.querySelector('#wake-time-display');
+function syncTimeDisplays() {
+  if (bedtimeDisplay) bedtimeDisplay.textContent = bedtime.value || state.bedtime;
+  if (wakeTimeDisplay) wakeTimeDisplay.textContent = wakeTime.value || state.wakeTime;
+}
+syncTimeDisplays();
+[bedtime, wakeTime].forEach((input) => {
+  input.addEventListener('input', () => {
+    if (input === bedtime && bedtime.value) state.bedtime = bedtime.value;
+    if (input === wakeTime && wakeTime.value) state.wakeTime = wakeTime.value;
+    syncTimeDisplays();
+    saveState();
+  });
+  input.addEventListener('click', () => { try { input.showPicker?.(); } catch {} });
+});
 bedtime.addEventListener('change', () => {
   state.bedtime = bedtime.value;
+  syncTimeDisplays();
   saveState();
 });
 wakeTime.addEventListener('change', () => {
   state.wakeTime = wakeTime.value;
+  syncTimeDisplays();
   saveState();
 });
 
 function updateDuration() {
   document.querySelector('#duration-value').textContent = duration.value;
   const percent = ((Number(duration.value) - 15) / 75) * 100;
-  duration.style.background = `linear-gradient(90deg,#a69ad0 0%,#a69ad0 ${percent}%,#ece7f5 ${percent}%,#ece7f5 100%)`;
+  duration.style.background = `linear-gradient(90deg,#f0c259 0%,#f0c259 ${percent}%,#253554 ${percent}%,#253554 100%)`;
+  document.querySelectorAll('[data-duration-step]').forEach((btn) => {
+    const active = Number(btn.dataset.durationStep) === Number(duration.value);
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
 }
 
 duration.addEventListener('input', () => {
   state.duration = Number(duration.value);
   saveState();
   updateDuration();
+});
+document.querySelectorAll('[data-duration-step]').forEach((button) => {
+  button.addEventListener('click', () => {
+    duration.value = button.dataset.durationStep;
+    state.duration = Number(duration.value);
+    saveState();
+    updateDuration();
+  });
 });
 
 function dateKey(date) {
@@ -419,13 +489,13 @@ function renderDiary() {
   let source = '記録なし';
 
   if (sessions.length) {
-    source = 'このブラウザの記録';
+    source = sessions.some((item) => item.unsaved) ? '未保存の記録を含む' : 'このブラウザの記録';
     headline = 'ねんぎつねと過ごした夜';
     metrics = [durationText(sessions.reduce((total, session) => total + session.end - session.start, 0)), `${sessions.length}回`, '未連携'];
     metricLabels = ['いっしょの時間', 'おやすみ回数', '動きの記録'];
     events = sessions.flatMap((session) => [
-      { time: clockTime(session.start), kind: 'start', mark: '☾', title: 'ねんぎつねとおやすみを開始', detail: '画面内のタイマーを開始しました。' },
-      { time: clockTime(session.end), kind: 'wake', mark: '☀', title: 'おやすみ時間を終了', detail: '一緒に過ごした時間を記録しました。' },
+      { time: clockTime(session.start), kind: 'start', mark: '☾', title: 'ねんぎつねとおやすみを開始', detail: session.legacy ? '以前の画面内タイマーの記録です。' : 'マイクの音声処理が準備できた時刻です。' },
+      { time: clockTime(session.end), kind: 'wake', mark: '☀', title: '音声入出力を終了', detail: session.legacy ? '以前のタイマーの記録です。' : `${endReasons[session.reason] || '終了'}。${session.unsaved ? '保存できていません。' : '時刻のみ保存しました。'}` },
     ]);
     disclaimer.textContent = 'このブラウザで記録した開始・終了時刻です。寝返りなどの睡眠状態はまだ測定していません。';
   } else if (sample) {
@@ -435,7 +505,7 @@ function renderDiary() {
     events = sample.events;
     disclaimer.textContent = 'この日の出来事と数値は画面イメージ用のサンプルです。実際の睡眠状態は測定していません。';
   } else {
-    disclaimer.textContent = '入眠準備からタイマーを使うと、開始・終了時刻をこのブラウザに記録できます。';
+    disclaimer.textContent = '音声入出力の準備ができてから、開始・終了時刻のみをこのブラウザに記録します。会話の本文・音声は保存しません。';
   }
 
   document.querySelector('#diary-source').textContent = source;
@@ -490,72 +560,160 @@ document.querySelector('#calendar-next').addEventListener('click', () => {
   if (next <= new Date()) { calendarMonth = next; renderCalendar(); }
 });
 
-const sleepButton = document.querySelector('#sleep-button');
-
-function finishSession(message, endedAt = Date.now()) {
-  const start = state.sessionStart;
-  if (!Number.isFinite(start) || start <= 0) return;
-  state.sessions.unshift({ start, end: Math.max(start, endedAt) });
-  state.sessions = state.sessions.slice(0, 100);
+let activeSession = null;
+let stopSummary = '';
+const endReasons = { manual: '手動で終了', deadline: '会話時間の期限により終了', hidden: '画面非表示のため終了', pagehide: '画面を閉じたため終了', error: '音声エラーのため終了', 'other-tab': '別のタブで開始したため終了' };
+function finishSession(reason) {
+  const session = activeSession;
+  if (!session) return;
+  activeSession = null;
   state.sessionStart = null;
-  selectedDate = dateKey(new Date(start));
+  const end = Math.max(session.start, Date.now());
+  const record = { id: session.id, start: session.start, end, reason, deadlineAt: session.deadlineAt };
+  let saved = true;
+  try {
+    // One immutable key per session avoids stale-tab whole-array replacement.
+    localStorage.setItem(RECORD_PREFIX + record.id, JSON.stringify(record));
+    // Prune only records observed in this snapshot; never delete a newly arriving tab's key.
+    for (const older of loadRecords(Infinity).filter((item) => item.id && !item.unsaved).slice(100)) {
+      if (older.id && !older.unsaved) { try { localStorage.removeItem(RECORD_PREFIX + older.id); } catch { /* Keep the successfully saved record. */ } }
+    }
+  } catch { unsavedRecords.set(record.id, { ...record, unsaved: true }); saved = false; }
+  state.sessions = loadRecords();
+  selectedDate = dateKey(new Date(session.start));
   calendarMonth = dateFromKey(selectedDate);
-  saveState();
   renderDiary();
-  updateSession();
-  showToast(message);
+  updateStorageNotice();
+  showToast(saved ? '音声入出力の開始・終了時刻を保存しました。' : '記録を保存できませんでした。この画面だけに表示しています。');
 }
-
 function updateSession() {
-  const active = Number.isFinite(state.sessionStart) && state.sessionStart > 0;
-  const buttonLabel = sleepButton.querySelector('span');
   const heroStatus = document.querySelector('#hero-status');
   const ctaTitle = document.querySelector('#cta-title');
   const ctaCaption = document.querySelector('#cta-caption');
-  const sessionNote = document.querySelector('#session-note');
-
-  if (!active) {
-    sleepButton.classList.remove('active');
-    buttonLabel.textContent = 'ねんぎつねとおやすみ';
-    heroStatus.textContent = 'いっしょに休む準備ができたよ';
+  const note = document.querySelector('#session-note');
+  if (!activeSession) {
+    heroStatus.textContent = '音声会話は準備画面から開始できます';
     ctaTitle.textContent = 'ねんぎつねとおやすみしよう';
-    ctaCaption.textContent = 'やさしい時間を、ここから。';
-    sessionNote.textContent = '時刻は目安です。会話・アラームは準備中。タイマーで時間を記録します。';
+    ctaCaption.textContent = 'マイクを選んで、会話をはじめよう。';
+    note.textContent = stopSummary || '寝る・起きる時刻は目安です。会話時間は開始時に確定し、変更は次回から反映します。';
     return;
   }
-
-  const elapsed = Math.max(0, Math.floor((Date.now() - state.sessionStart) / 1000));
-  const remaining = Math.max(0, state.duration * 60 - elapsed);
-  if (remaining === 0) {
-    finishSession('おやすみ時間が終わりました。ゆっくり休んでね。', state.sessionStart + state.duration * 60000);
-    return;
-  }
-  const minutes = Math.floor(remaining / 60);
-  const seconds = String(remaining % 60).padStart(2, '0');
-  sleepButton.classList.add('active');
-  buttonLabel.textContent = 'おやすみ時間を終える';
-  heroStatus.textContent = 'あなたのそばで、おやすみ中';
-  ctaTitle.textContent = 'ねんぎつねとおやすみ中';
-  ctaCaption.textContent = `あと ${minutes}:${seconds}、ゆっくりしよう。`;
-  sessionNote.textContent = `残り ${minutes}:${seconds} · この画面で時間を記録中`;
+  const remaining = Math.max(0, Math.ceil((activeSession.deadlineAt - Date.now()) / 1000));
+  if (!remaining) { void window.NengitsuneVoice?.stop({ reason: 'deadline' }); return; }
+  const clock = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
+  heroStatus.textContent = 'このブラウザーで音声入出力中';
+  ctaTitle.textContent = '音声会話の画面に戻る';
+  ctaCaption.textContent = `残り ${clock}`;
+  note.textContent = `残り ${clock} · 開始時の${activeSession.duration}分で終了 · 画面を非表示にすると停止します。`;
 }
-
-sleepButton.addEventListener('click', () => {
-  if (state.sessionStart) {
-    finishSession('おやすみ時間を終了し、ダイアリーに記録しました。');
-  } else {
-    state.sessionStart = Date.now();
-    saveState();
+function connectionOperation(promise, signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => { const error = new Error('接続確認を取り消しました。'); error.name = 'AbortError'; reject(error); };
+    if (signal.aborted) { abort(); return; }
+    signal.addEventListener('abort', abort, { once: true });
+    Promise.resolve(promise).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+  });
+}
+async function checkVoiceConnection(signal) {
+  const status = document.querySelector('#voice-api-status');
+  status.textContent = '音声APIの接続を確認中…';
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
+  const timeout = setTimeout(abort, 8000);
+  try {
+    const response = await connectionOperation(fetch('/api/v1/voice/status', { cache: 'no-store', credentials: 'same-origin', redirect: 'error', signal: controller.signal }), controller.signal);
+    if ([401, 403].includes(response.status)) throw new Error('音声APIの認証が必要、またはアクセスが許可されていません。公開ページのログイン状態を確認してください。');
+    if (response.redirected || !response.headers.get('content-type')?.toLowerCase().includes('application/json')) throw new Error('音声APIからJSONが返りません。ログイン画面への転送や配信設定を確認してください。');
+    const body = await connectionOperation(response.json(), controller.signal);
+    if (!response.ok || body?.voice_api !== 'available' || body.models !== 'checked_on_first_turn'
+        || !Number.isInteger(body.active_sessions) || !Number.isInteger(body.max_active_sessions)
+        || !Number.isFinite(body.session_ttl_seconds)) throw new Error('音声APIを利用できません。APIの応答・配信設定を確認してください。');
+    status.textContent = '音声APIに到達しました。モデルの動作は最初の発話時に確認します。';
+  } catch (error) {
+    const message = error.name === 'AbortError' ? '音声APIの接続確認を完了できませんでした。再度開始してください。' : error.message || '音声APIに接続できませんでした。';
+    status.textContent = message;
+    throw new Error(message);
+  } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
+}
+window.NengitsuneVoiceHooks = {
+  beforeStart: checkVoiceConnection,
+  onReady({ sessionId }) {
+    const start = Date.now();
+    activeSession = { id: sessionId, start, deadlineAt: start + state.duration * 60000, duration: state.duration };
+    state.sessionStart = start;
+    stopSummary = '';
+    document.querySelector('#voice-stop-result').textContent = '';
     updateSession();
-    showToast('ねんぎつねと一緒に、ゆっくりおやすみ。');
-    goTo('home');
+  },
+  onStopped({ reason, remoteConfirmed }) {
+    finishSession(reason);
+    stopSummary = 'この端末のマイクと再生は停止しました。再開には開始ボタンを押してください。';
+    document.querySelector('#voice-stop-result').textContent = remoteConfirmed === false
+      ? '端末停止済み · 開始前の処理を取り消しました。'
+      : '端末停止済み · サーバーの停止確認を待っています。';
+    updateSession();
+  },
+  onStopResult({ remoteConfirmed }) {
+    document.querySelector('#voice-stop-result').textContent = remoteConfirmed
+      ? '端末停止済み · サーバーの停止応答を確認しました。'
+      : '端末停止済み · サーバーの停止は確認できません。接続を確認してください。';
+  },
+};
+window.addEventListener('storage', (event) => {
+  if (event.key === null || event.key === SETTINGS_KEY || event.key === STORAGE_KEY || event.key === LEGACY_STORAGE_KEY || event.key?.startsWith(RECORD_PREFIX)) {
+    state.sessions = loadRecords();
+    // Only settings changes refresh settings. In-flight deadlines belong to this tab.
+    if (event.key === SETTINGS_KEY) {
+      Object.assign(state, loadSettings());
+      bedtime.value = state.bedtime; wakeTime.value = state.wakeTime; duration.value = String(state.duration);
+      syncTimeDisplays(); updateSound(); updateDuration();
+    }
+    renderDiary(); updateStorageNotice();
   }
 });
-
 updateSound();
 updateDuration();
+updateStorageNotice();
 renderDiary();
 updateSession();
 goTo(location.hash.slice(1) || 'home', false);
 checkAndroidInstallation();
 setInterval(updateSession, 1000);
+
+function finishLoadingScreen() {
+  if (!loadingScreen || loadingScreen.hidden) return;
+  loadingScreen.classList.add('is-done');
+  if (themeColorMeta) themeColorMeta.setAttribute('content', '#152036');
+  setTimeout(() => { loadingScreen.hidden = true; }, 560);
+}
+
+if (loadingScreen) {
+  loadingScreen.addEventListener('click', finishLoadingScreen);
+  setTimeout(finishLoadingScreen, 900);
+}
+
+const tapLayer = document.querySelector('#tap-layer');
+const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+if (tapLayer) {
+  window.addEventListener('pointerdown', (event) => {
+    if (reduceMotionQuery.matches || (loadingScreen && !loadingScreen.hidden)) return;
+    if (tapLayer.childElementCount >= 5) tapLayer.firstElementChild?.remove();
+    const burst = document.createElement('span');
+    burst.className = 'tap-burst';
+    burst.style.left = `${event.clientX}px`;
+    burst.style.top = `${event.clientY}px`;
+    const ring = document.createElement('span');
+    ring.className = 'tap-ring';
+    burst.append(ring);
+    ['m1', 'm2', 'm3'].forEach((cls, idx) => {
+      const mote = document.createElement('span');
+      mote.className = `tap-mote ${cls}`;
+      mote.textContent = idx === 0 ? '✦' : '·';
+      burst.append(mote);
+    });
+    tapLayer.append(burst);
+    setTimeout(() => burst.remove(), 900);
+  }, { passive: true });
+}

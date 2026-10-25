@@ -1,6 +1,6 @@
 # クライアント・音声端末要件定義
 
-> **仕様の対象（2026-10-25）**: 製品Webの最新実装は [PR #25](https://github.com/jphacks/kz_2614/pull/25) / `feature/web-product-mvp` の [`e39aebb`](https://github.com/jphacks/kz_2614/commit/e39aebbe1e71281c88d2c42580a088b01c1b46b6) を参照しています。今回mainへ反映するのは仕様書だけで、PRの実装コードは取り込みません。更新基点のmain `aae38fb` の製品Webは音声API未接続のタイマー版です。「実装済み」は参照先ブランチの状態を含み、mainへのコード統合・公開サイト配備・実機受け入れとは区別します。
+> **仕様の対象（2026-10-25）**: [PR #25](https://github.com/jphacks/kz_2614/pull/25) の製品Web MVPと、main `a5ed09d`の仕様整理を統合した版です。以下の音声接続・保存・停止処理は本版の実装を指します。公開サイトへの配備・実機受け入れは別途必要です。
 
 更新日: 2026-10-25。公開用配置とEMORI側の仕様整理を反映しています。[統合仕様書](system.md) / [構成図](../architecture.md) / [ESP32機器仕様](esp32.md)。
 

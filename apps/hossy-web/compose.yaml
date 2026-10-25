@@ -2,7 +2,11 @@ name: jphacks2026-nemuri
 
 services:
   web:
-    build: .
+    build:
+      context: ../..
+      dockerfile: apps/hossy-web/Dockerfile
+    environment:
+      VOICE_API_UPSTREAM: "${VOICE_API_UPSTREAM:-}"
     pull_policy: build
     ports:
       - "${HTTP_PORT:-80}:80"

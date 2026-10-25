@@ -26,7 +26,7 @@ JPHACKS 2026 / チーム `kz_2614`
 
 | 機能 | 状態 |
 | --- | --- |
-| HOSSyの製品Web・PWA | ホーム・ダイアリー・タイマー等のUI。音声API・実機は未接続 |
+| HOSSyの製品Web・PWA | 最新UIを保持し、同一originの音声APIへ接続するコードを実装。実マイク・公開環境・実機は未検証 |
 | PCのWeb画面からSTT → LLM → TTSの音声往復 | 実モデルで確認済み |
 | 連続PCM入力、返答PCM配信、割込み、短い通信遅延からの復旧 | 実装済み。自動テストと記録済みのHTTP試験あり |
 | ESP32 Reader/Follower・SG90制御 | ファームウェアとEMORI側の実機記録あり |
@@ -39,7 +39,8 @@ JPHACKS 2026 / チーム `kz_2614`
 ## 技術構成
 
 ```text
-製品Web / PWA ─ 端末内のタイマー・選択・記録（音声APIは未接続）
+製品Web / PWA ─ 同一originの音声APIへ（配信サーバーの転送設定が必要）
+              └ 端末内の選択・開始/終了時刻・終了理由
 
 音声管理Webのマイク ─HTTP PCM→ PCサーバー ─PCMフレーム→ Webスピーカー
                          │
@@ -86,7 +87,7 @@ APIや音声形式の変更は双方の担当で確認します。詳細は [担
 - [統合仕様書](docs/requirements/system.md) / [仕様書・処理フロー図の一覧](docs/README.md)
 
 - [製品Webの使い方](docs/web/usage.md)（タイマー・日記・保存・PWA）
-- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（公開製品Webのソース。音声API接続は未実装）
+- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（音声API接続コードあり。実音声・公開経路は未検証）
 - [Git管理・除外方針](docs/development/gitignore.md)
 
 - [Windows・Ubuntuのセットアップ](docs/setup/server.md)
@@ -104,7 +105,7 @@ HOSSyの製品Webは `cd apps/hossy-web && npm ci && npm run dev` で起動し�
 
 ## 今後の展望
 
-製品Webと音声HTTP APIの接続、会話MCPとESP32実機の接続、Android/ESP32の音声入出力と停止の実機検証、利用環境に応じた応答品質・速度の調整を進めます。実装済み・実測済み・未確認を分けて [開発履歴](docs/development/work-history.md) に残します。
+製品Webの音声HTTP API接続の実環境検証、会話MCPとESP32実機の接続、Android/ESP32の音声入出力と停止の実機検証、利用環境に応じた応答品質・速度の調整を進めます。実装済み・実測済み・未確認を分けて [開発履歴](docs/development/work-history.md) に残します。
 
 ## ライセンス・公開データ
 

@@ -1,10 +1,10 @@
 # ねんぎつね 製品Webアプリ / PWA — HOSSy
 
-スマートフォン向けのホーム、ダイアリー、入眠準備タイマー、サウンド選択、製品紹介を備えるAstroアプリです。ソースはHOSSyの `107b762`（元プロジェクト `b300ac8`）を統合しています。
+スマートフォン向けのホーム、ダイアリー、入眠準備タイマー、サウンド選択、製品紹介を備えるAstroアプリです。OneDevの `JPHACKS2026_app` main `caf3541`（2026-10-25取得）を同期しています。夜空テーマ、ローディング画面、新しいロゴ、時間選択ボタンを含みます。
 
 公開製品Web: [ホーム](https://hiroron-jphacks2026.hiroron.net/) / [ダイアリー（#diary）](https://hiroron-jphacks2026.hiroron.net/#diary)。2026-10-25の未ログイン確認ではhiroron Passportのログイン画面が表示され、ログイン後の本文・音声接続・公開版とこのソースの一致は未確認です。
 
-**このリポジトリの製品Webでは音声会話・サウンド再生・ESP32接続は未実装です。** 現在の音声会話は別の [管理・音声Web](../web/README.md) を使います。mainへのコード統合と音声APIへの接続は別の作業です。
+製品画面から同一originの音声APIへ開始・連続PCM入力・途中文字・返答音声・停止を接続するコードを実装しています。[管理・音声Web](../web/README.md) の共有クライアントを利用します。実マイク・公開環境の音声往復は未検証です。サウンド選択は音源再生に接続せず、人形所有権・BLE・接触センサー・AI/他者モードの実APIも未実装です。
 
 ## 起動
 
@@ -16,17 +16,18 @@ npm ci
 npm run dev -- --host 127.0.0.1
 ```
 
-`http://127.0.0.1:4321/` を開きます。Windows PowerShellでは必要に応じて `npm.cmd` を使います。本番生成は `npm run build`、確認は `npm run preview -- --host 127.0.0.1`。
+音声APIを使う場合は、起動前に確認済みのサーバーoriginを `VOICE_API_UPSTREAM` へ指定します。未指定では自動接続しません。[設定手順](../../docs/setup/hossy-web.md)を参照してください。`http://127.0.0.1:4321/` を開きます。Windows PowerShellでは必要に応じて `npm.cmd` を使います。本番生成は `npm run build`、確認は `npm run preview -- --host 127.0.0.1`。
 
 ## 構成
 
 - `src/pages/index.astro`：全画面の構造
 - `src/layouts/Layout.astro`・`src/styles/app.css`：共通レイアウトとスタイル
-- `public/app.js`：画面切替、タイマー、端末内保存、PWA案内
+- `public/app.js`：画面切替、音声開始/停止フック、会話期限、端末内保存、PWA案内
+- `scripts/sync-voice-assets.mjs`：dev/build/previewの前に共有音声JSとWorkletを `apps/web` からコピー。生成コピーを直接編集しない
 - `public/manifest.json`・`public/sw.js`・`public/icons/`：PWA
 - `Dockerfile`・`compose.yaml`：静的ビルドとNginx配信
 
-旧 `astro-site/` の中身をこのフォルダー直下へ移しました。画面コード・画像・保存キーは維持しています。
+OneDevの `astro-site/` の中身をこのフォルダー直下へ対応させています。画面コード・画像・保存キーは元ソースに合わせ、Composeのビルドcontextは共有音声ソースを含めるためリポジトリルート `../..` です。共有リポジトリ用の除外設定を保持しています。元の開発メモは `docs/web/history/hossy/`、素材原本は `images/` に配置します。
 
 ## 仕様と運用
 

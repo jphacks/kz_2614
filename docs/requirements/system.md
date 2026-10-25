@@ -2,7 +2,7 @@
 
 更新日: 2026-10-25。製品の体験、担当、接続、実装状況、受け入れ条件をまとめた全体仕様です。個別APIの正本は末尾の参照表に集約します。
 
-**対象版**: main `bd4da7b` と、Web MVPの [PR #25](https://github.com/jphacks/kz_2614/pull/25) / [`e39aebb`](https://github.com/jphacks/kz_2614/commit/e39aebbe1e71281c88d2c42580a088b01c1b46b6)。PRのコードはmainへ未統合です。この文書の更新は仕様整理だけで、実装の統合・公開サイトへの配備・実機操作を行いません。
+**対象版**: [PR #25](https://github.com/jphacks/kz_2614/pull/25) のWeb MVP実装（基点 `e39aebb`）とmain `a5ed09d`の全体仕様を統合した版です。製品Webの音声接続コードを収録しています。公開サイトへの配備・認証後の実音声・機器の通し受け入れは別途必要です。
 
 [元のMVP計画](https://app.notion.com/p/4031041f65d38160aff2d8fa58d466b3) / [構成・処理フロー図](../architecture.md) / [詳細仕様一覧](../README.md)
 
@@ -17,7 +17,7 @@
 | 状態表記 | 意味 |
 | --- | --- |
 | main実装 | mainにコードがある。公開配備・実機成功を意味しない |
-| PR実装 | PR #25にコードと自動検証がある。main・公開サイトへ未反映 |
+| Web実装 | 本版に収録した製品Webのコードと自動検証。公開サイトへの反映とは別 |
 | 未統合 | 関係する部品はあるが、製品としての接続がない |
 | 未実装／未確定 | コードがない、または振る舞い・採用方式を決める必要がある |
 | 実機未確認 | 対象端末・ネットワーク・人形を使った合格記録がない |
@@ -29,7 +29,7 @@
 | 帰宅・起動 | 帰宅を検知して声をかける | 人感・BLE・位置情報の候補があり、採用未確定。現在は手動開始 |
 | ログイン・接続 | 自分と利用できる人形を確認する | 公開入口はPassport保護。アプリの本人情報・人形所有権・共有権限は未実装 |
 | 入眠準備 | 寝る・起きる目安と話したい時間を設定する | PRでは会話時間15〜90分を開始時に確定。寝る/起きる時刻は目安で、予約・アラームなし |
-| 一人で話す | 発話、途中認識、返答音声、追質問、割込みが続く | PC音声はmain実装。製品画面への接続はPR実装、公開スマホでの往復は未確認 |
+| 一人で話す | 発話、途中認識、返答音声、追質問、割込みが続く | PC音声はmain実装。製品画面への接続はWeb実装、公開スマホでの往復は未確認 |
 | 会話とトントン | 会話中の明示要求に応じて有限動作し、停止できる | Follower APIあり。会話MCPは希望頻度の保存のみで実機未統合 |
 | 他者からのフィードバック | 別の人のReader操作を人形へ届け、会話連携と切り替える | 同一LANのReader→Followerあり。製品UIの切替、操作者の認証・権限管理は未実装 |
 | 接触への反応 | 接触イベントに対して決めたアクションを行う | センサー取付・しきい値・イベント・反応内容・再発火条件が未確定／未実装 |
@@ -171,11 +171,11 @@ PR #25ではWeb試験18スクリプト、本番ビルド、ローカル画面で
 | --- | --- | --- |
 | 亀山 | 既存の音声PC:8765への公開転送設定の照合・疎通、Webとの契約確認、実機MCP・独立停止・遅着拒否、VADのパケット後半欠落と設定PUTの受信期限を修正 | [#2](https://github.com/jphacks/kz_2614/issues/2)、[#7](https://github.com/jphacks/kz_2614/issues/7)、[#23](https://github.com/jphacks/kz_2614/issues/23)、[#24](https://github.com/jphacks/kz_2614/issues/24) |
 | 江森 | 実個体の校正・上限・停止確認、Reader/Follower切替、接触入力の仕様/実装、ケース・配線保護 | [#7](https://github.com/jphacks/kz_2614/issues/7)、[#11](https://github.com/jphacks/kz_2614/issues/11)、[#12](https://github.com/jphacks/kz_2614/issues/12) |
-| ほっしー | PRの統合・公開経路、スマホ実機UI、本人/人形紐付け・モード操作、日記連携。ESPと本体/アプリ間の認証がない点をサーバー・機器担当と解決 | [#3](https://github.com/jphacks/kz_2614/issues/3)、[#4](https://github.com/jphacks/kz_2614/issues/4)、[#6](https://github.com/jphacks/kz_2614/issues/6)、[#10](https://github.com/jphacks/kz_2614/issues/10)、[#12](https://github.com/jphacks/kz_2614/issues/12) |
+| ほっしー | 公開経路の確認・配備、スマホ実機UI、本人/人形紐付け・モード操作、日記連携。ESPと本体/アプリ間の認証がない点をサーバー・機器担当と解決 | [#3](https://github.com/jphacks/kz_2614/issues/3)、[#4](https://github.com/jphacks/kz_2614/issues/4)、[#6](https://github.com/jphacks/kz_2614/issues/6)、[#10](https://github.com/jphacks/kz_2614/issues/10)、[#12](https://github.com/jphacks/kz_2614/issues/12) |
 | 全員で決定 | 時刻とLLMの関係、帰宅/起床/接触の採用、BLEの用途、共有権限・要約の保存条件 | [#5](https://github.com/jphacks/kz_2614/issues/5)、[#8](https://github.com/jphacks/kz_2614/issues/8)、[#9](https://github.com/jphacks/kz_2614/issues/9)、[#10](https://github.com/jphacks/kz_2614/issues/10)、[#11](https://github.com/jphacks/kz_2614/issues/11)、[#13](https://github.com/jphacks/kz_2614/issues/13) |
 | 全員で受け入れ | 実装後の通し試験、スマホ収納状態の確認、製品紹介、撮影、投影/動画切替/3回の練習 | [#14](https://github.com/jphacks/kz_2614/issues/14)、[#16](https://github.com/jphacks/kz_2614/issues/16)、[#17](https://github.com/jphacks/kz_2614/issues/17)、[#18](https://github.com/jphacks/kz_2614/issues/18) |
 
-保存・複数タブ・期限・SWの [#19](https://github.com/jphacks/kz_2614/issues/19)・[#20](https://github.com/jphacks/kz_2614/issues/20)・[#21](https://github.com/jphacks/kz_2614/issues/21)・[#22](https://github.com/jphacks/kz_2614/issues/22)にはPR #25で修正を入れています。main統合・実環境の確認とは別で、IssueはOPENです。期限処理が遅れた場合も実停止時刻を記録し、予定期限へ丸めて見せません。
+保存・複数タブ・期限・SWの [#19](https://github.com/jphacks/kz_2614/issues/19)・[#20](https://github.com/jphacks/kz_2614/issues/20)・[#21](https://github.com/jphacks/kz_2614/issues/21)・[#22](https://github.com/jphacks/kz_2614/issues/22)にはPR #25で修正を入れています。公開配備・実環境の確認とは別で、IssueはOPENです。期限処理が遅れた場合も実停止時刻を記録し、予定期限へ丸めて見せません。
 
 ## 11. 詳細仕様の正本
 

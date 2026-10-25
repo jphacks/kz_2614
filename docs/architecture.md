@@ -1,6 +1,6 @@
 # 現在の構成と処理フロー
 
-> **仕様の対象（2026-10-25）**: 製品Webの最新実装は [PR #25](https://github.com/jphacks/kz_2614/pull/25) / `feature/web-product-mvp` の [`e39aebb`](https://github.com/jphacks/kz_2614/commit/e39aebbe1e71281c88d2c42580a088b01c1b46b6) を参照しています。今回mainへ反映するのは仕様書だけで、PRの実装コードは取り込みません。更新基点のmain `aae38fb` の製品Webは音声API未接続のタイマー版です。「実装済み」は参照先ブランチの状態を含み、mainへのコード統合・公開サイト配備・実機受け入れとは区別します。
+> **仕様の対象（2026-10-25）**: [PR #25](https://github.com/jphacks/kz_2614/pull/25) の製品Web MVPと、main `a5ed09d`の仕様整理を統合した版です。以下の音声接続・保存・停止処理は本版の実装を指します。公開サイトへの配備・実機受け入れは別途必要です。
 
 [統合仕様書](requirements/system.md) / [ESP32機器仕様](requirements/esp32.md) / [機器HTTP API](api/esp32-http.md)。EMORIの6図は機器仕様・MCP統合・API側に保持しています。
 
@@ -35,7 +35,7 @@ flowchart TB
         Servo[SG90 × 3]
     end
     Product --> BrowserData[端末内の選択・開始終了時刻・理由]
-    Product <-->|PR25のPCM・NDJSON / 転送設定必須| HTTP
+    Product <-->|同一originのPCM・NDJSON / 転送設定必須| HTTP
     Web <-->|PCM入力・NDJSON出力| HTTP
     Android <-->|TCP v1| TCP
     VoiceESP <-->|TCP v1| TCP

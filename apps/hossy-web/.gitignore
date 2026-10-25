@@ -12,6 +12,11 @@ dist/
 # dependencies
 node_modules/
 
+# Generated from apps/web by scripts/sync-voice-assets.mjs
+public/voice_call.js
+public/voice_pcm_worklet.js
+public/voice_pcm_output_worklet.js
+
 # logs
 npm-debug.log*
 yarn-debug.log*
