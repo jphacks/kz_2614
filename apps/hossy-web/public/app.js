@@ -12,6 +12,28 @@ function readJSON(key) {
 function validRecord(item) {
   return Number.isFinite(item?.start) && Number.isFinite(item?.end) && item.start > 0 && item.end >= item.start;
 }
+function stopFields(value) {
+  const tail = value?.tailControl;
+  const validTail = tail && ['command_stopped', 'disabled', 'unconfirmed'].includes(tail.status)
+    && tail.feedback === 'command_only'
+    && (tail.device_epoch === null || typeof tail.device_epoch === 'string' && /^[0-9a-f]{32}$/.test(tail.device_epoch))
+    && (tail.stop_revision === null || Number.isSafeInteger(tail.stop_revision) && tail.stop_revision >= 0)
+    && (tail.status !== 'command_stopped' || tail.device_epoch !== null && tail.stop_revision !== null);
+  return {
+    localStopped: value?.localStopped === true,
+    remoteConfirmed: value?.remoteConfirmed === true ? true : value?.remoteConfirmed === false ? false : null,
+    tailControl: validTail ? { status: tail.status, device_epoch: tail.device_epoch, stop_revision: tail.stop_revision, feedback: tail.feedback }
+      : { status: 'unconfirmed', device_epoch: null, stop_revision: null, feedback: null },
+  };
+}
+function stopDescription(value) {
+  const result = stopFields(value);
+  const server = result.remoteConfirmed === true ? 'サーバーの停止応答を確認しました。'
+    : result.remoteConfirmed === false ? 'サーバーの停止は確認できません。' : 'サーバーの停止確認を待っています。';
+  const tail = result.tailControl.status === 'command_stopped' ? '機器の指令停止を確認しました（物理停止は未確認）。'
+    : result.tailControl.status === 'disabled' ? 'この会話では機器制御は無効でした。' : '機器停止は未確認です。';
+  return `${result.localStopped ? '端末停止済み' : '端末停止記録なし'} · ${server} ${tail}`;
+}
 function loadRecords(limit = 100) {
   const records = new Map();
   const legacy = readJSON(STORAGE_KEY) || readJSON(LEGACY_STORAGE_KEY) || {};
@@ -24,7 +46,7 @@ function loadRecords(limit = 100) {
       if (!key?.startsWith(RECORD_PREFIX)) continue;
       const item = readJSON(key);
       if (validRecord(item)) records.set(key.slice(RECORD_PREFIX.length), {
-        id: key.slice(RECORD_PREFIX.length), start: item.start, end: item.end,
+        id: key.slice(RECORD_PREFIX.length), start: item.start, end: item.end, ...stopFields({ ...item, remoteConfirmed: item.remoteConfirmed === true }),
         deadlineAt: Number.isFinite(item.deadlineAt) ? item.deadlineAt : null,
         reason: ['manual', 'deadline', 'hidden', 'pagehide', 'error', 'other-tab'].includes(item.reason) ? item.reason : 'manual',
       });
@@ -495,7 +517,7 @@ function renderDiary() {
     metricLabels = ['いっしょの時間', 'おやすみ回数', '動きの記録'];
     events = sessions.flatMap((session) => [
       { time: clockTime(session.start), kind: 'start', mark: '☾', title: 'ねんぎつねとおやすみを開始', detail: session.legacy ? '以前の画面内タイマーの記録です。' : 'マイクの音声処理が準備できた時刻です。' },
-      { time: clockTime(session.end), kind: 'wake', mark: '☀', title: '音声入出力を終了', detail: session.legacy ? '以前のタイマーの記録です。' : `${endReasons[session.reason] || '終了'}。${session.unsaved ? '保存できていません。' : '時刻のみ保存しました。'}` },
+      { time: clockTime(session.end), kind: 'wake', mark: '☀', title: '音声入出力を終了', detail: session.legacy ? '以前のタイマーの記録です。' : `${endReasons[session.reason] || '終了'}。${session.unsaved ? '保存できていません。' : ''}${stopDescription(session)}` },
     ]);
     disclaimer.textContent = 'このブラウザで記録した開始・終了時刻です。寝返りなどの睡眠状態はまだ測定していません。';
   } else if (sample) {
@@ -562,22 +584,26 @@ document.querySelector('#calendar-next').addEventListener('click', () => {
 
 let activeSession = null;
 let stopSummary = '';
+let displayedStopOperation = null;
 const endReasons = { manual: '手動で終了', deadline: '会話時間の期限により終了', hidden: '画面非表示のため終了', pagehide: '画面を閉じたため終了', error: '音声エラーのため終了', 'other-tab': '別のタブで開始したため終了' };
-function finishSession(reason) {
+function pruneSavedRecords() {
+  // Prune only records observed in this snapshot; preserve concurrently arriving keys.
+  for (const older of loadRecords(Infinity).filter((item) => item.id && !item.unsaved).slice(100)) {
+    try { localStorage.removeItem(RECORD_PREFIX + older.id); } catch { /* Keep the successfully saved record. */ }
+  }
+}
+function finishSession(reason, result) {
   const session = activeSession;
-  if (!session) return;
+  if (!session || result.sessionId !== session.id) return;
   activeSession = null;
   state.sessionStart = null;
   const end = Math.max(session.start, Date.now());
-  const record = { id: session.id, start: session.start, end, reason, deadlineAt: session.deadlineAt };
+  const record = { id: session.id, start: session.start, end, reason, deadlineAt: session.deadlineAt, ...stopFields(result) };
   let saved = true;
   try {
     // One immutable key per session avoids stale-tab whole-array replacement.
     localStorage.setItem(RECORD_PREFIX + record.id, JSON.stringify(record));
-    // Prune only records observed in this snapshot; never delete a newly arriving tab's key.
-    for (const older of loadRecords(Infinity).filter((item) => item.id && !item.unsaved).slice(100)) {
-      if (older.id && !older.unsaved) { try { localStorage.removeItem(RECORD_PREFIX + older.id); } catch { /* Keep the successfully saved record. */ } }
-    }
+    pruneSavedRecords();
   } catch { unsavedRecords.set(record.id, { ...record, unsaved: true }); saved = false; }
   state.sessions = loadRecords();
   selectedDate = dateKey(new Date(session.start));
@@ -585,6 +611,32 @@ function finishSession(reason) {
   renderDiary();
   updateStorageNotice();
   showToast(saved ? '音声入出力の開始・終了時刻を保存しました。' : '記録を保存できませんでした。この画面だけに表示しています。');
+}
+function updateStopRecord(sessionId, result) {
+  if (!sessionId) return;
+  // Read the existing key again: late results must not revive pruned rows or overwrite another tab's fields.
+  let record = unsavedRecords.get(sessionId);
+  let readFailed = false;
+  if (!record) {
+    try { record = JSON.parse(localStorage.getItem(RECORD_PREFIX + sessionId) || 'null'); }
+    catch {
+      storageReadFailed = true;
+      readFailed = true;
+      record = state.sessions.find((item) => item.id === sessionId);
+    }
+  }
+  if (!validRecord(record)) { updateStorageNotice(); return; }
+  const updated = { id: sessionId, start: record.start, end: record.end, deadlineAt: record.deadlineAt,
+    reason: record.reason, ...stopFields({ ...result, localStopped: true }) };
+  try {
+    if (readFailed) throw new Error('Record read unavailable');
+    const { unsaved, ...saved } = updated;
+    localStorage.setItem(RECORD_PREFIX + sessionId, JSON.stringify(saved));
+    unsavedRecords.delete(sessionId);
+    pruneSavedRecords();
+  } catch { unsavedRecords.set(sessionId, { ...updated, unsaved: true }); }
+  state.sessions = loadRecords();
+  renderDiary(); updateStorageNotice();
 }
 function updateSession() {
   const heroStatus = document.querySelector('#hero-status');
@@ -644,21 +696,24 @@ window.NengitsuneVoiceHooks = {
     activeSession = { id: sessionId, start, deadlineAt: start + state.duration * 60000, duration: state.duration };
     state.sessionStart = start;
     stopSummary = '';
+    displayedStopOperation = null;
     document.querySelector('#voice-stop-result').textContent = '';
     updateSession();
   },
-  onStopped({ reason, remoteConfirmed }) {
-    finishSession(reason);
+  onStopped(result) {
+    finishSession(result.reason, result);
+    displayedStopOperation = result.stopOperationId;
     stopSummary = 'この端末のマイクと再生は停止しました。再開には開始ボタンを押してください。';
-    document.querySelector('#voice-stop-result').textContent = remoteConfirmed === false
-      ? '端末停止済み · 開始前の処理を取り消しました。'
-      : '端末停止済み · サーバーの停止確認を待っています。';
+    document.querySelector('#voice-stop-result').textContent = result.remoteConfirmed === false && !result.sessionId
+      ? '端末停止済み · 開始前の処理を取り消しました。機器停止は未確認です。'
+      : stopDescription(result);
     updateSession();
   },
-  onStopResult({ remoteConfirmed }) {
-    document.querySelector('#voice-stop-result').textContent = remoteConfirmed
-      ? '端末停止済み · サーバーの停止応答を確認しました。'
-      : '端末停止済み · サーバーの停止は確認できません。接続を確認してください。';
+  onStopResult(result) {
+    updateStopRecord(result.sessionId, result);
+    if (result.current && displayedStopOperation === result.stopOperationId) {
+      document.querySelector('#voice-stop-result').textContent = stopDescription({ ...result, localStopped: true });
+    }
   },
 };
 window.addEventListener('storage', (event) => {

@@ -89,6 +89,65 @@ async function run() {
     cancelled.productEnvironment.statusKind = 'ok'; await cancelled.begin();
     assert.equal(cancelled.stats.starts, 1, 'Preflight cancellation must allow immediate manual restart');
   }
-  console.log('Product voice checked: explicit start, API/auth gate, capture readiness, partial text, reply, level, manual/hidden/error stop, late capture/start, local and remote stop results, no conversation persistence, bounded session-specific DELETE, HTML/redirect/JSON rejection, preflight cancellation');
+  const epoch = '7ef65580e6e346de8b503259d4e1f40c';
+  const validTail = { status: 'command_stopped', device_epoch: epoch, stop_revision: 8, feedback: 'command_only' };
+  const tailCases = [
+    [validTail, 'command_stopped', '物理停止は未確認'],
+    [{ ...validTail, status: 'disabled', device_epoch: null, stop_revision: null }, 'disabled', '制御は無効'],
+    [{ ...validTail, status: 'unconfirmed', device_epoch: null, stop_revision: null }, 'unconfirmed', '機器停止は未確認'],
+    ...[undefined, null, [], {}, { ...validTail, status: 'stopped' }, { ...validTail, device_epoch: epoch.toUpperCase() },
+      { ...validTail, device_epoch: null }, { ...validTail, stop_revision: null }, { ...validTail, stop_revision: -1 },
+      { ...validTail, stop_revision: 1.5 }, { ...validTail, stop_revision: Number.MAX_SAFE_INTEGER + 1 },
+      { ...validTail, stop_revision: '8' }, { ...validTail, feedback: 'physical' }, { ...validTail, feedback: undefined }]
+      .map((tail) => [tail, 'unconfirmed', '機器停止は未確認']),
+  ];
+  for (const [tailControl, expected, text] of tailCases) {
+    const checked = product({ tailControl }); await checked.begin(); checked.stop(); await settle();
+    assert.equal(checked.records()[0].remoteConfirmed, true, 'Bad tail metadata must not erase valid server confirmation');
+    assert.equal(checked.records()[0].tailControl.status, expected);
+    assert.ok(checked.element('voice-stop-result').textContent.includes(text));
+    assert.equal(checked.records().length, 1);
+  }
+  for (const startKind of ['html', 'redirect', 'invalid-json', 'array', 'null', 'missing-id', 'blank-id', 'wrong-generation', 'unsafe-generation', 'missing-state', 'wrong-state']) {
+    const invalid = product({ startKind }); await invalid.begin(); await settle();
+    assert.equal(invalid.stats.microphoneRequests, 0, `${startKind}: reject malformed session before microphone`);
+    assert.equal(invalid.records().length, 0);
+    assert.equal(invalid.calls.find((call) => call.options.method === 'POST').options.redirect, 'error');
+    if (['wrong-generation', 'unsafe-generation', 'missing-state', 'wrong-state'].includes(startKind)) {
+      assert.equal(invalid.calls.filter((call) => call.options.method === 'DELETE').length, 1, 'Malformed usable session receives cleanup');
+    }
+  }
+  const failedCleanup = product({ startKind: 'wrong-state', deferDeletes: true });
+  await failedCleanup.begin();
+  assert.ok(failedCleanup.element('voice-stop-result').textContent.includes('確認を待っています'));
+  failedCleanup.pendingDeletes[0].reject(); await settle();
+  assert.ok(failedCleanup.element('voice-stop-result').textContent.includes('確認できません'));
+  assert.ok(failedCleanup.element('voice-stop-result').textContent.includes('機器停止は未確認'));
+  assert.equal(failedCleanup.records().length, 0); assert.equal(failedCleanup.stats.microphoneRequests, 0);
+  const creating = product({ deferStarts: 1, tailControl: validTail }); await creating.begin(); creating.stop(); await settle();
+  assert.ok(creating.element('voice-stop-result').textContent.includes('確認を待っています'));
+  assert.ok(!creating.element('voice-stop-result').textContent.includes('開始前'));
+  creating.pendingStarts[0].resolve(); await settle();
+  assert.equal(creating.records().length, 0);
+  assert.ok(creating.element('voice-stop-result').textContent.includes('指令停止'));
+  for (const startKind of ['null', 'array', 'missing-id']) {
+    const cancelledMalformed = product({ deferStarts: 1, startKind });
+    await cancelledMalformed.begin(); cancelledMalformed.stop(); cancelledMalformed.pendingStarts[0].resolve(); await settle();
+    assert.ok(cancelledMalformed.element('voice-stop-result').textContent.includes('確認できません'));
+    assert.equal(cancelledMalformed.records().length, 0);
+  }
+  const stale = product({ deferDeletes: true, tailControl: validTail }); await stale.begin(); stale.stop();
+  const stopped = { ...stale.records()[0] };
+  await stale.begin();
+  const activeId = stale.eval('activeSession.id');
+  const statusBefore = stale.status();
+  stale.pendingDeletes[0].resolve(); await settle();
+  assert.equal(stale.eval('activeSession.id'), activeId);
+  assert.equal(stale.status(), statusBefore);
+  assert.equal(stale.element('voice-stop-result').textContent, '');
+  const updated = stale.records().find((row) => row.id === stopped.id);
+  assert.equal(updated.tailControl.status, 'command_stopped');
+  for (const key of ['start', 'end', 'deadlineAt', 'reason', 'id']) assert.equal(updated[key], stopped[key]);
+  console.log('Product voice checked: explicit start, API/auth gate, capture readiness, partial text, reply, level, manual/hidden/error stop, late capture/start, local and remote stop results, no conversation persistence, bounded session-specific DELETE, HTML/redirect/JSON rejection, preflight cancellation, validated tail results, malformed starts and cleanup, cancelled creation, stale-session result correlation');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

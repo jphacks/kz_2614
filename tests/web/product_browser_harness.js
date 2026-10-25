@@ -9,7 +9,7 @@ const BASE = Date.parse('2026-10-25T12:00:00+09:00');
 function product(options = {}) {
   const storage = options.productStorage || new Map();
   const windowListeners = new Map();
-  const environment = { saveFails: false, statusKind: options.statusKind || 'ok', deleteKind: options.deleteKind || 'ok' };
+  const environment = { saveFails: false, statusKind: options.statusKind || 'ok', deleteKind: options.deleteKind || 'ok', tailControl: options.tailControl, startKind: options.startKind || 'ok' };
   const app = browser({ ...options, beforeEngine(context, { element, environment: clock, setTimer, clearTimer }) {
     const decorate = (item) => {
       item.dataset ||= {}; item.style ||= {}; item.children ||= [];
@@ -45,7 +45,7 @@ function product(options = {}) {
     context.history = { pushState() {}, replaceState() {} };
     context.localStorage = {
       get length() { return storage.size; }, key: (index) => [...storage.keys()][index],
-      getItem: (key) => storage.get(key) || null,
+      getItem: (key) => { if (environment.readFails) throw new Error('Storage unavailable'); return storage.get(key) || null; },
       removeItem(key) { environment.beforeRemove?.(key); storage.delete(key); },
       setItem(key, value) { if (environment.saveFails) throw new Error('QuotaExceeded'); storage.set(key, value); },
     };
@@ -56,6 +56,19 @@ function product(options = {}) {
     context.fetch = async (url, request) => {
       if (url !== '/api/v1/voice/status') {
         const response = await originalFetch(url, request);
+        if (url === '/api/v1/voice/sessions' && request?.method === 'POST') {
+          const kind = environment.startKind;
+          return { ...response, redirected: kind === 'redirect', headers: { get: () => kind === 'html' ? 'text/html' : 'application/json' },
+            json: async () => {
+              if (kind === 'invalid-json') throw new Error('Invalid JSON');
+              const body = await response.json();
+              const cases = { array: [], null: null, 'missing-id': { ...body, session_id: undefined }, 'blank-id': { ...body, session_id: ' ' },
+                'wrong-generation': { ...body, generation: -1 }, 'unsafe-generation': { ...body, generation: Number.MAX_SAFE_INTEGER + 1 },
+                'missing-state': { ...body, state: undefined }, 'wrong-state': { ...body, state: 'stopped' } };
+              return Object.hasOwn(cases, kind) ? cases[kind] : body;
+            },
+          };
+        }
         if (request?.method !== 'DELETE') return response;
         environment.deleteSignal = request.signal;
         const kind = environment.deleteKind;
@@ -65,7 +78,7 @@ function product(options = {}) {
             if (kind === 'invalid-json') throw new Error('Invalid JSON');
             if (kind === 'pending-json') return new Promise((resolve) => { environment.resolveDeleteJSON = resolve; });
             if (kind === 'wrong-session') return { state: 'stopped', session_id: 'another-session' };
-            return response.json();
+            return { ...await response.json(), tail_control: environment.tailControl, audio_device_stop_confirmed: true };
           },
         };
       }
