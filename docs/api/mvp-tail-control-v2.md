@@ -1,10 +1,14 @@
 # MVPしっぽ制御 v2 — 通信契約
 
+ここでの **v2はしっぽ制御（PC↔ESP32）の版** です。Web↔PCの[音声API](voice-http.md)は`/api/v1/voice/`のままです。対象機器の`GET /api/v2/tail/state`が404ならv2対応を確認できないため、旧APIへ切り替えて動かすことはしません。2026-10-25の実機読取結果は[通し試験](../demo.md#今回確認できた範囲)を参照してください。
+
 **状態: Web・PC・ESP32 Followerのv2実装を統合。模擬検証と実機書込み・公開配備・通し受け入れは区別し、後者は未確認。旧main `3b6a0c1` のFollowerでは使えません。wire契約は変更していません。**
 
 [PC修理記録](../development/pc-ai-mvp-v2.md) / [機器修理記録](../esp32/mvp-v2-repair.md)。
 
 [共通MVP仕様](../../MVP.md)の有限トントン・停止・遅着拒否を、PC担当 `RyuuzinnRaika` とESP32担当 `Happy-Emori` が同じ形式で実装しています。Web担当 `naminamina` はPCの結果を表示し、機器HTTPを直接呼びません。既存の[機器HTTP API](esp32-http.md)は互換用v1の説明として保持します。
+
+PC側の開始条件は[AIの実再生開始](../development/playback-tail.md)へ更新します。端末playback.startedに対する1返答1回・最大5000msのtapを使い、ended/failed/割込みで期限前でもstopします。この変更は機器のURL・JSON・revision/epoch処理を変更しません。モデルによる任意開始や旧APIへのフォールバックは行いません。
 
 ## 1. 対象と前提
 

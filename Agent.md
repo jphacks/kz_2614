@@ -21,6 +21,17 @@
 - 利用者指定のmain `2a14c766d5d7f19199da908c895892b56fb433f5` を取得し、Happy-Emoriへfast-forward。対象Followerを識別して書込み完了。既存の別checkout作業は保全した。
 - 全フラッシュを非公開でバックアップし、全消去せず更新。Wi-Fi設定と校正保存領域は書込み前後でバイト単位の一致を確認した。非公開設定・バックアップ・個体値はGitへ入れない。
 - 実機の `/api/v2/tail/state` はHTTP 200 / JSON、v2_exclusive・closed・idle・calibrated=true・start_enabled=falseを確認。サーボ動作・音声通し試験・物理停止の受け入れは未実施。詳細は作業履歴。
+## AI音声再生に連動するしっぽ（2026-10-25 追加指定）
+
+- 利用者が開始タイミングを「AIが話し始める」と指定。旧「トントンしてと明示要求した場合だけ」の方針を更新する。正本は[MVP](MVP.md)と[再生連動の記録](docs/development/playback-tail.md)。
+- 既存の端末playback.startedを起点に、許可済みの現在の返答で最大5秒・1回のみ。生成/受信やLLM工具だけでは動かさず、終了/失敗/割込みで独立停止する。音声v1/機器v2 wire、速度・予算・機器フェンス、既定無効を維持する。
+- 分離worktreeのfeature/playback-tailで実装・模擬検証する。稼働中のMac Web・PCサービス・実機は変更しない。12:09の対象ESP32は旧ファーム応答だったため、新版反映後に限定実機試験が必要。
+
+## ローカル接続確認と次の作業（2026-10-25 12:09時点）
+
+- main統合版 `2a14c76` のMac製品Webから、別PCの音声status APIへ200 JSONを確認。Webの転送先をMac自身から音声PCへ変更した。PC側の起動変更はユーザーが手動で実施。WebサーバーOKの申告を受けたが、音声3往復・割込み・停止・記録の個別ACは未記録。
+- 対象Followerはv2 stateが404、旧tail/statusが200。到達できるが、統合v2ファームの反映は確認できていない。Happy-EmoriがWi-Fi/個体設定/NVS校正を保全して新版を反映し、v2状態を確認してからPC担当と限定試験へ進む。動作指令は送っていない。
+- [通し試験](docs/demo.md)、[Web接続の切り分け](docs/setup/hossy-web.md)、[機器反映手順](docs/esp32/mvp-v2-repair.md)を参照。音声v1としっぽv2を混同しない。CT経由の公開接続は別途未整備。以下の日付付き節は各作業時点の記録。
 
 ## 今回のMVP修理の統合状況（2026-10-25）
 

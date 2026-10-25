@@ -56,6 +56,7 @@ def stop_confirmation():
 
 
 class FakeLease:
+    playback_owned = False
     def __init__(self, *, stale=False):
         self.stale = stale
         self.used = False
@@ -114,6 +115,19 @@ class FakeMCP:
 
 
 class TailToolChatTests(unittest.IsolatedAsyncioTestCase):
+    async def test_playback_lease_never_shortcuts_forces_or_executes_model_tap(self):
+        lease = FakeLease()
+        lease.playback_owned = True
+        result, requests, mcp = await self.exercise([
+            sse([tool_event("tap_tail", "{}"), event(finish="tool_calls")]),
+            final("音声の再生に合わせます。"),
+        ], lease=lease, options={"execute_confirmed_tap": True})
+        self.assertEqual(mcp.calls, [])
+        self.assertEqual(requests[0][1]["tool_choice"], "auto")
+        self.assertNotIn("tap_tail", [t["function"]["name"] for t in requests[0][1]["tools"]])
+        self.assertFalse(result[-1]["stats"]["tail_command_unfulfilled"])
+
+
     async def test_voice_shortcut_starts_before_model_and_passes_result_without_repeating(self):
         mcp = FakeMCP()
         async def model(request):

@@ -22,7 +22,7 @@ class VoiceTailV2Tests(unittest.TestCase):
         self.coordinator = TailCoordinator(enabled=lambda: True,
             device=V2Device("http://127.0.0.1:1", transport=httpx.MockTransport(self.device.handle)))
         self.manager = VoiceSessions(tail_coordinator=self.coordinator)
-        pipeline = SimpleNamespace(close=AsyncMock())
+        pipeline = SimpleNamespace(close=AsyncMock(), llm=SimpleNamespace(config=SimpleNamespace(tail_mcp_enabled=True)))
         with patch.object(self.manager, "_create_pipeline", AsyncMock(return_value=pipeline)):
             created = self.manager.create_session()
         self.sid = created["session_id"]
@@ -40,7 +40,8 @@ class VoiceTailV2Tests(unittest.TestCase):
 
     def tap(self, lease=None):
         lease = lease or self.lease
-        return self.manager._submit(lease.call_tap(lambda: self.coordinator.tap(lease, 1), 1)).result(timeout=2)
+        lease.playback_active = True
+        return self.manager._submit(lease.call_tap(lambda: self.coordinator.tap(lease, 1), 1, playback=True)).result(timeout=2)
 
     def stopped(self):
         return self.manager._submit(self.coordinator.wait_stopped(self.sid)).result(timeout=5)
@@ -135,10 +136,8 @@ class VoiceTailV2Tests(unittest.TestCase):
     def test_epoch_change_retires_voice_session(self):
         self.tap()
         self.device.reboot()
-        self.session.busy = False
-        self.manager.begin_turn(self.sid, str(uuid.uuid4()))
         with self.assertRaises(TailControlError):
-            self.tap(self.session.tail_lease)
+            self.manager._submit(self.coordinator.status(self.lease)).result(timeout=2)
         self.assertFalse(self.session.active)
         self.assertEqual(self.stopped()["status"], "unconfirmed")
 

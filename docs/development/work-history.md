@@ -27,6 +27,26 @@
 通常起動後、同じWi-Fiへ接続し、実機の `GET /api/v2/tail/state` はHTTP 200・Content-Type application/json・Cache-Control no-store。`protocol_version=2, control_mode=v2_exclusive, revision=0, session_id=null, phase=closed, motion=idle, start_enabled=false, calibrated=true` を確認した。
 
 実施範囲は書込み・設定保全・状態読取りまで。serial a、open/tapなどの動作指令は送っていない。機構の動作、速度・電流、物理停止時間、再起動をまたぐ遅着要求、PC音声からの通し受け入れは引き続き未実施。動作試験は操作者・対象機器を確認し、手元準備後に既存のMVP v2試験手順で行う。
+## AI実再生開始に合わせるしっぽ動作（2026-10-25）
+
+- 利用者が「トントンして」の明示要求より「AIが話し始める」タイミングを指定。参照main `593103d2a97ef1f5133d7502ab031e0b4dbc4601`から分離worktree/branch `feature/playback-tail`で実装。[仕様・検証・引き継ぎ](playback-tail.md)とMVPのAC-03/04/05を更新した。
+- 既存playback.startedに対して1返答1回の有限5000ms動作。返答の実再生終了・失敗・割込みで許可を先に失効し、独立停止を予約する。LLMの先行tapは拒否する。再生前statusとstop、入力継続、設定の両opt-in、v2機器の許可/校正/停止フェンス、速度・時間予算を維持した。
+- 重複/遅着開始と旧返答の終了を現在turnから分離。open/tapの結果が不明なら同じ会話内の再開始を禁止し、停止確認後の次返答でも自動復旧しない。既知の機器拒否と未知のHTTPエラーは、statusとerror本文を照合して区別する。
+- Astra設計→Sol実装・検証→Astra節目レビュー→修正・最終レビューを実施。Python最終282件/skip0/17.500秒、Web18本、Astro本番buildが成功。実機/モデルはmock。共有Webコードとファームは変更していない。
+- 既存稼働Web・音声PCのサービス、私有設定、実機は変更しない。公開配備・実スマホ・v2機器での動作/停止観察は未実施。PC担当は本変更を含む版、Happy-Emoriはv2本体反映と個体校正を確認し、限定通し試験へ進む。
+
+
+## ローカル製品Webの音声接続とESP32版確認（2026-10-25）
+
+- 基点/製品Webソース: 統合main `2a14c766d5d7f19199da908c895892b56fb433f5`。PR #26/#27/#28はmainへ反映済み。今回の観測では音声PCの稼働SHA・機器ファームSHAは未取得。
+- Macの`apps/hossy-web`で`npm ci`成功（260 packages追加、audit261、脆弱性0）。当初`VOICE_API_UPSTREAM=http://127.0.0.1:8765`で起動したが、Macには音声サーバーがなく、Web経由statusは502 text/plain/空本文。UIのJSONエラーはログイン転送を意味しなかった。
+- 音声PCのlocalhost応答と`127.0.0.1:8765`待受をユーザーが報告。ユーザーがPC側の起動変更を手動で実施。その後、Mac→音声PCのstatusで200 JSONを確認。
+- 12:03 JST、ローカルAstroを停止し、`VOICE_API_UPSTREAM=http://192.168.100.113:8765 npm run dev -- --host 127.0.0.1`で再起動。`curl -i --connect-timeout 3 --max-time 5 http://127.0.0.1:4321/api/v1/voice/status`で200 JSON、`voice_api=available`、`models=checked_on_first_turn`、`Cache-Control: no-store`を確認。ユーザーはWebサーバーOKと回答。モデルの音声往復・各停止・記録の詳細結果は未取得。
+- 12:09 JST、指定Follower `192.168.100.111` の`GET /api/v2/tail/state`は404 text/plain、旧`GET /api/tail/status`は200 JSON/idle。到達できるが統合v2ファームは未反映と判断。動作指令・機器書込み・設定変更は行っていない。
+- README/MVP/起動・試験・API文書に、音声v1としっぽv2の区別、別PCでの待受/転送、502の切り分け、IP確認と新版反映手順を追記。古いReader追従手順を新版Followerに適用しないよう整理。今回の編集は文書のみで、稼働サービスや実機へ変更を加えない。
+- 文書検証: 変更したMarkdown 10点の相対リンク137件（ファイル/見出し）とコードフェンスを確認、欠落なし。`git diff --check`成功。実行コードの変更がないため、自動試験・本番ビルド・サービス再起動は再実施していない。
+- 残り: Happy-Emoriによる個体設定/NVS保全と新版反映、PC側の稼働版確認、限定機器試験、実音声/停止/記録のAC別証跡。CT→PCの経路・公開配備・認証後API・実スマホの通し試験は別途未確認。LAN IPは当時の値であり固定設定として扱わない。
+
 
 ## Web・PC・ESP32のMVP修理を統合（2026-10-25）
 

@@ -1,5 +1,7 @@
 # Web音声会話 HTTP API
 
+音声APIは **`/api/v1/voice/`（v1）** を継続使用します。[しっぽ制御v2](mvp-tail-control-v2.md)はPC↔ESP32の別APIであり、音声URLを`/api/v2/voice/`へ変更しません。製品Webは同一originの音声APIへ接続し、PCが機器制御を仲介します。
+
 2026-10-25更新。現行Webの継続PCM・NDJSON契約と、互換用のファイル送信契約です。Androidネイティブ/ESP32音声は別の [TCP契約](voice-tcp.md) を使います。[処理フロー図](../architecture.md) / [サーバー要件](../requirements/server.md)。
 
 継続PCM入力とサーバーVADによる途中認識を追加し、従来の1発話ファイル送信・NDJSON逐次返答も保持します。PCM経路でも発話確定後にLLMの差分と文節TTSを逐次配信します。音声入力POSTと返答受信GETは独立した接続で並行し、返答生成・再生中も無音を含むPCM送信を継続します。
@@ -112,6 +114,8 @@ Webは `X-Voice-Audio-Profile: pcm_s16le_16000_stream` で連続PCM出力を要�
 ### `POST /api/v1/voice/sessions/{session_id}/audio-stream/playback`
 
 `Content-Type: application/json` で `generation`、`turn_id`、`event`（`started` / `ended` / `failed`）を送ります。最初の文節の実出力で `started` を通知します。`ended` は `complete` を受信し、かつ全音声の出力キューが空になった時だけ送ります。生成途中の終了通知は拒否します。完了後は600msの `cooldown` を経て待受へ戻ります。音声送信とサーバーVADによる新発話検出は全段階で継続します。旧WAV再生経路の失敗は手動再生待ちとし、自動で待受へ戻しません。現在のWeb PCM／AudioWorklet経路の出力異常は通話を終了し、利用者に再開を案内します。古い世代・発話・停止済み会話の通知は拒否します。完了通知の再送は同じ発話で冪等です。
+
+機器制御が許可された会話では、最初の有効な`started`が[しっぽ再生連動](../development/playback-tail.md)の開始条件です。相づちを含む実出力通知を使い、文字/音声の生成・受信だけで開始しません。1返答1回・最大5秒、`ended`/`failed`/割込み時は期限前でも独立停止します。同じ通知の再送や終了後の遅着`started`は再開始できません。既存の通知キー・URLは変更しません。機器処理は非同期で、通知応答を機器の動作成功とは扱いません。
 
 WebはPCM送信・再生通知・状態取得を独立して処理し、それぞれ同時1件に制限します。PCMの確認中も状態取得を続け、同じsession／generationでnext_sequenceが送信番号+1なら、POSTの応答が遅い場合も受理済みと確認できます。古い連番の状態は適用せず、想定以上の連番へ勝手に追従しません。再生通知の順序は保持します。
 

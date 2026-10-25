@@ -286,7 +286,9 @@ async def stream_tail_chat(
             or isinstance(context_length, bool) or context_length < 1):
         raise ValueError("Invalid voice model limits")
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt.strip() + _TOOL_GUIDANCE},
+        {"role": "system", "content": system_prompt.strip() + (
+            "\nしっぽの開始は実際の音声再生に合わせてサーバーが管理します。tap_tailを呼ばず、開始済みと答えないでください。停止はstop_tail、状態はget_tail_statusです。"
+            if current_tail_lease() and current_tail_lease().playback_owned else _TOOL_GUIDANCE)},
         {"role": "user", "content": user_input},
     ]
     actual_calls: list[str] = []
@@ -316,7 +318,7 @@ async def stream_tail_chat(
                 # A confirmed voice shortcut does not need a model round trip
                 # to choose its sole allowed action. Keep the same lease and
                 # device validation, then let the model explain the result.
-                shortcut = execute_confirmed_tap and intent == "tap"
+                shortcut = execute_confirmed_tap and intent == "tap" and not (lease and lease.playback_owned)
                 if shortcut:
                     attempted_calls += 1
                     try:
@@ -344,11 +346,14 @@ async def stream_tail_chat(
                         + json.dumps(result, ensure_ascii=False, allow_nan=False)})
                 for round_index in range(MAX_ROUNDS):
                     final_only = shortcut or round_index == MAX_ROUNDS - 1 or attempted_calls >= MAX_TOOL_CALLS
-                    force_tap = round_index == 0 and intent == "tap" and lease is not None and not final_only
+                    force_tap = (round_index == 0 and intent == "tap" and lease is not None
+                                 and not lease.playback_owned and not final_only)
                     payload = {
                         "model": model, "messages": messages,
-                        "tools": ([tool for tool in tools if tool["function"]["name"] == "tap_tail"]
-                                  if force_tap else tools),
+                        "tools": ([tool for tool in tools if tool["function"]["name"] != "tap_tail"]
+                                  if lease and lease.playback_owned else
+                                  ([tool for tool in tools if tool["function"]["name"] == "tap_tail"]
+                                   if force_tap else tools)),
                         "tool_choice": "required" if force_tap else "none" if final_only else "auto",
                         "parallel_tool_calls": False,
                         "stream": True, "stream_options": {"include_usage": True},
@@ -413,7 +418,7 @@ async def stream_tail_chat(
                     if finish_reason == "tool_calls" and not calls:
                         raise RuntimeError("LM Studio marked tool calls without providing a call")
                     if not calls:
-                        unfulfilled_tap = intent == "tap" and not tap_accepted
+                        unfulfilled_tap = intent == "tap" and not tap_accepted and not (lease and lease.playback_owned)
                         if unfulfilled_tap:
                             # A model may ignore required tool_choice or describe a
                             # success despite a rejected call. Do not speak that
@@ -462,6 +467,8 @@ async def stream_tail_chat(
                             else:
                                 try:
                                     if name == "tap_tail":
+                                        if lease is not None and lease.playback_owned:
+                                            raise TailControlError("Voice starts are owned by actual audio playback")
                                         if intent != "tap" or lease is None:
                                             raise TailControlError("Start requires an explicit current request and an active conversation")
                                         requested_duration = _requested_tap_duration(current_user_text)
