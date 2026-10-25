@@ -58,7 +58,7 @@ STLは8点を収録していますが、収録は印刷・嵌合の合格を意�
 | 経路 | 方式・境界 | 状態 |
 | --- | --- | --- |
 | スマホ製品Web → 公開配信 | HTTPS、Passportの既存入口 | 未ログイン時の保護を確認。ログイン後の配信版・API経路は未確認 |
-| 製品Web → PC音声 | 同一originの `/api/v1/voice/`、状態参照の `/api/v1/dashboard/runtime` を配信側が転送 | PRにdev/Nginx転送あり。実upstream未確定。未設定Nginxは503 |
+| 製品Web → PC音声 | 同一originの `/api/v1/voice/`、状態参照の `/api/v1/dashboard/runtime` を配信側が転送 | API仕様と音声PCの8765番は確定。PRにdev/Nginx転送あり。公開配信側のupstream設定・到達経路は未確認。未設定Nginxは503 |
 | 管理Web → PC音声 | HTTP、PCM入力・NDJSON出力・再生結果通知・DELETE停止 | main実装 |
 | PC → LLM/TTS/STT | PC内モデルとLM Studio等。VADと発話分割もPC側 | main実装、過去の実モデルHTTP記録あり |
 | 会話 → MCP → PC設定 | stdio経由で希望頻度の保存・取得 | main実装。ESP32へ動作を送らない |
@@ -66,6 +66,8 @@ STLは8点を収録していますが、収録は印刷・嵌合の合格を意�
 | Reader → Follower | 同一Wi-Fi、HTTP `/api/teleop` | main実装。インターネット越しの他者操作サービスではない |
 | Android/ESP32音声 → PC | TCP v1、4-byte長+JSON、1接続1会話 | コードあり。最新版の端末実機通話は未確認 |
 | Bluetooth/BLE | 用途・接続対象・ペアリング・再接続 | 未確定／未実装。Wi-Fi接続をBLE実装とは扱わない |
+
+ブラウザー側の接続先は製品Webと同じoriginの音声API、転送先のサービスは音声PCのHTTP 8765番です。[PC接続記録](../setup/local-pc.md)にはPC内 `http://127.0.0.1:8765` と、2026-10-24時点のLAN入口 `http://192.168.137.201:8765` が記載されています。後者は当時のIPで、公開配信サーバーからの現在の到達性は未確認です。仕様を決め直す作業と、既存環境の転送設定・疎通を確認する作業を区別します。
 
 公開ブラウザーからPCのlocalhostへ直接つなぎません。API状態の成功だけでモデル推論・実音声・機器制御の合格とはしません。HTTPサーバーとTCPサーバーは別プロセスで、セッションやモデルを共有する前提にはしません。詳細の図は [構成図](../architecture.md) を参照します。
 
@@ -157,7 +159,7 @@ PRのSWは静的素材だけを対象にし、API・認証callback・音声応�
 | 7. 異常・保存 | 保存不可・別タブ・通信断・認証失効でも成功を偽らず復旧手順を表示 | PRで一部自動確認。実端末の物理切断/PWAは未確認 |
 | 8. 追加ストーリー | 採用した接触・帰宅・起床・BLEのシナリオを再現できる | 採用範囲と仕様の確定が先 |
 
-PR #25ではWeb試験18スクリプト、本番ビルド、ローカル画面でのAPI未設定拒否・設定保持を確認済みです。過去の219件の配置統合試験やESP32の実機記録は別の根拠です。今回の仕様整理では再実行していません。公開配備、実upstream、実マイク往復、PWA実端末、Docker/Nginx起動は未確認です。
+PR #25ではWeb試験18スクリプト、本番ビルド、ローカル画面でのAPI未設定拒否・設定保持を確認済みです。過去の219件の配置統合試験やESP32の実機記録は別の根拠です。今回の仕様整理では再実行していません。公開配備、公開配信側のupstream設定・到達経路、実マイク往復、PWA実端末、Docker/Nginx起動は未確認です。
 
 発表はスマホ画面を投影し、可能なら認証から上の順で見せます。LLM会話とトントンの両方を説明し、一人利用から簡易フィードバックまでを示します。事前撮影した動画へすぐ切り替えられるよう準備し、最低3回リハーサルします。ロボット試験も撮影し、確認した動作と条件が分かる素材をREADMEに使います。未統合部分を別操作で見せる場合は、通し連携の成功と説明しません。作業はMVP実装→実機試験→保護・組立→発表/README作成→練習の順に進め、指定外の後工程を先行させません。
 
@@ -167,7 +169,7 @@ PR #25ではWeb試験18スクリプト、本番ビルド、ローカル画面で
 
 | 主担当 | 残作業 | 関連 |
 | --- | --- | --- |
-| 亀山 | 音声upstream確定、Webとの契約確認、実機MCP・独立停止・遅着拒否、VADのパケット後半欠落と設定PUTの受信期限を修正 | [#2](https://github.com/jphacks/kz_2614/issues/2)、[#7](https://github.com/jphacks/kz_2614/issues/7)、[#23](https://github.com/jphacks/kz_2614/issues/23)、[#24](https://github.com/jphacks/kz_2614/issues/24) |
+| 亀山 | 既存の音声PC:8765への公開転送設定の照合・疎通、Webとの契約確認、実機MCP・独立停止・遅着拒否、VADのパケット後半欠落と設定PUTの受信期限を修正 | [#2](https://github.com/jphacks/kz_2614/issues/2)、[#7](https://github.com/jphacks/kz_2614/issues/7)、[#23](https://github.com/jphacks/kz_2614/issues/23)、[#24](https://github.com/jphacks/kz_2614/issues/24) |
 | 江森 | 実個体の校正・上限・停止確認、Reader/Follower切替、接触入力の仕様/実装、ケース・配線保護 | [#7](https://github.com/jphacks/kz_2614/issues/7)、[#11](https://github.com/jphacks/kz_2614/issues/11)、[#12](https://github.com/jphacks/kz_2614/issues/12) |
 | ほっしー | PRの統合・公開経路、スマホ実機UI、本人/人形紐付け・モード操作、日記連携。ESPと本体/アプリ間の認証がない点をサーバー・機器担当と解決 | [#3](https://github.com/jphacks/kz_2614/issues/3)、[#4](https://github.com/jphacks/kz_2614/issues/4)、[#6](https://github.com/jphacks/kz_2614/issues/6)、[#10](https://github.com/jphacks/kz_2614/issues/10)、[#12](https://github.com/jphacks/kz_2614/issues/12) |
 | 全員で決定 | 時刻とLLMの関係、帰宅/起床/接触の採用、BLEの用途、共有権限・要約の保存条件 | [#5](https://github.com/jphacks/kz_2614/issues/5)、[#8](https://github.com/jphacks/kz_2614/issues/8)、[#9](https://github.com/jphacks/kz_2614/issues/9)、[#10](https://github.com/jphacks/kz_2614/issues/10)、[#11](https://github.com/jphacks/kz_2614/issues/11)、[#13](https://github.com/jphacks/kz_2614/issues/13) |

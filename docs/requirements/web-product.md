@@ -6,9 +6,9 @@
 
 ## 公開先と境界
 
-[公開ホーム](https://hiroron-jphacks2026.hiroron.net/) / [#diary](https://hiroron-jphacks2026.hiroron.net/#diary)。未ログインAPI状態要求は401 text/html。Passportログイン後のUI、公開版とソースの一致、API upstream、音声往復は未確認です。8765番の `apps/web` は別の管理画面です。
+[公開ホーム](https://hiroron-jphacks2026.hiroron.net/) / [#diary](https://hiroron-jphacks2026.hiroron.net/#diary)。未ログインAPI状態要求は401 text/html。Passportログイン後のUI、公開版とソースの一致、公開配信側のAPI upstream設定・到達経路、音声往復は未確認です。8765番の `apps/web` は別の管理画面です。
 
-製品Webは同一originの音声APIを使い、Astro devまたはNginx側で明示したupstreamへ転送します。管理者共通のdashboard settingsは個人設定へ接続しません。本人識別・人形所有権・BLE・接触センサー・AI/他者フィードバックモードの実APIは未実装で、利用不可表示/disabledを維持します。ブラウザー会話が人形を動かすとは表示しません。
+製品Webは同一originの音声APIを使い、Astro devまたはNginx側で明示したupstreamへ転送します。API契約と音声PCのHTTP 8765番は定義済みです。未確認なのは公開配信側の実際の転送設定・PCへの疎通であり、API仕様そのものが未確定という意味ではありません。[PC側の接続記録](../setup/local-pc.md)を参照します。管理者共通のdashboard settingsは個人設定へ接続しません。本人識別・人形所有権・BLE・接触センサー・AI/他者フィードバックモードの実APIは未実装で、利用不可表示/disabledを維持します。ブラウザー会話が人形を動かすとは表示しません。
 
 ## 画面
 
