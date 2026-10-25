@@ -942,3 +942,14 @@ Programs/
 - ロゴ・maskableアイコン・起動ローディング・夜空配色・タップ演出・時刻入力と6段階ボタン・SW v6を反映。現行README、製品Web仕様、使い方、PWA資産の案内を更新し、旧版の操作確認記録は結果を保持して対象版を明記した。
 - 確認: npm ci（191パッケージ）、Astro 7.4.1の本番ビルド、app.js/sw.jsのNode構文成功。生成ページ・manifest・SW・CSS・新画像とアイコン等11 HTTPパスが200。63ファイルのSHA-256はビルド後も一致。相対Markdownリンクとgit diff --checkを確認した。
 - apps/web、server、firmware、testsの実行コードと既存設定は変更しない。ブラウザー操作試験、実端末PWA、Dockerビルド・公開サイト更新、サービス・マイク・ESP32操作は今回の確認に含めない。同期元と検証範囲は日時付きのWeb履歴にも記録した。
+
+
+## 2026-10-25 最新製品WebからMVP音声APIへ接続
+
+- 依頼: 最新コミットのWebをMVPに対応させる。専用clone/feature/web-product-mvpでmain aae38fbとHOSSY＿WEB 2fc13cfを通常mergeし、夜空UI・素材・STL・既存文書を保持した。Astraが仕様/検証を設計、GPT-6.1 Solが実装、Astraが節目・最終レビューを担当。
+- 実装: 製品の準備画面にマイク選択・入力音量・途中文字・返答・開始/停止を追加。apps/webのPCMクライアントとworkletをビルド前に同期し、二重実装を避けた。接続前にstatusのJSON契約を検査し、認証HTML・不正応答では開始しない。停止は端末を即時解放して記録し、サーバー停止結果を別表示。DELETEは5秒以内、JSON/state/session_idを検証する。
+- 記録: capture-readyで開始、開始時の期限を固定、変更は次回適用。実際のローカル停止時刻・元の理由・予定期限を分離。設定とID別記録、storage同期、保存失敗警告、新形式の記録キー100件保持、旧記録の読取互換を実装。
+- 配信: 同一originのみのAPI利用。VOICE_API_UPSTREAMを設定したAstro dev/Nginxからvoiceとruntimeへ転送し、Nginx未設定時は503 JSON。他のAPIを転送せず、既存全体設定を個人設定として変更しない。SWは静的資産のみをキャッシュし、API/音声/認証を除外。認証画面を保存せず、401/403を古い画面で隠さない。
+- 検証: tests/webの18スクリプト（既存音声/設定/worklet、製品音声/保存、SW、proxy）すべて成功。npm ci --ignore-scripts、最終Astro build、JS/shell構文を確認。Astraの3指摘（停止成功の誤認・保存上限・実停止時刻）を修正し製品回帰2本とソースで再評価、追加の重大指摘なし。
+- 画面: 専用loopback 127.0.0.1:18766のビルドで、準備画面・15分選択・API未設定時の開始拒否・マイク停止表示・無効なモードボタンを確認。APIに到達しないためマイク要求/実録音なし。これを公開版やスマートフォン実機の受け入れとは扱わない。
+- 未確認: 実際の音声API upstream、公開配備、ログイン後音声往復、実端末/PWA、Docker/Nginxの実行。公開statusの未ログインGETは401 text/htmlであり、認証後upstreamの状態は分からない。本人/人形所有権・BLE・接触・他者フィードバック切替・会話から実機制御は別の未完了事項。稼働サービス・マイク・ESP・公開設定は変更していない。

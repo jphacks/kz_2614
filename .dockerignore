@@ -1,0 +1,15 @@
+**
+!apps/
+!apps/hossy-web/
+!apps/hossy-web/**
+!apps/web/
+!apps/web/voice_call.js
+!apps/web/voice_pcm_worklet.js
+!apps/web/voice_pcm_output_worklet.js
+**/node_modules
+**/dist
+**/.astro
+**/.git
+**/.env
+**/.env.*
+!**/.env.example

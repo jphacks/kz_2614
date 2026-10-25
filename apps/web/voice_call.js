@@ -1,6 +1,9 @@
 "use strict";
 
 (() => {
+  // Optional product adapter. The dashboard keeps the same engine without an adapter.
+  const hooks = window.NengitsuneVoiceHooks || {};
+  function notify(name, detail) { try { hooks[name]?.(detail); } catch (_) { /* UI observers must not interrupt audio cleanup. */ } }
   const API_SESSIONS = "/api/v1/voice/sessions";
   const MICROPHONE_KEY = "nen-gitsune-voice-microphone";
   const INPUT_GAIN_KEY = "nen-gitsune-voice-input-gain-percent";
@@ -125,6 +128,7 @@
 
   function setStatus(message, kind = "") {
     statusLine.textContent = message;
+    notify("onStatus", { message, kind });
     statusLine.classList.remove("error", "active");
     if (kind) statusLine.classList.add(kind);
   }
@@ -203,16 +207,30 @@
       microphoneSelect.value = wanted;
       microphoneDevicesReady = true;
       if (disappeared && (sessionId || startRequest)) {
-        void stopCall({ silent: true });
+        void stopCall({ silent: true, reason: "error" });
         setStatus("選択していたマイクが切断されました。録音マイクを選び直して「会話を始める」を押してください。", "error");
       }
     } catch (_) { /* Device selection remains unchanged when enumeration is unavailable. */ }
   }
 
-  function stopRemoteSession(id, keepalive = false) {
-    return fetch(`${API_SESSIONS}/${encodeURIComponent(id)}`, {
-      method: "DELETE", cache: "no-store", credentials: "same-origin", keepalive,
-    });
+  async function stopRemoteSession(id, keepalive = false) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await abortable(fetch(`${API_SESSIONS}/${encodeURIComponent(id)}`, {
+        method: "DELETE", cache: "no-store", credentials: "same-origin", redirect: "error", keepalive,
+        signal: controller.signal,
+      }), controller.signal);
+      if (response.redirected || !response.headers?.get("content-type")?.toLowerCase().includes("application/json")) {
+        throw new Error("サーバーの停止応答がJSONではありません。ログイン状態や配信設定を確認してください。");
+      }
+      const body = await abortable(readJson(response), controller.signal);
+      if (body.state !== "stopped" || body.session_id !== id) throw new Error("対象の会話の停止を確認できませんでした。");
+      return body;
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("サーバーの停止応答を時間内に確認できませんでした。");
+      throw error;
+    } finally { clearTimeout(timer); }
   }
 
   async function startCall() {
@@ -221,7 +239,7 @@
     const unavailable = captureUnavailableMessage();
     if (unavailable) { setStatus(unavailable, "error"); return; }
     conversationChannel?.postMessage({ type: "voice-owner", sender: tabOwner });
-    const request = { controller: new AbortController(), cancelled: false, timedOut: false };
+    const request = { controller: new AbortController(), cancelled: false, timedOut: false, phase: "preparing" };
     startRequest = request;
     const timer = setTimeout(() => { request.timedOut = true; request.controller.abort(); }, START_TIMEOUT_MS);
     refreshButtons();
@@ -229,6 +247,10 @@
     try {
       await abortable(prepareAudioContext(), request.controller.signal);
       if (startRequest !== request || request.cancelled) return;
+      request.phase = "preflight";
+      if (hooks.beforeStart) await abortable(hooks.beforeStart(request.controller.signal), request.controller.signal);
+      if (startRequest !== request || request.cancelled || document.visibilityState === "hidden") return;
+      request.phase = "creating";
       const response = await fetch(API_SESSIONS, {
         method: "POST", cache: "no-store", credentials: "same-origin", signal: request.controller.signal,
       });
@@ -302,7 +324,7 @@
 
   function failCapture(request, message) {
     if (!currentCapture(request)) return;
-    void stopCall({ silent: true });
+    void stopCall({ silent: true, reason: "error" });
     setStatus(`${message} 接続やマイクを確認して「会話を始める」から再開してください。`, "error");
   }
 
@@ -362,6 +384,7 @@
       context.addEventListener?.("statechange", request.contextStateHandler);
       request.contextStateHandler();
       if (!currentCapture(request)) return;
+      notify("onReady", { sessionId, generation });
       void syncHeartbeat();
       void refreshMicrophones();
       renderState(request);
@@ -1022,9 +1045,17 @@
     }
   }
 
-  async function stopCall({ silent = false, keepalive = false } = {}) {
+  async function stopCall({ silent = false, keepalive = false, reason = "manual" } = {}) {
+    const wasActive = Boolean(sessionId || startRequest || captureRequest);
+    if (!wasActive) return;
     const stopVersion = ++activityVersion;
-    if (startRequest) { startRequest.cancelled = true; startRequest = null; }
+    if (startRequest) {
+      startRequest.cancelled = true;
+      // Before POST there is no remote session to clean up. Abort preflight promptly.
+      // Once creation is in flight, retain its response so a late session can be deleted.
+      if (startRequest.phase !== "creating") startRequest.controller.abort();
+      startRequest = null;
+    }
     const stoppedSession = sessionId; sessionId = null; generation = null;
     if (captureRequest) { disposeCapture(captureRequest); captureRequest = null; }
     resetAudio();
@@ -1035,11 +1066,13 @@
       try { Promise.resolve(context.close()).catch(() => {}); } catch (_) { /* Already closed. */ }
     }
     showMicrophone("マイク停止"); refreshButtons();
+    if (wasActive) notify("onStopped", { reason, localStopped: true, remoteConfirmed: stoppedSession ? null : false });
     if (stoppedSession) {
       try {
-        const response = await stopRemoteSession(stoppedSession, keepalive);
-        if (!response.ok && !silent) throw new Error("サーバーへの停止要求を確認できませんでした。");
+        await stopRemoteSession(stoppedSession, keepalive);
+        if (activityVersion === stopVersion) notify("onStopResult", { remoteConfirmed: true });
       } catch (error) {
+        if (activityVersion === stopVersion) notify("onStopResult", { remoteConfirmed: false });
         if (!silent && activityVersion === stopVersion) setStatus(`${error.message} 端末のマイクと再生は停止しました。`, "error");
         return;
       }
@@ -1066,7 +1099,7 @@
       conversationChannel = new window.BroadcastChannel("nen-gitsune-voice-owner");
       conversationChannel.onmessage = (event) => {
         if (event.data?.type === "voice-owner" && event.data.sender !== tabOwner && (sessionId || startRequest)) {
-          void stopCall({ silent: true }); setStatus("別のタブで会話を開始したため、このタブのマイクを停止しました。");
+          void stopCall({ silent: true, reason: "other-tab" }); setStatus("別のタブで会話を開始したため、このタブのマイクを停止しました。");
         }
       };
     } catch (_) { /* Cross-tab messaging is optional. */ }
@@ -1082,8 +1115,9 @@
     if (captureRequest?.pcmGain) captureRequest.pcmGain.gain.value = audioPlayer.volume;
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") { void stopCall({ silent: true, keepalive: true }); setStatus("画面が切り替わったため停止しました。戻ったら会話を開始してください。"); }
+    if (document.visibilityState === "hidden") { void stopCall({ silent: true, keepalive: true, reason: "hidden" }); setStatus("画面が切り替わったため停止しました。戻ったら会話を開始してください。"); }
   });
-  window.addEventListener("pagehide", () => void stopCall({ silent: true, keepalive: true }));
+  window.addEventListener("pagehide", () => void stopCall({ silent: true, keepalive: true, reason: "pagehide" }));
+  window.NengitsuneVoice = { start: startCall, stop: stopCall };
   refreshButtons();
 })();

@@ -107,3 +107,27 @@ main{position:relative;z-index:1}
 @media(max-width:365px){.hero-card{height:365px}.hero-plush{top:98px;height:188px}.hero-copy h2{font-size:19px}.cta-copy strong{font-size:13px}}
 @media(prefers-reduced-motion:no-preference){.screen:not([hidden]){animation:screen-calm-in .34s cubic-bezier(.22,1,.36,1)}.hero-plush{animation:plush-breathe 6s ease-in-out infinite}.hero-star,.sky-star{animation:twinkle 5.2s ease-in-out infinite}.star-two,.sky-star.s2,.sky-star.s5{animation-delay:1.6s}.star-three,.sky-star.s3,.sky-star.s6{animation-delay:3.1s}.sky-star.s4{animation-delay:4.2s}.mini-card,.sound-option,.round-icon,.nav-item,.sleep-cta,.primary-button{transition:transform .22s ease,box-shadow .22s ease,background .22s ease,border-color .22s ease}.mini-card:active,.sound-option:active,.sleep-cta:active,.primary-button:active{transform:scale(.975)}@keyframes plush-breathe{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-4px)}}@keyframes twinkle{0%,100%{opacity:.22;transform:scale(.86)}50%{opacity:.82;transform:scale(1.1)}}@keyframes screen-calm-in{0%{opacity:.4;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}@keyframes tap-ripple{0%{opacity:.75;transform:scale(.22)}100%{opacity:0;transform:scale(2.15)}}@keyframes tap-spark{0%{opacity:.85;transform:translate(0,0) scale(.7)}100%{opacity:0;transform:translate(var(--tx,0),var(--ty,-18px)) scale(1.1)}}}
 @media(prefers-reduced-motion:reduce){.tap-layer,.ambient-sky{display:none}}
+
+/* Product voice controls share the existing night palette and rounded cards. */
+.voice-card, .connection-card { padding: 22px; border: 1px solid #405277; border-radius: 25px; background: #1c2b46; margin-bottom: 24px; }
+.voice-card p, .connection-card p { line-height: 1.75; overflow-wrap: anywhere; }
+.voice-api-status { color: #f2ce80; font-size: 13px; }
+.voice-field { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 20px 0 9px; font-size: 14px; }
+.voice-field select { width: 100%; min-width: 0; border: 1px solid #657695; border-radius: 12px; color: #fff5dd; background: #152036; padding: 12px; font: inherit; }
+.voice-field input[type="range"] { width: 100%; accent-color: #f0c259; }
+.voice-field output { margin-left: auto; color: #f2ce80; }
+.voice-hint { font-size: 12px; color: #c1c9db; }
+.voice-meter { display: flex; gap: 10px; align-items: center; font-size: 12px; }
+.voice-meter meter { flex: 1; min-width: 50px; }
+.voice-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; margin: 20px 0; }
+.voice-actions .primary-button { margin: 0; padding: 16px 10px; }
+.voice-stop-button, .connection-modes button { border-radius: 16px; padding: 14px 10px; border: 1px solid #8d7e81; background: #293652; color: #f7e8dc; font: inherit; }
+.voice-card button:disabled, .connection-modes button:disabled { opacity: .5; cursor: default; }
+.voice-text { border-top: 1px solid #405277; padding-top: 18px; margin-top: 18px; }
+.voice-text strong { font-size: 12px; color: #f2ce80; }
+.voice-text p { font-size: 14px; white-space: pre-wrap; }
+.voice-card audio { width: 100%; }
+.voice-card .error, .storage-status { color: #ffd0cb; }
+.connection-modes { display: flex; flex-wrap: wrap; gap: 10px; }
+.connection-card { font-size: 14px; }
+.storage-status { position: sticky; bottom: 100px; z-index: 20; margin: 12px; padding: 14px; border: 1px solid #dfa797; border-radius: 14px; background: #382a3b; font-size: 13px; line-height: 1.7; }

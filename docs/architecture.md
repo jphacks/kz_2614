@@ -4,7 +4,7 @@
 
 2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](development/ownership.md) を参照してください。
 
-更新日: 2026-10-25。PC音声の公開配置9036cce、統合仕様f6b0055、HOSSy製品Web107b762、EMORI記録61bf53dを照合しています。製品Webはmainへソース統合済みでも音声APIは未接続です。
+更新日: 2026-10-25。PC音声の公開配置9036cce、統合仕様f6b0055、HOSSy製品Web107b762、EMORI記録61bf53dを照合しています。製品Webは最新UIを保持し、共有音声クライアントから同一originのAPIへ接続するMVPを実装しています。実音声・公開経路は未検証です。
 
 [仕様書一覧](README.md) / [サーバー要件](requirements/server.md) / [端末要件](requirements/clients.md)
 
@@ -32,8 +32,8 @@ flowchart TB
         Follower[ESP32 Follower]
         Servo[SG90 × 3]
     end
-    Product --> BrowserData[端末内の選択・タイマー記録]
-    Product -.->|次の音声統合| HTTP
+    Product --> BrowserData[端末内の選択・開始終了時刻・理由]
+    Product <-->|同一origin経由のPCM・NDJSON / 転送設定必須| HTTP
     Web <-->|PCM入力・NDJSON出力| HTTP
     Android <-->|TCP v1| TCP
     VoiceESP <-->|TCP v1| TCP
@@ -169,7 +169,7 @@ flowchart LR
 
 | 経路 | 既定・場所 | 確認範囲 |
 | --- | --- | --- |
-| 製品Web/PWA | Astro開発127.0.0.1:4321 / `apps/hossy-web` | UI。音声・実機は未接続 |
+| 製品Web/PWA | Astro開発127.0.0.1:4321 / `apps/hossy-web` | 音声API接続コードあり。実音声・公開経路・実機未検証 |
 | 音声・設定Web | HTTP 127.0.0.1:8765 / `server/api/server.py` | PC実モデルHTTPの記録あり |
 | LLM | HTTP 127.0.0.1:1234 / `llm/lm_studio.py` | 指定Gemmaの記録あり。API選択はMCP有効/無効で異なる |
 | TTS | `tts/irodori.py`・`tts/local_backend.py` | このPCはlocal Irodori v4.1。テンプレートはGradioの旧既定も保持 |
@@ -206,15 +206,15 @@ flowchart TD
     Home --> Sound[サウンドを選ぶ / 再生は未実装]
     Home --> Diary[日別・月間ダイアリー]
     Home --> About[製品紹介]
-    Routine --> Start[タイマー開始時刻を記録]
-    Start --> Finish[タイマー終了時刻を記録]
+    Routine --> Start[音声準備完了で時刻・期限を確定]
+    Start --> Finish[端末音声停止で時刻・理由を記録]
     Finish --> Store[端末内に保存]
     Sound --> Store
     Store --> Diary
-    Diary --> Sample[睡眠グラフはサンプル / タイマー時刻は実記録]
+    Diary --> Sample[睡眠グラフはサンプル / 音声時刻は実記録]
     Open --> SW[Service Worker / 静的画面キャッシュ]
     SW --> Offline[オフライン時は保存済み画面を表示]
-    Routine -.-> Future[今後の音声HTTP API接続]
+    Routine --> Voice[共有音声クライアント / 同一origin API]
 ```
 
-製品Webの保存先は配信originごとのlocalStorageです。音声管理Webの設定保存先server/api/dataとは別です。音声統合前にSWのAPIキャッシュ除外が必要です。[画面仕様](requirements/web-product.md) / [起動とPWA](setup/hossy-web.md)。
+製品Webの保存先は配信originごとのlocalStorageです。音声管理Webの設定保存先server/api/dataとは別です。SWは静的許可リストのみを保存し、API・認証・音声を除外します。[画面仕様](requirements/web-product.md) / [起動とPWA](setup/hossy-web.md)。

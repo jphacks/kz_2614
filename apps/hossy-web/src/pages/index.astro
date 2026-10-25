@@ -51,7 +51,7 @@ import Layout from '../layouts/Layout.astro';
 
     <main id="main-content">
       <section class="screen" id="screen-home" data-screen="home" aria-label="ホーム">
-        <div class="device-selector"><span class="selector-dot"></span> ねんぎつねといっしょ <svg><use href="#i-chevron"></use></svg></div>
+        <div class="device-selector"><span class="selector-dot"></span> 人形：未接続 <svg><use href="#i-chevron"></use></svg></div>
         <div class="home-heading">
           <span class="eyebrow">A LITTLE REST, A LOT OF LOVE</span>
           <h1>おかえりなさい<span class="heading-star">✳</span></h1>
@@ -154,16 +154,37 @@ import Layout from '../layouts/Layout.astro';
         <div class="routine-banner"><div><span>TONIGHT'S COMPANION</span><strong>ねんぎつねと、ひとやすみ。</strong><small>横向きの夜も、ふんわりそばに。</small></div><img src="/nengitsune.jpg" alt="ねんぎつね" width="1024" height="572" loading="lazy" /></div>
         <div class="panel-heading"><h2>おやすみプラン</h2><span>01 / 02</span></div>
         <div class="settings-card">
-          <label class="setting-line" for="bedtime"><span class="setting-symbol lavender"><svg><use href="#i-clock"></use></svg></span><span class="setting-label"><strong>寝る時間</strong><small>ベッドに入る時間</small></span><span class="time-field"><span class="time-field-text" id="bedtime-display">22:30</span><svg aria-hidden="true"><use href="#i-clock"></use></svg><input id="bedtime" type="time" value="22:30" /></span></label>
-          <div class="setting-line duration-line"><span class="setting-symbol peach"><svg><use href="#i-moon"></use></svg></span><span class="setting-label"><strong>ねんぎつねと話す時間</strong><small>いっしょに過ごす長さ</small></span><strong class="duration-value"><span id="duration-value">30</span>分</strong></div>
+          <label class="setting-line" for="bedtime"><span class="setting-symbol lavender"><svg><use href="#i-clock"></use></svg></span><span class="setting-label"><strong>寝る時間</strong><small>ベッドに入る目安（アラームなし）</small></span><span class="time-field"><span class="time-field-text" id="bedtime-display">22:30</span><svg aria-hidden="true"><use href="#i-clock"></use></svg><input id="bedtime" type="time" value="22:30" /></span></label>
+          <div class="setting-line duration-line"><span class="setting-symbol peach"><svg><use href="#i-moon"></use></svg></span><span class="setting-label"><strong>ねんぎつねと話す時間</strong><small>開始時に確定・変更は次回の会話から</small></span><strong class="duration-value"><span id="duration-value">30</span>分</strong></div>
           <input class="duration-range" id="duration" type="range" min="15" max="90" step="15" value="30" aria-label="ねんぎつねと話す時間の長さ" />
           <div class="range-labels" role="group" aria-label="話す時間の候補"><button type="button" data-duration-step="15">15分</button><button type="button" class="active" data-duration-step="30">30分</button><button type="button" data-duration-step="45">45分</button><button type="button" data-duration-step="60">60分</button><button type="button" data-duration-step="75">75分</button><button type="button" data-duration-step="90">90分</button></div>
           <label class="setting-line wake-line" for="wake-time"><span class="setting-symbol sunrise"><svg><use href="#i-sun"></use></svg></span><span class="setting-label"><strong>起きる時間</strong><small>朝の目安を決めよう</small></span><span class="time-field"><span class="time-field-text" id="wake-time-display">07:00</span><svg aria-hidden="true"><use href="#i-clock"></use></svg><input id="wake-time" type="time" value="07:00" /></span></label>
         </div>
         <div class="panel-heading sound-heading"><h2>おやすみサウンド</h2><button type="button" data-go="sounds">変更する <svg><use href="#i-chevron"></use></svg></button></div>
         <div class="chosen-sound"><span class="setting-symbol lilac"><svg><use href="#i-music"></use></svg></span><div><strong id="routine-sound">みみもとささやき</strong><small>やさしい声で、ゆっくりと</small></div><svg class="chosen-star"><use href="#i-star"></use></svg></div>
-        <button class="primary-button" id="sleep-button" type="button"><svg><use href="#i-moon"></use></svg><span>ねんぎつねとおやすみ</span><svg><use href="#i-chevron"></use></svg></button>
-        <p class="routine-footnote" id="session-note">時刻は目安です。会話・アラームは準備中。タイマーで時間を記録します。</p>
+        <div class="panel-heading"><h2>このブラウザーで話す</h2><span>VOICE</span></div>
+        <div class="voice-card" aria-label="音声会話">
+          <p class="voice-api-status" id="voice-api-status" role="status">音声API：未確認 · 開始すると接続を確認します。</p>
+          <label class="voice-field" for="voice-microphone-select">録音マイク<select id="voice-microphone-select"><option value="default">システム既定のマイク</option></select></label>
+          <p class="voice-hint">使うマイクを確認してから開始してください。選択したマイクが切断された場合は停止します。</p>
+          <label class="voice-field" for="voice-input-gain">入力音量 <output id="voice-input-gain-value">100%</output><input id="voice-input-gain" type="range" min="25" max="200" step="5" value="100" /></label>
+          <div class="voice-meter"><span id="voice-microphone-status">マイク停止</span><meter id="voice-input-level" min="0" max="1" value="0" aria-label="マイクの入力レベル"></meter></div>
+          <p id="voice-call-status" role="status" aria-live="polite">開始ボタンを押すと、マイクの使用を確認します。</p>
+          <div class="voice-actions"><button class="primary-button" id="voice-start-button" type="button">会話を始める</button><button class="voice-stop-button" id="voice-stop-button" type="button" disabled>会話を停止</button></div>
+          <p class="routine-footnote" id="session-note">寝る・起きる時刻は目安です。会話時間は開始時に確定します。</p>
+          <p class="voice-hint" id="voice-stop-result" role="status"></p>
+          <div class="voice-text"><strong>聞き取った内容（途中も表示）</strong><p id="voice-transcript" aria-live="polite">会話を始めると表示します。</p></div>
+          <div class="voice-text"><strong>ねんぎつねの返答</strong><p id="voice-response" aria-live="polite">返答はここに表示します。</p></div>
+          <audio id="voice-audio" controls hidden aria-label="返答音声の再生"></audio>
+          <p class="voice-hint">開始は毎回手動です。画面非表示で停止します。保存するのは開始・終了時刻と終了理由だけです。音声・会話本文は保存しません。</p>
+        </div>
+        <div class="panel-heading"><h2>ユーザー・人形の接続</h2><span>未接続</span></div>
+        <div class="connection-card">
+          <p>ユーザー：本人識別は未確認</p><p>人形：未接続・所有権の確認は未対応</p>
+          <p class="voice-hint">Passportの本人情報・人形所有権・モード制御とのAPI連携は未実装です。実機動作は確認していません。</p>
+          <div class="connection-modes" role="group" aria-label="人形のモード（利用不可）"><button type="button" disabled>会話連携（利用不可）</button><button type="button" disabled>他者フィードバック（利用不可）</button></div>
+          <p class="voice-hint">ブラウザーの音声会話で人形は動きません。</p>
+        </div>
       </section>
 
       <section class="screen inner-screen" id="screen-sounds" data-screen="sounds" aria-label="サウンド" hidden>
@@ -209,7 +230,9 @@ import Layout from '../layouts/Layout.astro';
       </div>
       <button class="install-close" type="button" id="install-close" aria-label="案内を閉じる">×</button>
     </aside>
+    <p class="storage-status" id="storage-status" role="alert" hidden></p>
     <div class="toast" role="status" aria-live="polite" hidden></div>
   </div>
-  <script src="/app.js?v=20261024-4" defer></script>
+  <script src="/app.js?v=20261025-mvp" defer></script>
+  <script src="/voice_call.js?v=20261025-mvp" defer></script>
 </Layout>

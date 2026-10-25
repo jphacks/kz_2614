@@ -19,7 +19,7 @@ function browser(options = {}) {
   let timerId = 0;
   const setTimer = (callback, delay = 0) => { timers.set(++timerId, { callback, due: environment.now + delay }); return timerId; };
   const clearTimer = (id) => timers.delete(id);
-  const response = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+  const response = (status, body) => ({ ok: status >= 200 && status < 300, status, headers: { get: () => "application/json" }, json: async () => body });
   const element = (id) => {
     if (options.optionalDom === false && ["voice-input-level", "voice-microphone-status", "voice-mode-tag", "voice-record-button", "voice-input-gain", "voice-input-gain-value", "voice-input-gain-noisy", "voice-input-gain-normal", "voice-input-gain-quiet"].includes(id)) return null;
     if (!elements.has(id)) elements.set(id, {
@@ -206,11 +206,11 @@ function browser(options = {}) {
     fetch: async (url, request = {}) => {
       calls.push({ url, options: request, startedAt: environment.now });
       if (request.method === "DELETE") {
-        if (options.deferDeletes) return deferred(pendingDeletes, undefined, () => response(200, { state: "stopped" }));
-        return response(200, { state: "stopped" });
+        if (options.deferDeletes) return deferred(pendingDeletes, undefined, () => response(200, { state: "stopped", session_id: decodeURIComponent(url.split("/").at(-1)) }));
+        return response(200, { state: "stopped", session_id: decodeURIComponent(url.split("/").at(-1)) });
       }
       if (url === "/api/v1/voice/sessions") {
-        const id = `session-${++stats.starts}`;
+        const id = `${options.sessionPrefix || "session"}-${++stats.starts}`;
         const server = { id, nextSequence: 0, acks: new Map(), stage: "listening", turnId: null, transcript: "", responseText: "", received: [], receivedRequests: [], playback: [],
           events: [], eventCursor: 0, readers: [], turnComplete: false, playbackStarted: false };
         servers.set(id, server);
@@ -303,6 +303,7 @@ function browser(options = {}) {
     constructor() { options.broadcastBus.push(this); }
     postMessage(data) { for (const peer of options.broadcastBus) if (peer !== this) peer.onmessage?.({ data }); }
   };
+  options.beforeEngine?.(context, { element, environment, setTimer, clearTimer });
   vm.runInNewContext(source, context, { filename: "voice_call.js" });
   async function advance(ms) {
     const target = environment.now + ms;
@@ -319,7 +320,7 @@ function browser(options = {}) {
     start: () => element("voice-start-button").click(), stop: () => element("voice-stop-button").click(),
     idle: () => !element("voice-start-button").disabled,
     status: () => element("voice-call-status").textContent,
-    server: () => servers.get(`session-${stats.starts}`),
+    server: () => servers.get(`${options.sessionPrefix || "session"}-${stats.starts}`),
     frames: () => calls.filter(({ url, options: request }) => url.endsWith("/audio-stream") && request.method === "POST"),
     emit(value = 0, level) { return worklets.at(-1).emit(value, level); },
     reply(turnId = "turn-1") { const server = this.server(); server.stage = "reply_ready"; server.turnId = turnId; server.transcript = "認識した発話"; server.responseText = "返答です。"; },
