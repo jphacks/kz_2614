@@ -1,118 +1,214 @@
-# ねんぎつね（仮）
+# ねんぎつね（仮） — 一日の終わりに、声としっぽで寄り添う。
 
-今回の共通仕様・修理順・合格条件は **[MVP.md](MVP.md)**。対象は「スマホで会話＋しっぽトントン＋停止＋利用記録」です。各ブランチから [最新mainの正本](https://github.com/jphacks/kz_2614/blob/main/MVP.md) を先に確認してください。
+**寝る前の「ちょっと聞いて」に、声と動きで応えるきつね型の添い寝ロボット。**
 
-**声で会話し、しっぽのトントンで寄り添う、きつね型の添い寝ロボット。**
+JPHACKS 2026 / `kz_2614`　｜　音声AI × ロボティクス × おやすみ時間
 
-JPHACKS 2026 / チーム `kz_2614`
+<p align="center">
+  <img src="docs/images/nengitsune/fox-prototype.jpg" width="800" alt="黄色い布で製作したねんぎつねの頭部と長い胴体の試作品">
+</p>
+<p align="center"><em>ねんぎつねの外装試作。2026年10月25日の制作写真。</em></p>
+
+<p align="center">
+  <a href="https://hiroron-jphacks2026.hiroron.net/">製品Web</a> ·
+  <a href="docs/gallery.md">写真・画面ギャラリー</a> ·
+  <a href="docs/demo.md">デモ手順</a> ·
+  <a href="docs/README.md">技術仕様書</a>
+</p>
+
+> 開発中のプロトタイプです。公開Webは認証が必要で、公開環境での音声・実機を通した動作確認は継続中です。写真は外装・機構の制作状況を示しています。
+
+## 目次
+
+- [製品概要](#製品概要)
+- [体験の流れ](#体験の流れ)
+- [特長](#特長)
+- [システム構成](#システム構成)
+- [注力したこと](#注力したこと)
+- [デモと開発状況](#デモと開発状況)
+- [開発技術](#開発技術)
+- [今後の展望](#今後の展望)
+- [開発・技術資料](#開発技術資料)
+- [チーム](#チーム)
 
 ## 製品概要
 
 ### 背景・解決したい課題
 
-寝る前に少し話したい、ひとりの時間に誰かの気配がほしい。そのような場面に向け、短い音声会話と柔らかいしっぽの動きを組み合わせる添い寝クッションを開発しています。
+一日が終わり、ベッドに入ったとき。「今日あったことを少しだけ話したい」「ひとりで過ごす夜にも、そばにいる気配がほしい」。ねんぎつねは、そんな時間に寄り添うことを目指しています。
+
+話を聞いてくれる声に、ぬいぐるみの姿としっぽの動きを重ねる。画面で完結する会話に身体のある相手の存在感を加え、眠る前にひと息つくきっかけをつくります。
 
 ### 製品説明
 
-マイクへ話しかけるとPC上で音声を認識し、返答を生成して端末へ音声を返します。並行して開発したESP32 Reader・Followerは、可変抵抗器の入力やHTTP要求に応じてSG90サーボ3台を制御します。有限トントン・停止の基盤コードはmainへ統合済みです。開始条件を「AIの音声が実際に再生され始めた時」に変更し、1返答1回・最大5秒、返答終了や割込みで停止する仕様です。[再生連動の記録](docs/development/playback-tail.md)を参照してください。ESP32本体への新版反映と通し受け入れを進めています。新版FollowerではReaderからの操作を拒否します。
+**ねんぎつねは、スマートフォンの音声会話と、きつね型の人形を組み合わせた添い寝ロボットです。**
 
-### 特長・注力したこと
+ブラウザーから話しかけると、PCが音声を認識し、AIの返答を音声で返します。機器連携を有効にした構成では、AIの声が端末で再生され始めるタイミングに合わせて、しっぽが短く動きます。
 
-1. **話している途中から文字が更新される会話。** 音声を継続送信し、発話検出と文字起こしをPC側へ集約しています。
-2. **話しかけ直せる音声応答。** 返答の生成・出力中も入力を受け付け、新しい発話が始まると前の返答を打ち切ります。
-3. **音声と機器の役割分担。** Web・Android・ESP32の入出力と、PCのAI処理を分けています。機器側には動作時間・速度・停止の制約を設けています。
+現在のMVPは「**スマホで会話・しっぽの動作・停止・利用記録**」の4つです。詳しい対象範囲と受け入れ条件は [MVP.md](MVP.md) にまとめています。
 
-## 現在のデモと確認状況
+### 届けたいこと
 
-製品Webの公開先は [ねんぎつね 製品Web](https://hiroron-jphacks2026.hiroron.net/)、ダイアリー入口は [#diary](https://hiroron-jphacks2026.hiroron.net/#diary) です。2026-10-25の未ログイン確認ではhiroron Passportのログイン画面で保護されており、ログイン後の製品UI・音声接続は未確認です。PCローカル8765番の音声・設定Webとは別の入口です。[公開環境の結合テスト表](docs/demo.md#公開製品webの結合テスト準備) に確認順序をまとめています。
+- 寝る前に、一日の出来事を声に出して話せる時間。
+- 声だけでなく、人形の姿や動きからも感じられる相手の気配。
+- 自分で会話時間を決め、終わった時間を振り返れるおやすみの習慣。
 
-| 機能 | 状態 |
-| --- | --- |
-| HOSSyの製品Web・PWA | ローカル製品Web→別PCの音声status APIは200 JSONを確認。実音声の詳細AC・公開環境・実スマホは未確認 |
-| PCのWeb画面からSTT → LLM → TTSの音声往復 | 実モデルで確認済み |
-| 連続PCM入力、返答PCM配信、割込み、短い通信遅延からの復旧 | 実装済み。自動テストと記録済みのHTTP試験あり |
-| ESP32 Reader/Follower・SG90制御 | ファームウェアとEMORI側の実機記録あり |
-| 会話のMCPからESP32を制御 | v2コード・模擬試験は統合済み。12:09の対象機器は旧APIのみ応答し、新版書込み・動作確認待ち |
-| 3Dプリント部品 | STL 8点を収録。寸法・材料・印刷条件・実機との嵌合は未確認 |
-| Android / ESP32の新しい音声TCP経路 | コードあり。最新版の端末ビルド・実機通話は未確認 |
+## 体験の流れ
 
-**APIの版は用途ごとに別です。** 音声は `/api/v1/voice/` のまま、しっぽ制御は `/api/v2/tail/` を使います。音声をv2へ変更する必要はありません。今回の接続結果と再現手順は [通し試験](docs/demo.md#ローカル製品webからの通し試験) を参照してください。
+接続と機器の準備を済ませた環境で、次の流れを目指しています。実際の試験条件は [デモ手順](docs/demo.md) を参照してください。
 
-公開用デモ動画・製品写真はまだ掲載していません。[デモ手順と確認範囲](docs/demo.md) に、再現方法と残っている確認を記載しています。
+1. **今夜のおやすみ時間を選ぶ。** 製品Webで会話時間を選びます。寝る時間・起きる時間は目安として設定できます。
+2. **ねんぎつねに話しかける。** 会話を開始し、マイクを許可します。AIの返答中にも話しかけ直せます。
+3. **声としっぽの反応を感じる。** 許可された機器が、AIの実際の再生開始に合わせて短く動きます。
+4. **会話を終え、記録を見る。** 終了操作や設定時間の経過で端末の録音・再生を止め、開始・終了時刻や終了理由をダイアリーへ残します。
 
-## 技術構成
+<p align="center">
+  <img src="docs/images/nengitsune/web-routine.png" width="360" alt="ねんぎつねの準備画面。会話時間30分、寝る時間22時30分、起きる時間7時を設定する画面">
+</p>
+<p align="center"><em>おやすみの準備画面。表示される予定時刻は目安で、アラーム機能ではありません。</em></p>
 
-```text
-製品Web / PWA ─ 同一originの音声APIへ（配信サーバーの転送設定が必要）
-              └ 端末内の選択・開始/終了時刻・終了理由
+## 特長
 
-音声管理Webのマイク ─HTTP PCM→ PCサーバー ─PCMフレーム→ Webスピーカー
-                         │
-                  Silero VAD → Whisper → Gemma → Irodori-TTS
-                         │
-                  MCP（有限tap・独立stop・状態確認）
-                         │ しっぽHTTP v2
-                  ESP32 Follower → SG90 × 3
-                  （コード統合済み、実機更新・通し確認待ち）
+### 声と動きがつながる
 
-ESP32 Reader → 旧Followerの手動操作用
-               新版v2_exclusiveではReader操作を拒否
+返答を生成した時点ではなく、**端末がAIの音声を実際に再生し始めた時点**を動作のきっかけにします。最新mainでは1返答につき1回・2秒の動作を要求し、返答終了や割込み時には停止処理を行います。動作許可や時間の上限を満たさない場合は動かしません。
+
+### 話しかけ直せる会話
+
+音声入力を継続してPCへ送り、発話の区切りを検出します。AIが返答している途中でも新しい発話を受け付け、前の返答を打ち切って会話を切り替えます。
+
+### おやすみ時間に合わせたWeb画面
+
+夜をイメージした配色ときつねのイラストで、会話時間の設定・開始・終了・記録をひとつのWebアプリにまとめています。会話時間は15〜90分から選び、開始時に確定します。
+
+### 終わるところまで設計する
+
+手動終了だけでなく、時間切れ・画面非表示・障害時にも端末の録音と再生を止めます。端末の停止、サーバーの停止、機器からの停止応答を分けて確認し、確認できない状態を成功として表示しません。
+
+## システム構成
+
+```mermaid
+flowchart LR
+    U[利用者] <-->|声| W[スマホ・PCの製品Web]
+    W <-->|同一originの音声API| P[Web配信・API転送]
+    P <-->|PCM・JSON・NDJSON| S[PC音声サーバー]
+    S --> V[発話検出・音声認識]
+    V --> L[返答生成]
+    L --> T[音声合成]
+    T --> S
+    W -->|実再生の開始・終了通知 / API転送経由| S
+    S -->|MCP制御層・しっぽHTTP v2| E[ESP32 Follower]
+    E --> M[SG90サーボ × 3]
+    M --> F[しっぽの動き]
 ```
 
-| 領域 | 使用技術 | ソース |
+ブラウザーはESP32を直接操作せず、PCが会話状態・機器の許可・動作予算を確認して指令を送ります。音声APIの `/api/v1/voice/` と、しっぽAPIの `/api/v2/tail/` は、それぞれ独立した版の契約です。
+
+詳細は [構成と処理フロー](docs/architecture.md)、[音声HTTP API](docs/api/voice-http.md)、[しっぽv2契約](docs/api/mvp-tail-control-v2.md) を参照してください。
+
+## 注力したこと
+
+### ぬいぐるみの中に、動く仕組みをつくる
+
+しっぽの機構は、3台のSG90サーボと3Dプリント部品を組み合わせて試作しています。外装と内部機構をそれぞれ製作し、人形としての形と可動部の収まりを検討しています。
+
+<p align="center">
+  <img src="docs/images/nengitsune/tail-prototype.jpg" width="800" alt="3台の小型サーボ、白い3Dプリント部品、配線を組み合わせたしっぽ機構の試作品">
+</p>
+<p align="center"><em>しっぽ機構の制作写真。外装への組込み前の構造が分かる状態。</em></p>
+
+### 会話を途切れさせにくい音声処理
+
+継続的なPCM送受信、返答中の発話受付、短い通信遅延からの復旧を実装しました。古い会話や返答の音声を再生しないよう、セッションと返答の世代を管理しています。
+
+### 動作に上限を設け、停止を独立して扱う
+
+機器側の速度・動作時間・直近60秒の予算を制約し、遅れて届いた古い指令で再び動き出すことを防ぎます。現在の再生連動は2秒ずつ、60秒内の予約時間合計は最大10秒です。機器が返す「指令停止」と、人が観察する「物理的に止まったこと」は区別して検証します。
+
+### 記録と通信の失敗も扱う
+
+利用記録をID単位で保存し、複数タブ・再読込・保存失敗を扱います。Service WorkerはAPI・音声・認証応答をキャッシュしません。音声モデルそのものではなく、既存モデルをつなぐ会話処理とWeb・機器の連携をチームで開発しています。
+
+## デモと開発状況
+
+**[製品Webを開く](https://hiroron-jphacks2026.hiroron.net/)** / **[写真・画面ギャラリー](docs/gallery.md)** / **[通し試験の手順](docs/demo.md)**
+
+公開Webにはhiroron Passportの認証が必要です。公開経路での音声接続・実スマホ・実機を通した受け入れは未完了です。デモ動画は準備中です。
+
+2026年10月25日、main `47d4e83` までの実装・検証記録に基づく状況です。以下は記録済みの結果であり、このREADME更新で試験を再実行したものではありません。
+
+| 対象 | 確認できていること | 残っている確認 |
 | --- | --- | --- |
-| AI・会話制御 | Python、faster-whisper、Silero VAD、LM Studio、Irodori-TTS、MCP | [server/ai](server/ai/) |
-| HTTP・設定・音声API | Python HTTPサーバー、JSON、NDJSON、PCM16LE | [server/api](server/api/) |
-| 製品Web / PWA | Astro、JavaScript、localStorage、Service Worker | [apps/hossy-web](apps/hossy-web/) |
-| 音声・設定Web | HTML、CSS、JavaScript、Web Audio / AudioWorklet | [apps/web](apps/web/) |
-| Android | Java、Android SDK、Gradle、TCPソケット | [apps/android](apps/android/) |
-| しっぽ・機器 | ESP32、Arduino C++、Wi-Fi/HTTP、SG90 × 3 | [firmware/esp32](firmware/esp32/) |
-| 筐体・取付部品 | 3Dプリント用STL 8点 | [3Dprint](3Dprint/README.md) |
-| ESP32音声通信部品 | C、ESP-IDF、TCP、PCM16LE | [firmware/esp32/voice_tcp](firmware/esp32/voice_tcp/) |
+| PC音声会話 | 実モデルによるSTT → LLM → TTSのHTTP試験記録あり | 製品Web・実スマホを含む全体の通し試験 |
+| 製品Web | UI・共有音声クライアント・利用記録を実装。別PCのstatus APIへの疎通記録あり | 公開認証後の音声接続、実端末での操作・停止・記録 |
+| 会話開始・終了と機器の許可 | 実Followerへの開始時prepare・終了時disarmを確認 | 実マイクからの一連の操作の再確認 |
+| AI再生に連動するしっぽ | 利用者による物理動作の確認記録あり。2秒版は模擬再生通知＋実Followerで連続2回の受付・idle・停止を確認 | 最新版の実ブラウザー再生と物理動作を合わせた観察 |
+| 外装・機構 | 添付の制作写真を掲載。STL 8点を収録 | 組立後の可動部・配線・マイク/スピーカーの干渉確認 |
 
-このPCで使用するモデルは `Systran/faster-whisper-small`、`google/gemma-4-26b-a4b-qat`、`Aratako/Irodori-TTS-v4.1-Small`。モデルの重みや外部ランタイムは配布元から別途取得します。
+検証条件と変更履歴は [開発履歴](docs/development/work-history.md)、再生との連携は [実装記録](docs/development/playback-tail.md) を参照してください。
 
-### チームで実装した部分
+## 開発技術
 
-既存の音声認識・言語・音声合成モデルを接続する会話パイプライン、連続PCMの送受信、発話による返答中断、受理番号による送信復旧、参照音声処理の再利用、設定画面、MCP頻度操作、ESP32の入力・連動制御とHTTP APIを実装しています。モデルそのものを独自開発したものではありません。
-
-## 作業分担
-
-| 担当 | 主な領域 | 変更する場所 |
+| 領域 | 技術・部品 | 役割 |
 | --- | --- | --- |
-| **RyuuzinnRaika** | AI・音声パイプライン、サーバー側の会話・MCP連携 | `server/ai/`、`server/api/`、`docs/api/` |
-| **naminamina** | 製品Web・PWA、音声画面・操作UI | `apps/hossy-web/`、`apps/web/`、`tests/web/` |
-| **Happy-Emori** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、機器仕様・API、`docs/esp32/` |
-| 担当者名未指定（`namikawa_3Dprint`由来） | 3Dプリント用の筐体・取付部品 | [3Dprint/](3Dprint/README.md) |
-| 担当者名未指定 | Android音声クライアント | `apps/android/` |
+| 製品Web / PWA | Astro、JavaScript、Web Audio / AudioWorklet、Service Worker、localStorage | 音声入出力、操作画面、利用記録 |
+| 音声・会話サーバー | Python、HTTP、PCM16LE、JSON / NDJSON | セッション・音声転送・会話状態の管理 |
+| 発話検出・音声認識 | Silero VAD、faster-whisper | 発話の区切りと文字起こし |
+| 返答生成 | LM Studio、Gemma | 会話の返答生成 |
+| 音声合成 | Irodori-TTS | 返答の読み上げ |
+| 機器連携 | MCP制御層、Wi-Fi / HTTP | 会話と有限動作・停止の連携 |
+| しっぽ制御 | ESP32、Arduino C++、SG90 × 3 | 機器状態の管理とサーボ制御 |
+| 外装・機構 | 布製の外装、3Dプリント部品 | きつねの姿としっぽ機構の試作 |
 
-takemi853の担当は未指定です。以前の呼称とGitHub名の本人一致は推測しません。APIや音声形式の変更は双方の担当で確認します。詳細は [担当範囲と連携ルール](docs/development/ownership.md) を参照してください。
+Androidクライアント、ESP32向け音声TCP部品、Readerによる手動操作もリポジトリにあります。今回のMVPは製品WebとPC、Followerによる経路を中心とし、その他の経路の最新版実機通話は別途確認します。
 
-## 起動・開発
-
-- [統合仕様書](docs/requirements/system.md) / [仕様書・処理フロー図の一覧](docs/README.md)
-
-- [製品Webの使い方](docs/web/usage.md)（タイマー・日記・保存・PWA）
-- [HOSSyのAstro製品UI・PWAの起動](apps/hossy-web/README.md)（音声API接続コードあり。実音声・公開経路は未検証）
-- [Git管理・除外方針](docs/development/gitignore.md)
-
-- [Windows・Ubuntuのセットアップ](docs/setup/server.md)
-- [このPCの環境と起動](docs/setup/local-pc.md)
-- [ESP32の配線・設定・起動](firmware/esp32/README.md)
-- [構成と通信経路](docs/architecture.md)
-- [3Dプリント部品一覧と確認事項](3Dprint/README.md)
-- [公開ブランチの統合対象・状態](docs/development/branches.md)
-- [フォルダー一覧](docs/repository-layout.md)
-- [開発参加・テスト](CONTRIBUTING.md)
-
-依存関係とモデルを用意したこのPCでは、ルートの `./service-local.sh start` でWebサーバーを起動し、`http://127.0.0.1:8765/` を開きます。クリーンなcloneでは先にセットアップが必要です。
-
-HOSSyの製品Webは `cd apps/hossy-web && npm ci && npm run dev` で起動し、`http://127.0.0.1:4321/` を開きます。[画面仕様](docs/requirements/web-product.md) / [起動とPWA](docs/setup/hossy-web.md)。
+使用モデル・ランタイムの導入は [PC環境](docs/setup/local-pc.md) を参照してください。モデルの重みや録音・参照音声は、このリポジトリには含めません。
 
 ## 今後の展望
 
-製品Webの音声HTTP API接続の実環境検証、会話MCPとESP32実機の接続、Android/ESP32の音声入出力と停止の実機検証、利用環境に応じた応答品質・速度の調整を進めます。実装済み・実測済み・未確認を分けて [開発履歴](docs/development/work-history.md) に残します。
+まずは実スマホでの会話開始から、実再生としっぽの動作、停止、利用記録までを同じ版で通して確認します。外装を組み合わせた状態での扱いやすさや、応答の待ち時間も調整します。
 
-## ライセンス・公開データ
+その先の候補として、接触への反応、本人と人形のひも付け、他者からのフィードバック、起床時の働きかけを検討しています。これらは今回のMVPとは分けた将来構想です。睡眠への効果は未評価です。
 
-プロジェクトのコードは [MIT](LICENSE)。心音・Android robot・Gradle Wrapperは [第三者素材の表示](THIRD_PARTY_NOTICES.md) に従います。モデル、録音、参照音声、生成音声、実Wi-Fi設定、`.env`、ビルド成果物はリポジトリに含めません。
+## 開発・技術資料
+
+開発を始めるときは **[MVP.md](MVP.md)** を読み、担当範囲と受け入れ条件を確認してください。
+
+| 読みたい内容 | 資料 |
+| --- | --- |
+| 全体像・仕様一覧 | [技術仕様書](docs/README.md) / [統合仕様](docs/requirements/system.md) / [構成図](docs/architecture.md) |
+| 製品Web | [使い方](docs/web/usage.md) / [仕様](docs/requirements/web-product.md) / [起動・接続設定](docs/setup/hossy-web.md) / [アプリREADME](apps/hossy-web/README.md) |
+| PCの導入 | [Windows・Ubuntuのセットアップ](docs/setup/server.md) / [個別環境と起動](docs/setup/local-pc.md) |
+| ESP32・機構 | [配線・設定・起動](firmware/esp32/README.md) / [3Dプリント部品](3Dprint/README.md) |
+| 開発参加 | [CONTRIBUTING](CONTRIBUTING.md) / [担当範囲](docs/development/ownership.md) / [ブランチ](docs/development/branches.md) |
+| リポジトリ管理 | [フォルダー一覧](docs/repository-layout.md) / [Git除外方針](docs/development/gitignore.md) |
+
+### 製品Webのローカル起動
+
+Node.js 22.22.0以上とnpmを用意します。音声サーバーは別途セットアップ・起動してください。
+
+```bash
+cd apps/hossy-web
+npm ci
+# 音声サーバーも同じPCで動く場合。別PCなら到達できるoriginへ置き換える。
+VOICE_API_UPSTREAM=http://127.0.0.1:8765 npm run dev -- --host 127.0.0.1
+```
+
+[ローカル製品Web](http://127.0.0.1:4321/) を開きます。公開HTTPSからの接続や別端末からのマイク利用など、環境ごとの条件は [起動手順](docs/setup/hossy-web.md) を参照してください。`npm run preview`は画面確認用で、音声試験にはdevまたはAPI転送を設定した配信環境を使います。
+
+## チーム
+
+| GitHub | 主な担当 |
+| --- | --- |
+| [RyuuzinnRaika](https://github.com/RyuuzinnRaika) | PC・AI、音声パイプライン、会話・機器連携 |
+| [naminamina](https://github.com/naminamina) | 製品Web・PWA、音声画面・操作UI |
+| [Happy-Emori](https://github.com/Happy-Emori) | ESP32、しっぽ制御・機器API |
+| [takemi853](https://github.com/takemi853) | 担当領域は確認中 |
+
+3Dプリント部品は`namikawa_3Dprint`ブランチ由来です。GitHub名との対応が未確認の領域は、[担当範囲](docs/development/ownership.md)で管理しています。
+
+## ライセンス・参考
+
+コードは [MIT License](LICENSE)。心音・Android robot・Gradle Wrapperなどの外部素材は [第三者素材の表示](THIRD_PARTY_NOTICES.md) に従います。実Wi-Fi設定、`.env`、モデル、録音・生成音声、ビルド成果物はリポジトリに含めません。
+
+READMEの構成は、前年の参加作品 **[4DX@HOME（kz_2504）](https://github.com/jphacks/kz_2504)** を参考にしています。

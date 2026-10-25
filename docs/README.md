@@ -4,6 +4,8 @@
 
 PC音声・HOSSyの製品Web・EMORIの機器仕様と、`namikawa_3Dprint`由来の3Dプリント部品を整理しています。公開mainへの反映状況は [ブランチ一覧](development/branches.md) を参照してください。次に [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
 
+作品の写真と画面は [制作ギャラリー](gallery.md)、製品の紹介は [トップREADME](../README.md) を参照してください。
+
 ## 読む順序
 
 1. [今回のMVP](../MVP.md)：対象・担当・境界・修理順・合格条件。続いて [統合仕様書](requirements/system.md)：何をするシステムか、どこまで接続できているか。
