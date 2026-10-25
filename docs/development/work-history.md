@@ -1,5 +1,16 @@
 # JPHACKS 制作作業・会話履歴
 
+## 音声接続先の保存と起動エラーの切り分け（2026-10-25）
+
+- 他メンバーが製品Webを起動すると「音声APIからJSONが返りません」となる報告を受け、基点main `d0ceb31`（再生連動PR #30統合済み）から分離branch `fix/voice-api-setup`で修理した。報告元PCの環境は直接確認しておらず、接続先未設定/不達等を再現して検証した。
+- devは`apps/hossy-web/.env.local`の`VOICE_API_UPSTREAM`をサーバー側だけで読み込む。起動環境の同名値は空文字でも優先。空の配布`.env.example`から初回設定し、同じcheckoutでは次回から`npm run dev`で再利用する。IPの自動探索、特定PCへの既定接続、ブラウザーからPC/機器への直接アクセスは追加していない。
+- 未設定503、到達不能502、タイムアウト504をno-store JSON化。認証・上流APIエラー本文は保持し、runtimeは完全一致だけ転送する。静的previewがdev proxyを継承しないよう明示的に無効化。製品preflightと共有音声の開始応答で、認証・未設定・不達・経路・不正JSONを分けて表示し、失敗を開始/録音/利用記録の成功にしない。
+- 途中切断では、送信済み音声へJSONを追加せず接続を終了。ヘッダーだけ受信した後の切断では古いContent-Length/Encoding等を除去し、502 JSONが破損しないようにした。重複したエラーイベントで生成応答を途中破棄しない。Astra設計・節目/最終レビューを通過。
+- 検証: 既存Web18スクリプト（product4と共有音声回帰を含む）成功、新規`node tests/web/product_dev_proxy_test.mjs`成功、`npm ci`（260 packages、脆弱性0）と本番`npm run build`成功。新規試験は実Astro設定を隔離tempに読み込み、保存した接続先、環境優先、未設定/不達/timeout、認証・APIエラー保持、転送パス/要求本文/ヘッダー、音声ストリーム、切断、静的previewの無転送をloopback模擬サーバーで確認した。
+- Nginx設定生成の試験は成功したが、このMacにNginx/Docker実行環境がなく実動作は未検証。PCMの再試行ロジックやPython実装を変更しておらず、共有Node回帰で確認したためPython全体試験は再実施していない。
+- [初回設定・Composeとの差・対処手順](../setup/hossy-web.md)を更新。稼働中のWeb/音声PC、公開CT、機器の設定・サービスを変更していない。新しいcheckoutでの初回接続先設定と、PCのIP変更時の更新は引き続き必要。
+
+
 ## AI実再生開始に合わせるしっぽ動作（2026-10-25）
 
 - 利用者が「トントンして」の明示要求より「AIが話し始める」タイミングを指定。参照main `593103d2a97ef1f5133d7502ab031e0b4dbc4601`から分離worktree/branch `feature/playback-tail`で実装。[仕様・検証・引き継ぎ](playback-tail.md)とMVPのAC-03/04/05を更新した。

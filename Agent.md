@@ -1,5 +1,12 @@
 # JPHACKS 作業ガイド
 
+## 音声接続先の保存と診断（2026-10-25）
+
+- 他メンバーの起動時にも接続先未設定/到達不能を一律にJSONエラーとしない修理。基点mainは`d0ceb31`（AI再生連動PR #30統合後）、作業は分離branch`fix/voice-api-setup`。
+- APIパスは同一originのまま。devは製品WebのGit対象外`.env.local`に接続先を保存し、起動環境を優先する。未設定/転送障害はno-store JSON、認証/上流APIの応答は保持。previewは静的専用、既知PCのIPを既定値にしない。
+- [起動手順](docs/setup/hossy-web.md)に初回設定、環境変数の優先順位、Composeとの違いを記載。文書/模擬検証と公開配備を区別し、稼働Web・音声PC・実機は変更しない。
+
+
 ## AI音声再生に連動するしっぽ（2026-10-25 追加指定）
 
 - 利用者が開始タイミングを「AIが話し始める」と指定。旧「トントンしてと明示要求した場合だけ」の方針を更新する。正本は[MVP](MVP.md)と[再生連動の記録](docs/development/playback-tail.md)。

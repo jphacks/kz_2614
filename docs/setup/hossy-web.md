@@ -10,28 +10,47 @@
 
 ## ローカル開発
 
+音声のAPIパス`/api/v1/voice/`は固定です。一方、音声PCのIP/ホスト名・ポートは環境ごとの設定です。Webが別PCで動く場合、`127.0.0.1`はそのWebのPCを指します。他メンバーの接続先をそのまま使う前に、現在の音声PCへ到達できることを確認してください。
+
 Node.js 22.22.0以上、npmを用意し、リポジトリルートから実行します。
 
 ```bash
 cd apps/hossy-web
 npm ci
+# 初回だけ作る。既存の接続設定は上書きしない。
+if [ ! -f .env.local ]; then cp .env.example .env.local; fi
+```
+
+Windows PowerShellの場合も同じフォルダーで作成できます。
+
+```powershell
+if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
+```
+
+`.env.local`の`VOICE_API_UPSTREAM=`に、**Webを動かすPCから到達確認した音声サーバーのorigin**を保存します。同じPCに音声サーバーがある場合だけ、次の設定を使用します。
+
+```dotenv
+VOICE_API_UPSTREAM=http://127.0.0.1:8765
+```
+
+別PCなら実際のLAN IPまたは名前解決できるホスト名を指定します。テンプレートは空欄で、自動探索や特定PCへの既定接続はしません。IPが変わる環境ではファイルを更新するか、管理された固定割当/ホスト名を使います。保存後は毎回次のコマンドで起動でき、接続先を入力し直す必要はありません。
+
+```bash
 npm run dev -- --host 127.0.0.1
 ```
 
-`http://127.0.0.1:4321/` を開きます。Windowsでは必要に応じ `npm.cmd` へ読み替えます。音声APIを使う検証では、担当者が確認した接続先を起動前に指定します。次の値は同一PCに実際のサーバーがある場合だけの例です。
+`http://127.0.0.1:4321/`を開きます。Windowsでは必要に応じて`npm.cmd`に読み替えます。接続設定を変更したら、その開発サーバーを再起動してください。別clone/worktreeの設定は自動共有しません。
 
-```bash
-VOICE_API_UPSTREAM=http://127.0.0.1:8765 npm run dev -- --host 127.0.0.1
-```
+設定の優先順位は **プロセス環境の`VOICE_API_UPSTREAM` → このアプリの`.env.local`**。環境変数が空文字で設定されている場合もそちらを優先し、接続を無効化します。意図しない上書きはmacOS/Linuxの`unset VOICE_API_UPSTREAM`、PowerShellの`Remove-Item Env:VOICE_API_UPSTREAM -ErrorAction SilentlyContinue`で除いてから起動します。このdev設定ではCompose用`.env`を接続先ファイルとして読みません。
 
-`VOICE_API_UPSTREAM` は `http(s)://host[:port]` のoriginのみ。パス、末尾スラッシュ、資格情報、queryは指定できません。devの転送はopt-inで、未指定なら音声APIのルートはなく404等になります。サーバーを自動起動しません。マイク利用はHTTPSまたはlocalhostのセキュアコンテキストが必要です。
+`VOICE_API_UPSTREAM`は`http(s)://host[:port]`のoriginのみ。パス、末尾スラッシュ、資格情報、queryを含む値は起動時に拒否します。`.env.local`はGit/Dockerへのコピー対象外で、接続先をクライアントJSに埋め込みません。ブラウザーは同一originのAPIだけを呼びます。未設定は503 JSON、接続不能/タイムアウトは502/504 JSONで返し、開始失敗のまま理由を表示します。音声サーバーを自動起動する機能ではありません。
 
 ```bash
 npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
-`preview` は静的ビルド確認用でAPIプロキシを提供しません。dev/build/previewの前に `scripts/sync-voice-assets.mjs` が `apps/web` の音声JSと2つのWorkletをpublicへコピーします。生成コピーとdistはGit対象外です。
+`preview`は静的画面の確認用で、接続先が設定済みでもAPIを転送しません。会話試験には`npm run dev`か、API転送を設定したNginx配信を使います。dev/build/previewの前に共有音声JSと2つのWorkletをpublicへコピーします。生成コピーとdistはGit対象外です。マイクにはHTTPSまたはlocalhostのセキュアコンテキストが必要です。
 
 ## 別PCで音声サーバーを動かす場合
 
@@ -60,7 +79,9 @@ curl -i --connect-timeout 3 --max-time 5 http://192.168.100.113:8765/api/v1/voic
 200 JSONを確認後、Mac側の`apps/hossy-web`で起動します。既に起動中なら、転送先変更前にその開発サーバーを停止します。今回使用したAstro CLIはバックグラウンドで起動し、同ディレクトリの`./node_modules/.bin/astro dev status` / `./node_modules/.bin/astro dev stop`で確認/停止できました。前面実行の環境では起動ターミナルのCtrl+Cを使います。
 
 ```bash
-VOICE_API_UPSTREAM=http://192.168.100.113:8765 npm run dev -- --host 127.0.0.1
+# .env.localに保存（当日のIP例。現在値へ置き換える）
+# VOICE_API_UPSTREAM=http://192.168.100.113:8765
+npm run dev -- --host 127.0.0.1
 ```
 
 別ターミナルから製品Webと同じoriginで確認します。
@@ -73,14 +94,16 @@ curl -i --connect-timeout 3 --max-time 5 http://127.0.0.1:4321/api/v1/voice/stat
 
 ### 「音声APIからJSONが返りません」の切り分け
 
-画面の案内だけではログイン問題とは断定できません。上記のcurlでHTTP statusとContent-Typeを確認します。
+旧版の「JSONが返りません」はログイン問題とは限りません。修正版は未設定・到達不能・認証・経路・不正応答を区別し、開始を拒否します。上記のcurlでHTTP statusとContent-Typeを確認します。
 
 | 応答 | 確認すること |
 | --- | --- |
-| 502、text/plainや空本文 | 転送先に接続できない等のproxy障害。今回の原因はWebの転送先がMac自身だったこと。音声PCの待受もLAN向けへ変更した |
+| 502/504 | 音声PCへの接続失敗/タイムアウト。現在のIP、音声サーバーの起動・LAN待受・経路を確認。修正版dev/Nginx自身の転送障害はno-store JSONで返す |
 | 401/403、ログインHTML、認証へのredirect | 正規ログインと認証後のAPI経路。認証を外して解決しない |
-| 404 | devのupstream未指定、静的preview、パス/配信設定を確認 |
-| 503 JSON | Nginxのupstream未設定等。JSON内のエラーと配信設定を確認 |
+| 404 | 静的preview、APIパス、配信設定を確認。会話試験はdevまたはAPI転送済み配信を使う |
+| 503 JSON、voice_upstream_unconfigured | 接続先が空。devの.env.localまたは起動環境、Composeの環境設定を確認 |
+| その他の503 JSON | 音声サーバー側のエラー。APIのmessageとPC側ログを確認。未設定と決めつけない |
+| 200だがHTML/壊れたJSON/契約不一致 | 配信先・API版を確認。成功と扱わず、ログインHTMLとJSONの構文/内容不正を区別する |
 | 200 JSON、voice_api=available | API到達は成功。モデル・マイク・音声往復は別途確認 |
 
 CTは別ネットワークなので、このLAN IPを設定するだけでは接続できません。公開時はCT→音声PCのVPN等の経路と認証/HTTPSを整備します。ブラウザーから音声PCのLAN HTTPへ直接接続する構成にはせず、同一originのAPI転送を維持します。
@@ -98,9 +121,9 @@ docker compose logs --tail=50 web
 
 ビルドcontextはリポジトリルート、Dockerfileは `apps/hossy-web/Dockerfile`。共有音声資産をコピーしてビルドし、Nginxで静的配信します。既定80番、Git対象外の `.env` の `HTTP_PORT` で変更できます。
 
-音声転送には同ファイルまたは起動環境で `VOICE_API_UPSTREAM` を明示します。接続先はNginxコンテナから到達可能なoriginにし、コンテナの127.0.0.1はコンテナ自身であることに注意してください。未指定では音声/runtime経路に503 JSONを返します。許可する転送先パスは `/api/v1/voice/` 配下と完全一致の `/api/v1/dashboard/runtime` のみで、その他の `/api/` は404です。共通のdashboard settingsを個人画面の設定へ接続しません。
+音声転送には同ファイルまたは起動環境で `VOICE_API_UPSTREAM` を明示します。**Composeは`.env.local`を自動では読みません。** devのファイルを使う場合は、コンテナから到達できる値であることを確認し、`docker compose --env-file .env.local up -d --build`と明示します。開発時のlocalhost設定をそのまま流用しません。接続先はNginxコンテナから到達可能なoriginにし、コンテナの127.0.0.1はコンテナ自身であることに注意してください。未指定では音声/runtime経路に503 JSONを返します。許可する転送先パスは `/api/v1/voice/` 配下と完全一致の `/api/v1/dashboard/runtime` のみで、その他の `/api/` は404です。共通のdashboard settingsを個人画面の設定へ接続しません。
 
-転送はバッファ・proxy cacheを無効にし、HTTPS upstreamの証明書を検証します。公開時のPassportやTLS終端は別途管理する既存経路に従います。GitHubへのpushだけで公開サイトが更新されるわけではありません。
+転送はバッファ・proxy cacheを無効にし、HTTPS upstreamの証明書を検証します。Nginx自身の転送502/504だけをJSON化し、上流APIが返した認証応答やエラー本文は書き換えません。公開時のPassportやTLS終端は別途管理する既存経路に従います。GitHubへのpushだけで公開サイトが更新されるわけではありません。
 
 ## PWAとキャッシュ
 

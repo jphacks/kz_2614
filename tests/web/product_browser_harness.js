@@ -58,9 +58,11 @@ function product(options = {}) {
         const response = await originalFetch(url, request);
         if (url === '/api/v1/voice/sessions' && request?.method === 'POST') {
           const kind = environment.startKind;
-          return { ...response, redirected: kind === 'redirect', headers: { get: () => kind === 'html' ? 'text/html' : 'application/json' },
+          const status = { unauthorized: 401, forbidden: 403, gateway: 502, timeout: 504, missing: 404, unconfigured: 503 }[kind] || response.status || 200;
+          return { ...response, status, ok: status >= 200 && status < 300, redirected: kind === 'redirect', headers: { get: () => kind === 'html' ? 'text/html' : 'application/json' },
             json: async () => {
               if (kind === 'invalid-json') throw new Error('Invalid JSON');
+              if (kind === 'unconfigured') return { error: 'voice_upstream_unconfigured' };
               const body = await response.json();
               const cases = { array: [], null: null, 'missing-id': { ...body, session_id: undefined }, 'blank-id': { ...body, session_id: ' ' },
                 'wrong-generation': { ...body, generation: -1 }, 'unsafe-generation': { ...body, generation: Number.MAX_SAFE_INTEGER + 1 },
@@ -86,12 +88,13 @@ function product(options = {}) {
       const kind = environment.statusKind;
       environment.statusSignal = request.signal;
       if (kind === 'pending') return new Promise((resolve) => { environment.resolveStatus = resolve; });
-      if (kind === 'network') throw new Error('Network unavailable');
-      const status = kind === 'unauthorized' ? 401 : kind === 'forbidden' ? 403 : kind === 'unavailable' ? 503 : 200;
+      if (kind === 'network') throw new TypeError('Failed to fetch');
+      const status = { unauthorized: 401, forbidden: 403, unavailable: 503, unconfigured: 503, gateway: 502, timeout: 504, missing: 404 }[kind] || 200;
       return {
-        ok: status === 200, status, redirected: kind === 'redirect', headers: { get: () => kind === 'html' ? 'text/html' : 'application/json' },
+        ok: status === 200, status, redirected: kind === 'redirect', headers: { get: () => ['html', 'gateway', 'timeout', 'missing', 'unauthorized', 'forbidden'].includes(kind) ? 'text/html' : 'application/json' },
         json: async () => {
           if (kind === 'invalid-json') throw new Error('Invalid JSON');
+          if (kind === 'unconfigured') return { error: 'voice_upstream_unconfigured' };
           if (kind === 'pending-json') return new Promise((resolve) => { environment.resolveStatusJSON = resolve; });
           return kind === 'wrong-shape' ? { ok: true } : { voice_api: 'available', models: 'checked_on_first_turn', active_sessions: 0, max_active_sessions: 4, session_ttl_seconds: 900 };
         },

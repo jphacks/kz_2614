@@ -20,6 +20,9 @@ fi
 printf 'proxy_pass %s;\n' "$target" > "$config"
 cat >> "$config" <<'EOF'
 proxy_http_version 1.1;
+proxy_intercept_errors off;
+error_page 502 = @voice_unreachable;
+error_page 504 = @voice_timeout;
 proxy_set_header Host $proxy_host;
 proxy_set_header Connection "";
 proxy_ssl_server_name on;

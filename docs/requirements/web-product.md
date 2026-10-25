@@ -8,7 +8,7 @@
 
 [公開ホーム](https://hiroron-jphacks2026.hiroron.net/) / [#diary](https://hiroron-jphacks2026.hiroron.net/#diary)。未ログインAPI状態要求は401 text/html。Passportログイン後のUI、公開版とソースの一致、公開配信側のAPI upstream設定・到達経路、音声往復は未確認です。8765番の `apps/web` は別の管理画面です。
 
-製品Webは同一originの音声APIを使い、Astro devまたはNginx側で明示したupstreamへ転送します。API契約と音声PCのHTTP 8765番は定義済みです。未確認なのは公開配信側の実際の転送設定・PCへの疎通であり、API仕様そのものが未確定という意味ではありません。[PC側の接続記録](../setup/local-pc.md)を参照します。管理者共通のdashboard settingsは個人設定へ接続しません。本人識別・人形所有権・BLE・接触センサー・AI/他者フィードバックモードの実APIは未実装で、利用不可表示/disabledを維持します。機器の準備/許可済み会話では、共有音声クライアントの実再生通知をPC側の有限動作へ接続します。ブラウザーから機器を直接操作せず、既定無効・未接続状態を動作成功として表示しません。[開始/終了の契約](../development/playback-tail.md)を参照します。
+製品Webは同一originの音声APIを使い、Astro devまたはNginx側で明示したupstreamへ転送します。devの接続先はアプリの`.env.local`へ保存でき、起動環境の`VOICE_API_UPSTREAM`を優先します。未設定は503、転送障害は502/504のno-store JSONで返し、画面は認証・経路/接続・非JSON・不正JSONを区別して開始を拒否します。静的previewはAPIを転送しません。API契約と音声PCのHTTP 8765番は定義済みです。未確認なのは公開配信側の実際の転送設定・PCへの疎通であり、API仕様そのものが未確定という意味ではありません。[PC側の接続記録](../setup/local-pc.md)を参照します。管理者共通のdashboard settingsは個人設定へ接続しません。本人識別・人形所有権・BLE・接触センサー・AI/他者フィードバックモードの実APIは未実装で、利用不可表示/disabledを維持します。機器の準備/許可済み会話では、共有音声クライアントの実再生通知をPC側の有限動作へ接続します。ブラウザーから機器を直接操作せず、既定無効・未接続状態を動作成功として表示しません。[開始/終了の契約](../development/playback-tail.md)を参照します。
 
 ## 画面
 

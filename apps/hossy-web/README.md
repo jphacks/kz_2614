@@ -16,7 +16,7 @@ npm ci
 npm run dev -- --host 127.0.0.1
 ```
 
-音声APIを使う場合は、起動前に確認済みのサーバーoriginを `VOICE_API_UPSTREAM` へ指定します。未指定では自動接続しません。[設定手順](../../docs/setup/hossy-web.md)を参照してください。`http://127.0.0.1:4321/` を開きます。Windows PowerShellでは必要に応じて `npm.cmd` を使います。本番生成は `npm run build`、確認は `npm run preview -- --host 127.0.0.1`。
+音声APIのパスは固定ですが、接続する音声PCは環境ごとに設定します。初回に`.env.example`からGit対象外の`.env.local`を作り、確認済みの音声サーバーoriginを`VOICE_API_UPSTREAM`へ保存してください。次回からは`npm run dev`だけでその値を使います（起動環境の同名変数があれば空文字も含め優先）。未設定・接続不能・認証・不正応答を区別して表示し、自動探索や固定IPへの接続はしません。[設定手順](../../docs/setup/hossy-web.md)を参照してください。`http://127.0.0.1:4321/` を開きます。Windows PowerShellでは必要に応じて `npm.cmd` を使います。本番生成は `npm run build`、画面だけの確認は `npm run preview -- --host 127.0.0.1`。previewはAPIを転送しないので、会話試験にはdevを使います。
 
 ## 構成
 

@@ -24,12 +24,23 @@ async function run() {
   app.visibility('hidden'); app.windowEvent('pagehide'); await settle();
   assert.equal(app.records().length, 1, 'Repeated terminal events must not duplicate diary entries');
 
-  for (const statusKind of ['html', 'redirect', 'unauthorized', 'forbidden', 'network', 'invalid-json', 'wrong-shape', 'unavailable']) {
+  for (const statusKind of ['html', 'redirect', 'unauthorized', 'forbidden', 'network', 'invalid-json', 'wrong-shape', 'unavailable', 'unconfigured', 'gateway', 'timeout', 'missing']) {
     const failed = product({ statusKind }); await failed.begin();
     assert.equal(failed.stats.starts, 0, `${statusKind}: must reject before session POST`);
     assert.equal(failed.stats.microphoneRequests, 0);
     assert.equal(failed.records().length, 0);
     assert.ok(failed.element('voice-call-status').textContent);
+  }
+  const diagnostics = { network: 'ネットワーク・ログイン状態', unauthorized: '認証', forbidden: '認証', gateway: '音声サーバーに接続できません', timeout: '音声サーバーに接続できません', missing: '転送経路', unconfigured: '接続先が未設定', html: 'JSONが返りません', 'invalid-json': 'JSONを読み取れません', 'wrong-shape': '利用できません' };
+  for (const [statusKind, message] of Object.entries(diagnostics)) {
+    const failed = product({ statusKind }); await failed.begin();
+    assert.ok(failed.element('voice-api-status').textContent.includes(message), statusKind);
+  }
+  for (const startKind of ['unauthorized', 'forbidden', 'gateway', 'timeout', 'missing', 'unconfigured']) {
+    const failed = product({ startKind }); await failed.begin();
+    assert.ok(failed.status().includes(diagnostics[startKind]), startKind);
+    assert.equal(failed.stats.microphoneRequests, 0);
+    assert.equal(failed.records().length, 0);
   }
   const denied = product({ deferMicrophone: true }); await denied.begin();
   assert.equal(denied.records().length, 0);

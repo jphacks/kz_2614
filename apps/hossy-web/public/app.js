@@ -677,14 +677,19 @@ async function checkVoiceConnection(signal) {
   try {
     const response = await connectionOperation(fetch('/api/v1/voice/status', { cache: 'no-store', credentials: 'same-origin', redirect: 'error', signal: controller.signal }), controller.signal);
     if ([401, 403].includes(response.status)) throw new Error('音声APIの認証が必要、またはアクセスが許可されていません。公開ページのログイン状態を確認してください。');
+    if ([502, 504].includes(response.status)) throw new Error('音声サーバーに接続できません。接続先の設定・サーバーの起動・ネットワークを確認してください。');
+    if (response.status === 404) throw new Error('音声APIの転送経路がありません。Webサーバーの起動方法・配信設定を確認してください。');
     if (response.redirected || !response.headers.get('content-type')?.toLowerCase().includes('application/json')) throw new Error('音声APIからJSONが返りません。ログイン画面への転送や配信設定を確認してください。');
-    const body = await connectionOperation(response.json(), controller.signal);
+    let body;
+    try { body = await connectionOperation(response.json(), controller.signal); }
+    catch (error) { if (error.name === 'AbortError') throw error; throw new Error('音声APIのJSONを読み取れません。サーバーの応答を確認してください。'); }
+    if (response.status === 503 && body?.error === 'voice_upstream_unconfigured') throw new Error('音声サーバーへの接続先が未設定です。Webサーバーの設定を確認してください。');
     if (!response.ok || body?.voice_api !== 'available' || body.models !== 'checked_on_first_turn'
         || !Number.isInteger(body.active_sessions) || !Number.isInteger(body.max_active_sessions)
         || !Number.isFinite(body.session_ttl_seconds)) throw new Error('音声APIを利用できません。APIの応答・配信設定を確認してください。');
     status.textContent = '音声APIに到達しました。モデルの動作は最初の発話時に確認します。';
   } catch (error) {
-    const message = error.name === 'AbortError' ? '音声APIの接続確認を完了できませんでした。再度開始してください。' : error.message || '音声APIに接続できませんでした。';
+    const message = error.name === 'AbortError' ? '音声APIの接続確認を完了できませんでした。再度開始してください。' : error.name === 'TypeError' ? '音声APIに接続できません。ネットワーク・ログイン状態・Webサーバーの設定を確認してください。' : error.message || '音声APIに接続できませんでした。';
     status.textContent = message;
     throw new Error(message);
   } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
