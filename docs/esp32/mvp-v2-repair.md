@@ -86,7 +86,7 @@ RyuuzinnRaikaの `tests/fixtures/tail_v2.json` を内容一致で採用した（
 | AC-07 版と証跡 | 本記録を作成 | Web/PC/機器を揃えた実スマホ通し証跡は未実施 |
 | AC-02 / AC-06 | 今回の担当外・未実施 | 音声3往復・日記の受け入れを代行しない |
 
-- Arduino CLI 1.5.1、Arduino-ESP32 **3.3.12 / ESP-IDF 5.5.5**、FQBN `esp32:esp32:esp32`、公開templateでFollowerビルドPASS。Flash **986887 / 1310720 bytes**、static RAM **47996 / 327680 bytes**。警告なし。ビルドログ: `/tmp/esp32-v2-build.log`。ビルド出力は書込み不可として扱う。
+- Arduino CLI 1.5.1、Arduino-ESP32 **3.3.12 / ESP-IDF 5.5.5**、FQBN `esp32:esp32:esp32`、公開templateでFollowerビルドPASS。Flash **986871 / 1310720 bytes**、static RAM **47996 / 327680 bytes**。警告なし。ビルドログ: `/tmp/esp32-v2-build-final.log`。ビルド出力は書込み不可として扱う。
 - C++17/GCC 15.2 + cJSON **1.7.19**（実機SDKと同版）、Address/Undefined/LeakSanitizer付き。Python **24テスト、skip=0、PASS**（0.658秒）、C++競合 **500回＋PWM/手元準備の排他2ケース、PASS**、実HTTPアダプターのstub I/O **7ケース、PASS**。`/tmp/esp32-v2-native-final.log`。
 - PCの作業中 `server/ai/llm/tail_v2.py`（SHA-256 `cb81484f77e6846c31adc2f9f2438d1518fb91b87b577f537516af356b6688df`）の `validate_state` / `validate_ack` へ、コンパイルした機器コードの実JSONを渡してPASS。これは担当者のレビュー承認やPC全体の受け入れを意味しない。PC側ファイルは変更していない。
 - 最初のnative実行はsandboxのptrace制限でLeakSanitizerが終了。制限外で、同じ実機通信なしの模擬試験を再実行して上記PASSを得た。失敗した実行を成功件数へ含めていない。
