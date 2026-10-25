@@ -40,6 +40,14 @@ PC担当`RyuuzinnRaika`へ: 既存DELETEの`session_id`/`state=stopped`を保持
 
 公開配備、既存サービス再起動、公開認証後の音声、実スマホ/PWA、Docker/Nginx実行、ESP32の動作は今回未実施です。公開upstream設定・到達性と配信SHAを確認し、PC/ESP32対応後に[通し試験](../demo.md)を実施してください。依頼の完了操作はcommit/push/main向けPR作成までで、mergeは行いません。
 
+## Happy-Emoriの機器v2修理（2026-10-25）
+
+- 依頼: 共通MVPのESP32担当としてstate/open/tap/stop、停止後の遅着/重複/再起動要求拒否、有限動作と旧経路遮断を実装・検証し、main向けPRを作る。
+- 参照main `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`。origin/Happy-Emoriから別worktreeを作成しclean状態でfast-forward。既存の稼働ツリー、PC担当の作業中変更・未pushコミット、Wi-Fi/Tail設定/NVSをそのまま保全した。
+- 実装 `c1ae7be80bd6031029499b8f6d1c6164db6c7c0b`: Followerのmutex付き状態管理、v2 JSON/router、独立HTTP受信、移動窓予算、PWM off起動、手元準備と停止の排他。Readerソース・サーバー/Web・サービスは未変更。PCと同じJSON fixtureを採用。
+- Arduino-ESP32 3.3.12のtemplateビルドPASS（986871 bytes、RAM47996 bytes）。実装コードをホストコンパイルし、sanitizer付き24テストskip0、500競合＋排他2ケース、HTTP stub 7ケースPASS。PC作業中v2 validatorとの応答照合もPASS。初回LeakSanitizerはsandbox制限で失敗し、制限外のローカル模擬試験で再検証した。
+- 対象AC-01/03/04/05の機器側模擬結果とAC-07の記録、PC向け要求/応答、設定、未実施の実機手順は [修理記録](../esp32/mvp-v2-repair.md)。書込み・サーボ動作・実マイク・通し試験・公開配備は未実施。以前の「電源を繋いだらコンコンしてで動いた」という利用者報告は旧経路の確認として区別する。
+
 ## 今回の共通MVP文書（2026-10-25）
 
 - 依頼: 各branchで参照する共通MVP仕様・修理手順を最新mainへ置く。対象は「スマホで会話＋しっぽトントン＋停止＋利用記録」。

@@ -1,5 +1,7 @@
 # ESP32 Reader / Follower とSG90 3台
 
+MVP修理のFollower新版は **v2_exclusive** です。[v2契約](../../docs/api/mvp-tail-control-v2.md)、[修理・設定・実機試験手順](../../docs/esp32/mvp-v2-repair.md)、[ビルド/模擬試験](../../tests/esp32/README.md) を先に確認してください。起動時PWM off、手元の `a` で明示準備。Readerと旧動作APIは常時拒否します。既存v1ファームの説明と混同しないでください。実機反映は未実施です。
+
 Readerが可変抵抗器を読み、Wi-Fi経由でFollowerのSG90 3台へ共通の指令を送る。しっぽの先端指令は0～180で、0が丸い側、90が中立、180が伸びる側。これは論理指令であり、実測した先端角度ではない。
 
 詳細な現行仕様は [docs/esp32](../../docs/esp32/README.md) にまとめた。
