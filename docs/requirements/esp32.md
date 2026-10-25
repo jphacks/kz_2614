@@ -1,5 +1,7 @@
 # ESP32しっぽ制御 システム仕様
 
+**新版の差分:** Happy-EmoriのMVP v2実装では常時v2_exclusive・PWM off起動・手元で明示準備・Reader/旧動作API拒否・移動窓予算です。[v2修理記録](../esp32/mvp-v2-repair.md) と [通信契約](../api/mvp-tail-control-v2.md) を優先してください。以下のテレオペ起動・旧HTTP・固定窓の記述は9036cceのv1資料として保持します。実機書込みは未実施です。
+
 更新日：2026-10-25。実装基準：`9036cce`。 [入口](../esp32/README.md) / [HTTP API](../api/esp32-http.md) / [MCP](../esp32/mcp-integration.md)
 
 ## 1. 役割と対象機器
