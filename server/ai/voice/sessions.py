@@ -21,7 +21,11 @@ from ..stt.whisper import AudioDurationExceeded, CudaUnavailableError
 from ..tts.irodori import SynthesizedSpeech
 from ..runtime import VoiceStageTimeout
 from ..llm.tail_control import TailCoordinator, TailLease, get_tail_coordinator, tail_lease_context
+from ..llm.tail_v2 import TailBudgetExceeded
 
+
+# Short bursts leave room for five replies in the unchanged 10s/60s device budget.
+PLAYBACK_TAIL_SECONDS = 2.0
 
 MAX_AUDIO_BYTES = 25_000_000
 MAX_ACTIVE_SESSIONS = 4
@@ -154,7 +158,10 @@ class VoiceSessions:
 
     async def _start_playback_tail(self, lease: TailLease) -> None:
         try:
-            await lease.call_tap(lambda: self._tail_control.tap(lease, 5.0), 5.0, playback=True)
+            await lease.call_tap(lambda: self._tail_control.tap(lease, PLAYBACK_TAIL_SECONDS),
+                                 PLAYBACK_TAIL_SECONDS, playback=True)
+        except TailBudgetExceeded:
+            logger.info("tail_playback_start_skipped reason=budget_exceeded")
         except Exception as exc:
             # A blocked or failed first attempt never retries on duplicate notifications.
             logger.warning("tail_playback_start_failed error_type=%s", type(exc).__name__)

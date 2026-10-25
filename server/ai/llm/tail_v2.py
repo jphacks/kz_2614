@@ -20,6 +20,10 @@ class TailControlError(RuntimeError):
     pass
 
 
+class TailBudgetExceeded(TailControlError):
+    pass
+
+
 class DeviceEpochChanged(TailControlError):
     pass
 

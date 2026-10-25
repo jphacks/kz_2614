@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import httpx
 
-from .tail_v2 import TailControlError, DeviceEpochChanged, V2Device, duration_ms, valid_uuid
+from .tail_v2 import TailControlError, TailBudgetExceeded, DeviceEpochChanged, V2Device, duration_ms, valid_uuid
 
 STOP_DEADLINE_SECONDS = 4.5  # Includes GET/retries; leaves margin inside Web's five seconds.
 START_DEADLINE_SECONDS = 6.0
@@ -234,7 +234,7 @@ class TailCoordinator:
             while self._reservations and self._reservations[0][0] <= now - 60:
                 self._reservations.popleft()
             if sum(ms for _, ms in self._reservations) + duration > 10000:
-                raise TailControlError("60-second movement budget exceeded")
+                raise TailBudgetExceeded("60-second movement budget exceeded")
             self._busy = True
             self._owner = lease.session_id
         mutation_sent = False

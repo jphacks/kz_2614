@@ -43,7 +43,7 @@ class PlaybackTailTests(unittest.TestCase):
         self.state.turn_complete = True
         self.event("started"); self.flush()
         self.assertEqual([a for a, _ in self.device.accepted], ["open", "tap"])
-        self.assertEqual(self.device.accepted[-1][1]["duration_ms"], 5000)
+        self.assertEqual(self.device.accepted[-1][1]["duration_ms"], 2000)
         self.event("started"); self.flush()
         self.assertEqual(len(self.device.accepted), 2)
         self.device.expire()
@@ -105,7 +105,9 @@ class PlaybackTailTests(unittest.TestCase):
         self.assertTrue(self.lease.revoked)
 
     def test_budget_and_interruption_keep_new_turn_and_old_events_fenced(self):
-        for _ in range(2):
+        clock = [100.0]
+        self.coordinator._clock = lambda: clock[0]
+        for _ in range(5):
             old = self.turn
             self.event("started"); self.flush()
             self.assertEqual(self.device.state["motion"], "tapping")
@@ -116,8 +118,18 @@ class PlaybackTailTests(unittest.TestCase):
             self.flush()
             self.assertEqual(self.device.state["motion"], "idle")
         self.event("started"); self.flush()
-        self.assertEqual(len([a for a, _ in self.device.accepted if a == "tap"]), 2)
+        self.assertEqual(len([a for a, _ in self.device.accepted if a == "tap"]), 5)
         self.assertEqual(self.device.spent, 10000)
+        self.assertTrue(all(body["duration_ms"] == 2000 for action, body in self.device.accepted if action == "tap"))
+        # A skipped sixth reply is not queued or retried. After the device's
+        # window clears, only a new turn may start again.
+        clock[0] += 61
+        self.device.spent = 0
+        self.event("started"); self.flush()
+        self.assertEqual(len([a for a, _ in self.device.accepted if a == "tap"]), 5)
+        self.new_turn()
+        self.event("started"); self.flush()
+        self.assertEqual(len([a for a, _ in self.device.accepted if a == "tap"]), 6)
 
     def test_status_before_playback_is_available_without_motion(self):
         state = self.manager._submit(self.coordinator.status(self.lease)).result(2)
