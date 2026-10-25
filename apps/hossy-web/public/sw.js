@@ -1,5 +1,5 @@
-const CACHE_NAME = 'nengitsune-shell-v2';
-const CORE_FILES = ['/', '/app.js?v=20261024-1', '/nengitsune-plush.png', '/manifest.json', '/icons/nengitsune-192.png', '/icons/nengitsune-512.png'];
+const CACHE_NAME = 'nengitsune-shell-v6';
+const CORE_FILES = ['/', '/app.js?v=20261024-4', '/nengitsune.jpg', '/nengitsune-loading.jpg', '/manifest.json', '/icons/nengitsune-192.png', '/icons/nengitsune-512.png', '/icons/nengitsune-maskable-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {

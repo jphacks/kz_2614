@@ -933,3 +933,12 @@ Programs/
 - 対象: GitHub contributors APIで確認した `RyuuzinnRaika`、`naminamina`、`Happy-Emori`、`takemi853`。本案内を含む同一mainコミットを分岐点にする。
 - 文書: ブランチ運用、CONTRIBUTING、担当範囲の作業単位、Agentを新しい方針へ揃え、各PCでの切替・main取り込み・PRの手順を記載した。過去の統合履歴は保持する。
 - 公開方法: mainの文書更新と4本の新規refをatomic pushでまとめて公開する。既存ブランチの削除・force-push・権限変更は行わない。公開後にmainと4本のSHA一致を確認する。実行コードは変更しない。
+
+## 2026-10-25 — OneDev最新版をローカルとGitHubのHOSSY＿WEBへ同期
+
+- 利用者がOneDevのJPHACKS2026_appを最新版の所在として指定。OneDev mainはcaf35413d4780ff3860bf62467305a123aab5b2f。元ローカルはクリーンなb300ac8から3コミットをfast-forwardし、origin/mainと一致した。
+- GitHub側の既存更新を先に取得し、HOSSY＿WEBを107b762から33bbb7cへfast-forward。別担当の配置・統合仕様・使い方案内を保持してから同期した。GitHub mainへの直接pushや履歴書換えは行わない。
+- OneDevのastro-site/*をapps/hossy-web/*、Codex-memo/*をdocs/web/history/hossy/*、README/DEPLOYをstandalone履歴、images/*をapps/hossy-web/images/*へ対応。63ファイルが元のバイト列と一致。2つの.gitignoreとComposeの3ファイルは共有配置に合わせた既存版を保持した。削除済みのnengitsune-plush.pngも削除を反映。
+- ロゴ・maskableアイコン・起動ローディング・夜空配色・タップ演出・時刻入力と6段階ボタン・SW v6を反映。現行README、製品Web仕様、使い方、PWA資産の案内を更新し、旧版の操作確認記録は結果を保持して対象版を明記した。
+- 確認: npm ci（191パッケージ）、Astro 7.4.1の本番ビルド、app.js/sw.jsのNode構文成功。生成ページ・manifest・SW・CSS・新画像とアイコン等11 HTTPパスが200。63ファイルのSHA-256はビルド後も一致。相対Markdownリンクとgit diff --checkを確認した。
+- apps/web、server、firmware、testsの実行コードと既存設定は変更しない。ブラウザー操作試験、実端末PWA、Dockerビルド・公開サイト更新、サービス・マイク・ESP32操作は今回の確認に含めない。同期元と検証範囲は日時付きのWeb履歴にも記録した。
