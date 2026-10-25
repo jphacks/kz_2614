@@ -214,9 +214,9 @@ function browser(options = {}) {
         const server = { id, nextSequence: 0, acks: new Map(), stage: "listening", turnId: null, transcript: "", responseText: "", received: [], receivedRequests: [], playback: [],
           events: [], eventCursor: 0, readers: [], turnComplete: false, playbackStarted: false };
         servers.set(id, server);
-        if (stats.starts <= (options.deferStarts || 0)) return deferred(pendingStarts, request.signal, () => response(201, { session_id: id, generation: 0 }));
+        if (stats.starts <= (options.deferStarts || 0)) return deferred(pendingStarts, request.signal, () => response(201, { session_id: id, generation: 0, state: "active" }));
         if (options.failFirstStart && stats.starts === 1) return response(503, { message: "準備エラー" });
-        return response(201, { session_id: id, generation: 0 });
+        return response(201, { session_id: id, generation: 0, state: "active" });
       }
       if (url.startsWith("/speech/")) {
         if (options.failAudio) throw new Error("Audio unavailable");

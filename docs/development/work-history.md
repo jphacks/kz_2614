@@ -1,5 +1,45 @@
 # JPHACKS 制作作業・会話履歴
 
+## Web担当のMVP修理・PC連携待ち（2026-10-25）
+
+- 担当branch: `naminamina`。参照・取り込みmain SHA: `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`。作業前の未コミット変更なし、local/origin担当branchの未push差分0/0を確認し、mainをfast-forwardで取り込んだ。別チェックアウトの作業は保持し、reset/force-pushは使わない。
+- 既存製品UIと`apps/web/voice_call.js`を修理。開始POSTのJSON・ID・世代・active状態を検査し、不正応答では録音/成功記録へ進まない。IDが得られた不正応答と取消し後の遅着応答も停止処理へ渡し、終了確認を表示する。
+- v2の`tail_control`を検証し、端末停止・音声サーバー停止・機器指令停止/未確認/制御無効を分離。欠落、不正epoch/revision/feedback、未知statusは未確認。`command_stopped`も物理観察の成功とは表示しない。機器への直接HTTPは追加していない。
+- 日記はreadyから端末停止までの実時刻を一度確定。停止結果を同じIDへ追記し、次会話の画面を上書きしない。保存/読取失敗の警告、未保存結果保持、復旧時の100件上限、他タブ同期・再読込、削除済み記録を復活させない処理を確認する。SWは静的資産だけを対象とする既存方針を維持し、キャッシュ版を更新した。
+- Astraで仕様/試験を設計し、GPT-6.1 Solでコード/試験を実装。レビューで見つかった「取消し後の不正POSTで確認待ちが残る」「保存復旧時に101件になる」「読取失敗時の警告/結果が失われる」「不正POST後の停止結果が表示されない」を修正した。
+
+### 検証結果
+
+Node `v24.10.0` / npm `11.6.0`。`apps/hossy-web`で`npm ci --ignore-scripts --offline`成功。最終コードで次を実行し、2026-10-25 10:47 JSTに成功しました。検証対象コミットSHAはこの変更のPRへ記載します。
+
+```bash
+# リポジトリルート: product 4本 + 共通音声等12本 + Worklet 2本 = 18本
+for test_file in tests/web/*_test.js tests/web/*_test.cjs tests/web/test_pcm*.js; do
+  node "$test_file" || exit
+done
+npm --prefix apps/hossy-web run build
+git diff --check
+cmp apps/web/voice_call.js apps/hossy-web/public/voice_call.js
+cmp apps/web/voice_pcm_worklet.js apps/hossy-web/public/voice_pcm_worklet.js
+cmp apps/web/voice_pcm_output_worklet.js apps/hossy-web/public/voice_pcm_output_worklet.js
+```
+
+product対象は`product_voice_test.js`、`product_storage_test.js`、`product_proxy_test.cjs`、`product_sw_test.cjs`。模擬応答/仮想時計を使い、実PC/機器への通信はしません。Astraの最終差分レビューで合意したWeb/模擬範囲に重大な未解決指摘なし。成功した回帰試験は追加変更なく反復していません。
+
+### 対象ACとPC担当への引き継ぎ
+
+| AC | 今回の確認範囲 | 残る確認 |
+| --- | --- | --- |
+| AC-01 | 同一originの開始前検査・開始応答検証・拒否時に録音/記録を開始しない模擬試験 | 認証済み公開経路、PCの機器版/許可検査 |
+| AC-02 | 共通音声の継続PCM・返答・割込みなど既存Node回帰 | 実スマホで3往復・無音後の復帰・実音声割込み |
+| AC-04 | 手動/期限/非表示/障害時の端末停止、5秒DELETE上限、v2結果表示の模擬試験 | PC/ESP32の独立停止・停止フェンス・物理確認 |
+| AC-06 | ID別時刻/期限/理由/停止結果、保存障害、複数タブ、再読込、100件保持 | 実スマホの保存権限・バックグラウンド/終了挙動 |
+| AC-03/05/07 | Webで合格とは判定しない | 機器動作・遅着拒否・同じ版での通し証跡 |
+
+PC担当`RyuuzinnRaika`へ: 既存DELETEの`session_id`/`state=stopped`を保持し、[v2契約](../api/mvp-tail-control-v2.md)の`tail_control`を返してください。`command_stopped`は再照会まで終えた指令停止、`disabled`は当該会話で一度も実機制御を許可していない場合だけです。未確認・未対応機器の実機開始拒否をPC側で行い、音声DELETEの5秒以内に結果を返してください。現行status/POSTには機器許可フィールドがなく、Web側に独自フィールドは追加していません。Web fixturesは同じ契約の模擬応答であり、PC/ESP32へ実接続した証拠ではありません。
+
+公開配備、既存サービス再起動、公開認証後の音声、実スマホ/PWA、Docker/Nginx実行、ESP32の動作は今回未実施です。公開upstream設定・到達性と配信SHAを確認し、PC/ESP32対応後に[通し試験](../demo.md)を実施してください。依頼の完了操作はcommit/push/main向けPR作成までで、mergeは行いません。
+
 ## 今回の共通MVP文書（2026-10-25）
 
 - 依頼: 各branchで参照する共通MVP仕様・修理手順を最新mainへ置く。対象は「スマホで会話＋しっぽトントン＋停止＋利用記録」。

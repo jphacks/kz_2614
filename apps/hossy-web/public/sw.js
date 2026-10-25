@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nengitsune-shell-v7-mvp';
+const CACHE_NAME = 'nengitsune-shell-v8-mvp-stop';
 const NETWORK_WAIT_MS = 4000;
 const CORE_FILES = ['/', '/app.js', '/voice_call.js', '/voice_pcm_worklet.js', '/voice_pcm_output_worklet.js', '/nengitsune.jpg', '/nengitsune-loading.jpg', '/manifest.json', '/icons/nengitsune-192.png', '/icons/nengitsune-512.png', '/icons/nengitsune-maskable-512.png'];
 

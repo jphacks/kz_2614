@@ -213,6 +213,30 @@
     } catch (_) { /* Device selection remains unchanged when enumeration is unavailable. */ }
   }
 
+  function normalizeTailControl(value) {
+    const unknown = { status: "unconfirmed", device_epoch: null, stop_revision: null, feedback: null };
+    if (!value || typeof value !== "object" || Array.isArray(value)
+        || !["command_stopped", "unconfirmed", "disabled"].includes(value.status)) return unknown;
+    const epoch = value.device_epoch === null || /^[0-9a-f]{32}$/.test(value.device_epoch) && typeof value.device_epoch === "string";
+    const revision = value.stop_revision === null || Number.isSafeInteger(value.stop_revision) && value.stop_revision >= 0;
+    if (!epoch || !revision || value.feedback !== "command_only"
+        || value.status === "command_stopped" && (value.device_epoch === null || value.stop_revision === null)) return unknown;
+    return { status: value.status, device_epoch: value.device_epoch, stop_revision: value.stop_revision, feedback: value.feedback };
+  }
+
+  async function reportRemoteStop(id, operationId, keepalive) {
+    try {
+      const body = await stopRemoteSession(id, keepalive);
+      notify("onStopResult", { sessionId: id, stopOperationId: operationId, current: activityVersion === operationId,
+        remoteConfirmed: true, tailControl: normalizeTailControl(body.tail_control) });
+      return true;
+    } catch (error) {
+      notify("onStopResult", { sessionId: id, stopOperationId: operationId, current: activityVersion === operationId,
+        remoteConfirmed: false, tailControl: normalizeTailControl(null) });
+      return false;
+    }
+  }
+
   async function stopRemoteSession(id, keepalive = false) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -252,12 +276,22 @@
       if (startRequest !== request || request.cancelled || document.visibilityState === "hidden") return;
       request.phase = "creating";
       const response = await fetch(API_SESSIONS, {
-        method: "POST", cache: "no-store", credentials: "same-origin", signal: request.controller.signal,
+        method: "POST", cache: "no-store", credentials: "same-origin", redirect: "error", signal: request.controller.signal,
       });
+      if (response.redirected || !response.headers?.get("content-type")?.toLowerCase().includes("application/json")) {
+        throw new Error("会話の開始応答がJSONではありません。ログイン状態や配信設定を確認してください。");
+      }
       const body = await readJson(response);
-      if (startRequest !== request || request.cancelled || request.timedOut || document.visibilityState === "hidden") {
-        if (body.session_id) void stopRemoteSession(body.session_id, true).catch(() => {});
-        if (startRequest === request) setStatus(request.timedOut ? "会話の準備が時間内に終わりませんでした。もう一度開始してください。" : "画面が切り替わったため会話を終了しました。戻ったら開始してください。");
+      const usableId = body && typeof body.session_id === "string" && body.session_id.trim() ? body.session_id : null;
+      const valid = body && typeof body === "object" && !Array.isArray(body) && usableId
+        && Number.isSafeInteger(body.generation) && body.generation >= 0 && body.state === "active";
+      if (startRequest !== request || request.cancelled || request.timedOut || document.visibilityState === "hidden" || !valid) {
+        const invalidCurrent = !valid && startRequest === request && !request.cancelled;
+        if (invalidCurrent) await stopCall({ silent: true, reason: "error" });
+        if (usableId) void reportRemoteStop(usableId, request.stopOperationId ?? activityVersion, true);
+        else if (request.stopOperationId != null) notify("onStopResult", { sessionId: null, stopOperationId: request.stopOperationId,
+          current: activityVersion === request.stopOperationId, remoteConfirmed: false, tailControl: normalizeTailControl(null) });
+        if (invalidCurrent) setStatus("会話の開始応答を確認できませんでした。", "error");
         return;
       }
       sessionId = body.session_id;
@@ -266,6 +300,8 @@
       responseLine.textContent = "返事を待っています。";
       void beginCapture();
     } catch (error) {
+      if (request.stopOperationId != null && request.phase === "creating") notify("onStopResult", { sessionId: null, stopOperationId: request.stopOperationId,
+        current: activityVersion === request.stopOperationId, remoteConfirmed: false, tailControl: normalizeTailControl(null) });
       if (startRequest === request && !request.cancelled) setStatus(request.timedOut ? "会話の準備が時間内に終わりませんでした。もう一度開始してください。" : error.message || "会話を始められませんでした。", "error");
     } finally {
       clearTimeout(timer);
@@ -1049,7 +1085,9 @@
     const wasActive = Boolean(sessionId || startRequest || captureRequest);
     if (!wasActive) return;
     const stopVersion = ++activityVersion;
+    const creating = startRequest?.phase === "creating";
     if (startRequest) {
+      startRequest.stopOperationId = stopVersion;
       startRequest.cancelled = true;
       // Before POST there is no remote session to clean up. Abort preflight promptly.
       // Once creation is in flight, retain its response so a late session can be deleted.
@@ -1066,14 +1104,12 @@
       try { Promise.resolve(context.close()).catch(() => {}); } catch (_) { /* Already closed. */ }
     }
     showMicrophone("マイク停止"); refreshButtons();
-    if (wasActive) notify("onStopped", { reason, localStopped: true, remoteConfirmed: stoppedSession ? null : false });
+    if (wasActive) notify("onStopped", { sessionId: stoppedSession, stopOperationId: stopVersion, reason, localStopped: true,
+      remoteConfirmed: stoppedSession || creating ? null : false, remotePending: creating, tailControl: normalizeTailControl(null) });
     if (stoppedSession) {
-      try {
-        await stopRemoteSession(stoppedSession, keepalive);
-        if (activityVersion === stopVersion) notify("onStopResult", { remoteConfirmed: true });
-      } catch (error) {
-        if (activityVersion === stopVersion) notify("onStopResult", { remoteConfirmed: false });
-        if (!silent && activityVersion === stopVersion) setStatus(`${error.message} 端末のマイクと再生は停止しました。`, "error");
+      const confirmed = await reportRemoteStop(stoppedSession, stopVersion, keepalive);
+      if (!confirmed) {
+        if (!silent && activityVersion === stopVersion) setStatus("サーバーの停止は確認できません。端末のマイクと再生は停止しました。", "error");
         return;
       }
     }

@@ -15,7 +15,7 @@ function worker(fetcher, initial = new Map()) {
     setTimeout: fn => { timers.set(++nextTimer, fn); return nextTimer; }, clearTimeout: id => timers.delete(id),
     self: { location: { origin: 'https://app.test' }, addEventListener: (name, fn) => listeners[name] = fn,
       skipWaiting: async()=>{}, clients:{claim:async()=>{}} },
-    caches: { open: async()=>cache, keys: async()=>['nengitsune-shell-v6', 'unrelated-app', 'nengitsune-shell-v7-mvp'], delete: async name=>deletions.push(name) },
+    caches: { open: async()=>cache, keys: async()=>['nengitsune-shell-v6', 'unrelated-app', 'nengitsune-shell-v7-mvp', 'nengitsune-shell-v8-mvp-stop'], delete: async name=>deletions.push(name) },
     fetch: fetcher,
   });
   return { writes, deletions, timers, cache,
@@ -54,7 +54,7 @@ const initial = () => new Map([['/',home()]]);
   const redirected=worker(async()=>{const response=home();Object.defineProperty(response,'redirected',{value:true});return response},initial());
   await redirected.request('/');assert.equal(redirected.writes.length,0);assert.equal(await redirected.cache.match('/'),undefined);
   const good=worker(async()=>home());await good.request('/');await good.flush();assert.deepEqual(good.writes,['/']);
-  await good.activate();assert.deepEqual(good.deletions,['nengitsune-shell-v6']);
+  await good.activate();assert.deepEqual(good.deletions,['nengitsune-shell-v6', 'nengitsune-shell-v7-mvp']);
   const badInstall=worker(async()=>new Response('<form>login</form>',{headers:{'Content-Type':'text/html'}}));
   await assert.rejects(()=>badInstall.install(),/application_shell_unavailable/);
   const empty=worker(async()=>{throw new Error('offline')});

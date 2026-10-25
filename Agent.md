@@ -1,5 +1,12 @@
 # JPHACKS 作業ガイド
 
+## Web担当のMVP停止結果修理（2026-10-25）
+
+- `naminamina`でmain `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`を参照・fast-forward統合。開始前に未コミット変更なし、local/originの担当branchに未push差分なしを確認した。他のチェックアウトは保持する。
+- 既存UI/共通音声クライアントを再利用し、開始応答の検証、端末/サーバー/機器停止結果の分離、ID別記録への遅着結果反映を修理する。対象はAC-01/04/06のWeb境界とAC-02の共通音声回帰。
+- `tail_control`はv2契約の模擬応答で検証し、PC/ESP32の実接続とは扱わない。前回停止未確認時の実機開始拒否はPC担当の責務。Webから機器HTTPを直接呼ばず、独自の開始許可フィールドを追加しない。
+- 本依頼の完了操作はcommit・push・main向けPR作成まで。PRのmerge、公開配備、既存サービス再起動は行わない。検証結果とPC担当への引き継ぎは[作業履歴](docs/development/work-history.md)へ記録する。
+
 ## 今回の共通MVPと修理の入口（2026-10-25）
 
 - 依頼範囲は「スマホで会話＋しっぽトントン＋停止＋利用記録」。今回の範囲・境界・修理順・合格条件は [MVP.md](MVP.md) のみを正本とする。各branchから [最新main版](https://github.com/jphacks/kz_2614/blob/main/MVP.md) と基点SHAを確認する。
