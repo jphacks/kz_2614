@@ -75,6 +75,7 @@ class VoiceSession:
     progress: TurnProgress | None = None
     preview_busy: bool = False
     tail_lease: TailLease | None = None
+    tail_playback_inhibited: bool = False
 
 
 class VoiceSessions:
@@ -83,6 +84,7 @@ class VoiceSessions:
     def __init__(self, *, tail_coordinator: TailCoordinator | None = None) -> None:
         self._lock = threading.RLock()
         self._tail_control = tail_coordinator or get_tail_coordinator()
+        self._tail_start_tasks: set[asyncio.Task] = set()
         self._sessions: dict[str, VoiceSession] = {}
         # One preview worker globally; timed-out native inference retains this slot.
         self._preview_inflight = 0
@@ -117,11 +119,45 @@ class VoiceSessions:
         if self._loop is not None:
             self._loop.call_later(1.0, self._expiry_tick)
 
-    def stop_tail_for_session(self, session_id: str, generation: int) -> None:
+    def stop_tail_for_session(self, session_id: str, generation: int, turn_id: str | None = None) -> None:
         with self._lock:
             session = self._sessions.get(session_id)
-            if session is not None and session.active and session.generation == generation:
+            if (session is not None and session.active and session.generation == generation
+                    and (turn_id is None or self._owns_turn(session, generation, turn_id))):
                 self._invalidate_tail_locked(session)
+
+    def start_tail_for_playback(self, session_id: str, generation: int, turn_id: str) -> None:
+        """First real playback notification owns one finite, non-renewable burst."""
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None or not self._owns_turn(session, generation, turn_id):
+                return
+            lease = session.tail_lease
+            if lease is None or lease.playback_started or lease.playback_terminal or lease.revoked:
+                return
+            lease.playback_started = True
+            lease.playback_active = True
+            loop = self._loop
+            if loop is not None and not loop.is_closed():
+                loop.call_soon_threadsafe(self._schedule_playback_tail, lease)
+
+    def _schedule_playback_tail(self, lease: TailLease) -> None:
+        task = asyncio.create_task(self._start_playback_tail(lease), name="tail-v2-playback-start")
+        self._tail_start_tasks.add(task)
+        task.add_done_callback(self._tail_start_tasks.discard)
+
+    def _inhibit_playback_tail(self, session: VoiceSession) -> None:
+        with self._lock:
+            session.tail_playback_inhibited = True
+            if session.tail_lease is not None:
+                session.tail_lease.playback_enabled = False
+
+    async def _start_playback_tail(self, lease: TailLease) -> None:
+        try:
+            await lease.call_tap(lambda: self._tail_control.tap(lease, 5.0), 5.0, playback=True)
+        except Exception:
+            # A blocked or failed first attempt never retries on duplicate notifications.
+            pass
 
     def _submit(self, coroutine: Any):
         loop = self._loop
@@ -242,6 +278,8 @@ class VoiceSessions:
                 raise VoiceAPIError(409, "duplicate_turn", "この発話はすでに受け付けています。")
             if len(session.turn_ids) >= MAX_TURNS_PER_SESSION:
                 raise VoiceAPIError(409, "session_turn_limit", "この会話の発話数上限に達しました。")
+            if session.tail_lease is not None:
+                self._invalidate_tail_locked(session)
             session.turn_ids.add(turn_id)
             session.active_turn_id = turn_id
             session.busy = True
@@ -259,6 +297,10 @@ class VoiceSessions:
                 lambda: self._tail_owns_turn(session, generation, turn_id),
                 lambda: self._end_tail_session(session),
             )
+            session.tail_lease.playback_owned = True
+            session.tail_lease.inhibit_playback = lambda: self._inhibit_playback_tail(session)
+            session.tail_lease.playback_enabled = not session.tail_playback_inhibited and bool(getattr(
+                getattr(getattr(session.pipeline, "llm", None), "config", None), "tail_mcp_enabled", False))
             return session, session.generation
 
     def _owns_turn(self, session: VoiceSession, generation: int, turn_id: str) -> bool:

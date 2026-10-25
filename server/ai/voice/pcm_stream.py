@@ -525,6 +525,7 @@ class ServerAudioStreams:
             if not state.has_audio or state.stage not in {"stt", "llm", "tts", "reply_ready", "playing"}:
                 raise VoiceAPIError(409, "playback_not_ready", "返答音声を準備しています。", True)
             if event == "started":
+                self.manager.start_tail_for_playback(session_id, generation, turn_id)
                 state.playback_started = True
                 state.playback_failed = False
                 if state.turn_complete:
@@ -533,11 +534,12 @@ class ServerAudioStreams:
             elif event == "ended":
                 if not state.turn_complete:
                     raise VoiceAPIError(409, "playback_not_complete", "返答音声の生成が続いています。", True)
+                self.manager.stop_tail_for_session(session_id, generation, turn_id)
                 state.stage = "cooldown"
                 state.cooldown_until = self._clock() + COOLDOWN_SECONDS
                 state.error = None
             else:
-                self.manager.stop_tail_for_session(session_id, generation)
+                self.manager.stop_tail_for_session(session_id, generation, turn_id)
                 state.playback_failed = True
                 if state.turn_complete:
                     state.stage = "reply_ready"
