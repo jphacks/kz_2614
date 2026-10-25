@@ -278,8 +278,17 @@
       const response = await fetch(API_SESSIONS, {
         method: "POST", cache: "no-store", credentials: "same-origin", redirect: "error", signal: request.controller.signal,
       });
+      if ([401, 403].includes(response.status)) throw new Error("音声APIの認証が必要、またはアクセスが許可されていません。ログイン状態を確認してください。");
+      if ([502, 504].includes(response.status)) throw new Error("音声サーバーに接続できません。接続先の設定・サーバーの起動・ネットワークを確認してください。");
+      if (response.status === 404) throw new Error("音声APIの転送経路がありません。Webサーバーの配信設定を確認してください。");
       if (response.redirected || !response.headers?.get("content-type")?.toLowerCase().includes("application/json")) {
         throw new Error("会話の開始応答がJSONではありません。ログイン状態や配信設定を確認してください。");
+      }
+      if (response.status === 503) {
+        let failure;
+        try { failure = await response.json(); } catch { /* Preserve a distinct unreadable response. */ }
+        if (failure?.error === "voice_upstream_unconfigured") throw new Error("音声サーバーへの接続先が未設定です。Webサーバーの設定を確認してください。");
+        throw new Error(failure?.message || "音声サーバーを利用できません。サーバーの状態を確認してください。");
       }
       const body = await readJson(response);
       const usableId = body && typeof body.session_id === "string" && body.session_id.trim() ? body.session_id : null;

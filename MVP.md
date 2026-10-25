@@ -230,11 +230,12 @@ server/.venv/bin/python -m unittest discover -s tests -v
 node tests/web/product_voice_test.js
 node tests/web/product_storage_test.js
 node tests/web/product_proxy_test.cjs
+node tests/web/product_dev_proxy_test.mjs
 node tests/web/product_sw_test.cjs
 ```
 
 WindowsのPythonは `server\.venv\Scripts\python.exe -m unittest discover -s tests -v`。
-上記4つのproduct Node試験は既存Python wrapperに未登録なので、個別に実行する。
+上記product系Node試験は既存Python wrapperに未登録なので、個別に実行する。`product_dev_proxy_test.mjs`は依存関係を導入した製品WebのAstro/Viteとloopback模擬サーバーを使い、保存した接続設定・転送・静的previewを検証する。
 製品Webのビルドは `apps/hossy-web` で行う。
 
 ```bash
