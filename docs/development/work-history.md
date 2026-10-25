@@ -1,5 +1,48 @@
 # JPHACKS 制作作業・会話履歴
 
+## Web・PC・ESP32のMVP修理を統合（2026-10-25）
+
+- 利用者の「完成した修理をすべてmainへ統合」の指定で、独立checkoutの `integration/mvp-repairs-20261025` に通常mergeした。参照main: `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`。稼働checkout・サービス・非公開設定・モデル・実機は操作しない。
+- 統合元: [PR #26 Web](https://github.com/jphacks/kz_2614/pull/26) `04f7c165ca4bec07c2b1b7e398e63bed8cf2108c`、[PR #27 PC・AI](https://github.com/jphacks/kz_2614/pull/27) `5b43f56c2492048bae8f895f3585359ca3c6cc8d`、[PR #28 ESP32](https://github.com/jphacks/kz_2614/pull/28) `15f87fa5a478b52b0d763dabbb866e8d740ffa94`。履歴を保持し、Agent/API v2/作業履歴の競合は双方の記録と実装状況を保って解消した。統合merge: `025a5b3`、`edca0df`、`0f006a5`。
+- MVP・Agent・v2契約・音声HTTP・Web仕様・MCP入口を現在のコード統合状況へ更新。共有wire契約と既定の制御無効は維持する。AstraがPC所有lease/フェンス/停止、Follower core/wire、Web停止結果とID別記録のソースを確認し、統合を阻害する重大な指摘なし。
+
+### 統合版の検証
+
+Web全18スクリプト、Astro本番build、共有音声3資産の内容一致が成功。既存node_modulesを使用し追加installはしていない。変更した7文書の相対ファイルリンク74件は欠落0、`git diff --check` 成功。
+
+```bash
+for test_file in tests/web/*_test.js tests/web/*_test.cjs tests/web/test_pcm*.js; do
+  /opt/homebrew/bin/node "$test_file" || exit
+done
+PATH=/opt/homebrew/bin:$PATH npm --prefix apps/hossy-web run build
+cmp apps/web/voice_call.js apps/hossy-web/public/voice_call.js
+cmp apps/web/voice_pcm_worklet.js apps/hossy-web/public/voice_pcm_worklet.js
+cmp apps/web/voice_pcm_output_worklet.js apps/hossy-web/public/voice_pcm_output_worklet.js
+git diff --check
+```
+
+Python依存が既定環境に不足したため、既存runtimeは変更せず `/private/tmp/kz2614-integration-py` の一時venvへ試験依存を用意した。初回の266件はav/soundfile/faster-whisper不足で18メソッドが失敗したため、依存を補い全体を再実行した。製品コードへの変更は不要だった。最終の全266件は34.711秒で成功（skip 0）。Python 3.13.13、Node v24.10.0。モデルのダウンロードや実音声/実機への接続は行わず、既存fixture・CPUの小型tensor・同梱ONNXとloopback mockを使用した。
+
+```bash
+NODE=/opt/homebrew/bin/node TAIL_CONTROL_ENABLED=false TAIL_DEVICE_URL=http://127.0.0.1:1 /private/tmp/kz2614-integration-py/bin/python -m unittest discover -s tests -v
+```
+
+統合版Followerは、既存のArduino CLI 1.5.0 / Arduino-ESP32 core 3.3.8でtemplateビルド成功（Flash 996219 bytes、RAM 47932 bytes、警告出力なし）。PR #28のCLI 1.5.1 / core 3.3.12による結果とは別の追加検証。実機向け設定や書込みは行わず、公開用template stagingの`upload_eligible=false`を維持した。
+
+```bash
+python3 scripts/esp32/build_template.py --cli '/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli'
+```
+
+機器のnative試験は24件（skip 0）、500並行競合、PWM/手元準備/stopの排他、HTTP adapter 7ケースが成功。実ファームJSONをこの統合checkoutのPC v2検証器へ渡す比較も成功。Mac用の一時compiler wrapperはLinux固有の`-fno-pie`/`-no-pie`だけを除外し、Apple ClangのASan/UBSanを維持した。Linux LeakSanitizerの今回再実行とは扱わない。外部cJSONの非推奨sprintf警告6件が出たが、ファームcompileと全試験は成功。
+
+```bash
+CC=/private/tmp/kz2614-darwin-cc/cc CXX=/private/tmp/kz2614-darwin-cc/cxx /private/tmp/kz2614-integration-py/bin/python scripts/esp32/test_native.py --cjson-dir /private/tmp/kz2614-cjson-1.7.19 --pc-worktree /Users/ten/Documents/ChatGPT/ｓ/work/kz_2614-main-integration
+```
+
+### 未完了・次の一手
+
+公開配備・既存サービス再起動・ESP32書込み/物理動作・認証後の実スマホ/PWA・AC-01〜07の通し証跡は未実施/未確認。配備先CTから音声PCへのプライベートネットワーク経路が未整備のため、経路/upstream設定・疎通・配信SHAを確認した後に、操作者と固定機器を用意して同一版で限定受け入れを行う。今回のGit統合や模擬試験をMVP全体完了とは扱わない。
+
 ## Web担当のMVP修理・PC連携待ち（2026-10-25）
 
 - 担当branch: `naminamina`。参照・取り込みmain SHA: `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`。作業前の未コミット変更なし、local/origin担当branchの未push差分0/0を確認し、mainをfast-forwardで取り込んだ。別チェックアウトの作業は保持し、reset/force-pushは使わない。

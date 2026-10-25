@@ -189,9 +189,9 @@ Raw audio bytes を本文として送ります。`Content-Type` は上記の対�
 
 機器停止結果 `tail_control` は [しっぽ制御v2](mvp-tail-control-v2.md#5-停止確認とwebへの受け渡し) の既存契約に従います。PC側で追加実装し、模擬機器で検証しています。実機対応・配備は未確認です。音声世代の無効化と取消を先に行い、LLMや開始要求を待たず停止を送信します。機器停止処理は全体4.5秒、同期DELETEの待機は最大4.7秒とし、5秒のWeb確認期限内に未確認を返す余裕を残します。
 
-`tail_control.status` は `command_stopped` / `unconfirmed` / `disabled`。既存の `session_id`・`state`・`generation`・`audio_device_stop_confirmed=false` は維持します。`command_stopped` はstopの一致する応答と、その後のGETでclosed/idleを確認した指令状態で、物理観察ではありません。`unconfirmed` では次の実機開始を禁止します。機器制御を一度も許可していない会話だけ `disabled` です。旧PCでこのフィールドが欠ける場合も機器停止確認には使えません。Web表示と記録への接続はWeb担当へ引き継ぎます。
+`tail_control.status` は `command_stopped` / `unconfirmed` / `disabled`。既存の `session_id`・`state`・`generation`・`audio_device_stop_confirmed=false` は維持します。`command_stopped` はstopの一致する応答と、その後のGETでclosed/idleを確認した指令状態で、物理観察ではありません。`unconfirmed` では次の実機開始を禁止します。機器制御を一度も許可していない会話だけ `disabled` です。旧PCでこのフィールドが欠ける場合も機器停止確認には使えません。Web表示とID別の利用記録への反映も実装し、模擬応答で検証済みです。
 
-Web側はこの拡張の受信・表示を模擬応答で先行検証します。欠落/不正な`tail_control`は機器停止未確認とし、音声サーバー停止確認と混同しません。PC/ESP32の実装・実接続は別途必要です。現行status/POSTへ新しい機器許可フィールドを追加したものではなく、前回停止未確認・機器版未対応時の実機開始拒否はPC側で実装します。
+Web側はこの拡張の受信・表示を模擬応答で検証済みです。欠落/不正な`tail_control`は機器停止未確認とし、音声サーバー停止確認と混同しません。PC/ESP32のv2コードは統合済みですが、公開配備・実接続・実機受け入れは未確認です。現行status/POSTへ新しい機器許可フィールドを追加したものではなく、前回停止未確認・機器版未対応時の実機開始拒否はPC側で実装しています。
 
 ## データと確認範囲
 

@@ -4,7 +4,8 @@
 この文書を今回の範囲・境界・修理順・合格条件の唯一の正本とする。
 [全体計画](docs/requirements/system.md)は将来の体験を含む資料として保持する。
 広い計画や過去履歴にある機能を、今回の合格条件へ追加しない。
-この文書の追加は実装・配備・実機受け入れの完了を意味しない。
+Web・PC・ESP32の修理コードを統合済み。公開配備・実スマホ・実機の通し受け入れは未確認で、MVP全体の合格ではない。
+統合元・検証結果は [統合作業履歴](docs/development/work-history.md) を参照する。
 
 ## 1. 全員が同じ版を読む
 
@@ -68,12 +69,12 @@ git show origin/main:docs/api/mvp-tail-control-v2.md
 | 境界 | 契約の正本 | 双方の確認 |
 | --- | --- | --- |
 | Web ↔ PC | [音声HTTP](docs/api/voice-http.md) | naminamina / RyuuzinnRaika |
-| PC ↔ MCP ↔ ESP32 | 修正目標は[機器v2](docs/api/mvp-tail-control-v2.md)。現状は[機器HTTP](docs/api/esp32-http.md)、[MCP統合](docs/esp32/mcp-integration.md) | RyuuzinnRaika / Happy-Emori |
+| PC ↔ MCP ↔ ESP32 | [機器v2](docs/api/mvp-tail-control-v2.md)、[MCP統合](docs/esp32/mcp-integration.md)。互換v1は[機器HTTP](docs/api/esp32-http.md) | RyuuzinnRaika / Happy-Emori |
 | PC内の希望頻度 | [頻度API](docs/api/tail-frequency.md) | 実機指令との区別を全員確認 |
 
 共有契約を変えるときは、mainのAPI文書を先に更新し、両端の担当で確認する。
-新しい停止契約は [未実装v2契約](docs/api/mvp-tail-control-v2.md) に揃える。変更はmainの仕様PRを先に出して双方確認する。
-未実装案を現行APIの対応済みキーとして送信しない。
+実装した停止契約は [v2契約](docs/api/mvp-tail-control-v2.md) に揃える。変更はmainの仕様PRを先に出して双方確認する。
+v2未対応の旧機器に新しいキーを送信しない。
 
 ## 5. 最新mainから再利用するもの
 
@@ -95,15 +96,11 @@ Webを新規に作り直す前提には戻さない。
 
 ## 6. しっぽの現状と修正目標
 
-PC側の後続修理・模擬試験は [PC・AI v2修理記録](docs/development/pc-ai-mvp-v2.md) を参照。以下の「現状」は修理基点mainの状態を記録しています。PC実装の追加をESP32対応・配備・全AC合格とは扱いません。通信契約と合格条件は変更していません。
+Web・PC・ESP32 Followerのv2コードを統合した。PCは音声所有lease、明示要求、in-process MCP、有限tap、独立stop、機器フェンス再照会、DELETEの`tail_control`を実装し、Followerは原子的なepoch/revision検査、有限動作・予算、旧経路遮断、起動時PWM offを実装する。Webは開始応答・停止結果・ID別記録を検証する。
+[PC修理記録](docs/development/pc-ai-mvp-v2.md) / [ESP32修理記録](docs/esp32/mvp-v2-repair.md)。
+通信契約と合格条件は変更していない。以下は統合コードの仕様であり、配備・実機成功の証拠ではない。実機制御は既定無効。旧頻度操作はPC内の希望値保存であり、ESP32の動作成功とは区別する。
 
-**現状**: 会話MCPのallowlistは `set_tail_frequency` / `get_tail_frequency` の2操作。
-PC内の希望頻度の保存・取得であり、ESP32への動作成功ではない。
-子MCPの環境には `TAIL_CONTROL_ENABLED=false` が強制される。
-互換用の旧 `tap_tail` の既定0.6Hzを実機用へ転用しない。
-現行Follower APIはsession・stop_generation等の新しい停止契約に未対応。
-
-**これから実装する目標**（現行機能として使用しない）:
+**統合した仕様（限定実機試験・配備は未確認）**:
 
 - `tap_tail(duration_seconds)` は0.5〜5秒、速度は0.3Hz固定。
 - `stop_tail()` と `get_tail_status()` を停止・確認の経路として用意する。
@@ -119,7 +116,7 @@ PC/MCPだけの世代検査と停止再送では、ネットワーク中の古�
 stopより遅れて機器に届くtapが、停止後に動作を再開する可能性が残る。
 そのため、機器が開始受理と同じ原子的な処理で停止フェンスを検査する契約を必須とする。
 
-PCとESP32担当は [未実装v2契約](docs/api/mvp-tail-control-v2.md) を共同で確認し、次の境界を実装・検証する。
+PCとESP32担当は [v2契約](docs/api/mvp-tail-control-v2.md) に沿って次の境界を実装・模擬検証した。実機での確認は残る。
 
 1. version/capabilityの確認と、未対応機器への開始拒否。
 2. epoch・世代等による現在の会話と停止フェンスの識別。
@@ -154,7 +151,7 @@ v2未対応または契約/capabilityが未確認の旧機器では実機開始�
 | 順序 | 作業 | 終了条件 |
 | --- | --- | --- |
 | 1 | 全員が最新mainのこの文書と担当を確認 | 基点SHA・対象AC・担当境界が記録される |
-| 2 | PC/ESP32で未実装v2契約とcapabilityを確認・確定 | API正本・非対応時の拒否条件を双方確認 |
+| 2 | PC/ESP32でv2契約とcapabilityを確認・確定 | API正本・非対応時の拒否条件を双方確認 |
 | 3 | mockで許可・停止・遅着・次sessionの試験を追加 | AC-01/03/04/05に対応する失敗再現ができる |
 | 4 | PC/MCPと機器へ契約を実装、限定実機試験 | 旧要求拒否と停止を機器で確認 |
 | 5 | 既存Webを契約へ接続し、記録・表示を確認 | AC-02/04/06を実スマホで確認 |
@@ -215,7 +212,7 @@ MVP.mdの担当表に沿って自分の修理範囲と対象ACを提示し、そ
 | AC-06 | ready時刻・実停止時刻・予定期限・理由・IDを一度保存。開始失敗を成功記録にせず、保存失敗、複数タブ、再読込、100件上限を確認する |
 | AC-07 | Web/PC/機器の版、日時、スマホ/ブラウザー、固定機器、認証・proxy経路、AC別結果が揃った通し証跡がある |
 
-AC-05の新しい機器停止フェンス試験は **追加が必要**。既存頻度MCP試験で代用しない。
+AC-05の機器停止フェンス模擬試験はPC/ESP32に追加済み。実機での遅着・再起動試験は未確認であり、既存頻度MCP試験で代用しない。
 物理観察の記録がない状態で「人形停止確認済み」としない。
 未確認・外部環境待ちは理由と次の作業を残す。文書やmockだけでは全体合格にしない。
 全ACが対象実環境で合格した時点で最小MVP完了とする。各行にPASS/FAIL/未実施、検証SHA、結果・証跡を残し、未実施をPASSへ置き換えない。

@@ -1,10 +1,10 @@
-# MVPしっぽ制御 v2 — 修正目標の通信契約
+# MVPしっぽ制御 v2 — 通信契約
 
 **状態: Web・PC・ESP32 Followerのv2実装を統合。模擬検証と実機書込み・公開配備・通し受け入れは区別し、後者は未確認。旧main `3b6a0c1` のFollowerでは使えません。wire契約は変更していません。**
 
 [PC修理記録](../development/pc-ai-mvp-v2.md) / [機器修理記録](../esp32/mvp-v2-repair.md)。
 
-[共通MVP仕様](../../MVP.md)の有限トントン・停止・遅着拒否を、PC担当 `RyuuzinnRaika` とESP32担当 `Happy-Emori` が同じ形式で実装します。Web担当 `naminamina` はPCの結果を表示し、機器HTTPを直接呼びません。既存の[機器HTTP API](esp32-http.md)は現行v1の説明として保持します。
+[共通MVP仕様](../../MVP.md)の有限トントン・停止・遅着拒否を、PC担当 `RyuuzinnRaika` とESP32担当 `Happy-Emori` が同じ形式で実装しています。Web担当 `naminamina` はPCの結果を表示し、機器HTTPを直接呼びません。既存の[機器HTTP API](esp32-http.md)は互換用v1の説明として保持します。
 
 ## 1. 対象と前提
 
