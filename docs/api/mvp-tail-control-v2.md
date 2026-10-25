@@ -1,6 +1,8 @@
 # MVPしっぽ制御 v2 — 修正目標の通信契約
 
-**状態: 未実装。2026-10-25に定義したMVP修理用の契約であり、main `3b6a0c1` のFollowerでは使えません。**
+**状態: PC側は実装・模擬試験済み、ESP32側の実装/実機受け入れは未確認。2026-10-25に定義した通信契約は変更していません。main `3b6a0c1` のFollowerでは使えません。**
+
+PC実装と検証・引き継ぎは [修理記録](../development/pc-ai-mvp-v2.md) を参照してください。
 
 [共通MVP仕様](../../MVP.md)の有限トントン・停止・遅着拒否を、PC担当 `RyuuzinnRaika` とESP32担当 `Happy-Emori` が同じ形式で実装します。Web担当 `naminamina` はPCの結果を表示し、機器HTTPを直接呼びません。既存の[機器HTTP API](esp32-http.md)は現行v1の説明として保持します。
 
@@ -95,7 +97,7 @@ Web側の新しい機器URLは作りません。[既存voice DELETE](voice-http.
 
 ## 6. 同じ契約で実施する必須試験
 
-PCの模擬機器とESP32実装は同じJSON fixtures・期待状態で比較し、両担当のPRに結果を残します。まだこのv2専用ハーネスはありません。既存の頻度保存試験で代用せず、修理時に追加します。
+PCの模擬機器とESP32実装は同じJSON fixtures・期待状態で比較し、両担当のPRに結果を残します。PC側は `tests/fixtures/tail_v2.json`・`tests/tail_v2_mock.py`・`tests/test_tail_v2.py` にv2専用ハーネスを追加しました。ESP32側との照合・実機試験は未確認で、既存の頻度保存試験やPC mockで代用しません。
 
 | 入力・競合 | 必須結果 |
 | --- | --- |

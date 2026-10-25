@@ -68,7 +68,7 @@ class TailFrequencyHTTPTests(unittest.TestCase):
         self.assertEqual((status, payload["rate_hz"]), (200, 0.8))
 
     def test_plain_http_round_trip_only_changes_pc_configuration(self):
-        with patch.object(tail_mcp_server, "_request", side_effect=AssertionError("No hardware request")) as device, \
+        with patch("server.ai.llm.tail_v2.V2Device.request", side_effect=AssertionError("No hardware request")) as device, \
              patch.object(dashboard, "_voice_sessions", side_effect=AssertionError("No voice runtime")) as voice, \
              patch.object(dashboard, "_audio_streams", side_effect=AssertionError("No audio runtime")) as audio:
             status, default, _ = self.request("GET")

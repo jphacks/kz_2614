@@ -158,6 +158,9 @@ class FakeManager:
         threading.Thread(target=run, daemon=True).start()
         return future
 
+    def stop_tail_for_session(self, session_id, generation):
+        self.tail_stop_request = (session_id, generation)
+
     def cancel_stream_turn(self, session_id, generation):
         self.stream_cancelled.set()
 

@@ -1,7 +1,7 @@
-"""PCのトントン頻度設定と、互換用の旧機器操作を提供するMCPサーバー。
+"""PC頻度設定の互換MCPと、音声所有のv2機器MCP。
 
-音声アプリは頻度の保存・取得だけを公開します。ESP32側の実装は別担当で、
-PC側の保存成功を実機反映と扱いません。旧Pi 4デバイスAPIは別契約です。
+音声アプリはv2の有限tap・stop・stateだけを公開します。ESP32側の実装は別担当で、
+機器の指令応答を物理動作の確認と扱いません。単体stdioは頻度設定だけです。
 """
 
 from __future__ import annotations
@@ -112,95 +112,60 @@ async def get_tail_frequency() -> dict[str, Any]:
     return await _frequency_request("GET")
 
 
-def _device_base_url() -> str:
-    value = os.getenv("TAIL_DEVICE_URL", "").strip()
-    if not value:
-        raise RuntimeError("TAIL_DEVICE_URL is not configured")
-    parsed = urlsplit(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise RuntimeError("TAIL_DEVICE_URL must be an http(s) base URL")
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise RuntimeError("TAIL_DEVICE_URL must not contain credentials, query, or fragment")
-    hostname = parsed.hostname.lower()
-    try:
-        address = ipaddress.ip_address(hostname)
-    except ValueError:
-        if hostname not in {"localhost"} and not hostname.endswith(".local"):
-            raise RuntimeError("TAIL_DEVICE_URL must point to a private IP or .local host")
-    else:
-        if not (address.is_private or address.is_loopback or address.is_link_local):
-            raise RuntimeError("TAIL_DEVICE_URL must point to a private or link-local IP")
-    return value.rstrip("/") + "/"
+class VoiceTailMCP(MCPServer):
+    async def call_tool(self, name, arguments, context=None):
+        # Validate before the SDK's coercion/default handling. The model cannot
+        # smuggle a target or an identity through extra arguments.
+        from .llm.tail_v2 import duration_ms
+        if not isinstance(arguments, dict):
+            raise ToolError("Arguments must be an object")
+        if name == "tap_tail":
+            if set(arguments) - {"duration_seconds"}:
+                raise ToolError("Only duration_seconds is allowed")
+            duration_ms(arguments.get("duration_seconds", 5.0))
+        elif name not in {"stop_tail", "get_tail_status"} or arguments:
+            raise ToolError("Unsupported tool or arguments")
+        return await super().call_tool(name, arguments, context)
 
 
-def _require_enabled() -> None:
-    enabled = os.getenv("TAIL_CONTROL_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
-    if not enabled:
-        raise RuntimeError("Tail control is disabled; set TAIL_CONTROL_ENABLED=true after hardware checks")
+def create_tail_server(lease=None):
+    """Bind trusted voice ownership outside the model-visible MCP schema.
 
-
-async def _request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-    async with httpx.AsyncClient(
-        base_url=_device_base_url(),
-        timeout=DEVICE_TIMEOUT,
-        trust_env=False,
-    ) as client:
-        response = await client.request(method, path, **kwargs)
-        response.raise_for_status()
-        try:
-            body = response.json()
-        except ValueError:
-            body = {}
-        return body if isinstance(body, dict) else {}
-
-
-@mcp.tool()
-async def tap_tail(
-    duration_seconds: Annotated[float, Field(ge=0.5, le=5.0)] = 2.0,
-    taps_per_second: Annotated[float, Field(ge=0.3, le=1.0)] = 0.6,
-) -> str:
-    """Start gentle tail tapping for at most five seconds at a bounded rate.
-
-    Use only when the user clearly requests tapping. The Raspberry Pi service must enforce its own
-    movement-angle limits and watchdog; this MCP limit is an additional guard.
+    In-process MCP keeps the final HTTP guard in the voice process. Standalone
+    stdio has no lease and cannot start hardware even with environment flags.
     """
-    try:
-        _require_enabled()
-        result = await _request(
-            "POST",
-            "api/tail/tap",
-            json={
-                "duration_ms": round(duration_seconds * 1000),
-                "rate_hz": taps_per_second,
-            },
-        )
-        return f"tap_tail sent; device_state={result.get('state', 'unknown')}"
-    except Exception as exc:
-        logger.warning("tap_tail failed: %s", type(exc).__name__)
-        return f"tap_tail failed: {type(exc).__name__}"
+    server = VoiceTailMCP("nen-gitsune-tail-v2")
 
+    @server.tool()
+    async def tap_tail(
+        duration_seconds: Annotated[float, Field(ge=0.5, le=5.0, strict=True, allow_inf_nan=False)] = 5.0,
+    ) -> dict[str, Any]:
+        """Explicit current request only: finite tapping, 0.3Hz fixed, command feedback only."""
+        if lease is None:
+            raise ToolError("An active voice permit is required; standalone hardware control is disabled")
+        try:
+            return await lease.coordinator.tap(lease, duration_seconds)
+        except Exception as exc:
+            raise ToolError(f"Tail start rejected ({type(exc).__name__}); no physical success confirmed") from exc
 
-@mcp.tool()
-async def stop_tail() -> str:
-    """Stop tail movement immediately. This tool remains available when tapping is disabled."""
-    try:
-        result = await _request("POST", "api/tail/stop")
-        return f"stop_tail sent; device_state={result.get('state', 'unknown')}"
-    except Exception as exc:
-        logger.warning("stop_tail failed: %s", type(exc).__name__)
-        return f"stop_tail failed: {type(exc).__name__}"
+    @server.tool()
+    async def stop_tail() -> dict[str, Any]:
+        """Close this voice session's device fence; report command stop separately from physical motion."""
+        if lease is None:
+            raise ToolError("An owning voice session is required")
+        return await lease.stop()
 
+    @server.tool()
+    async def get_tail_status() -> dict[str, Any]:
+        """Read the fixed v2 device's command state (not measured mechanical feedback)."""
+        if lease is None:
+            raise ToolError("An active voice permit is required")
+        return await lease.coordinator.status(lease)
 
-@mcp.tool()
-async def get_tail_status() -> str:
-    """Read whether the Raspberry Pi service reports that the tail is moving."""
-    try:
-        result = await _request("GET", "api/tail/status")
-        return f"tail_status={result.get('state', 'unknown')}"
-    except Exception as exc:
-        logger.warning("get_tail_status failed: %s", type(exc).__name__)
-        return f"get_tail_status failed: {type(exc).__name__}"
+    return server
 
 
 if __name__ == "__main__":
+    # Configuration-only compatibility tools remain available over stdio.
+    # Hardware tools require the app-owned in-process server and its live lease.
     mcp.run()

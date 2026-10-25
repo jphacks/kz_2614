@@ -7,6 +7,12 @@
 - `tail_control`はv2契約の模擬応答で検証し、PC/ESP32の実接続とは扱わない。前回停止未確認時の実機開始拒否はPC担当の責務。Webから機器HTTPを直接呼ばず、独自の開始許可フィールドを追加しない。
 - 本依頼の完了操作はcommit・push・main向けPR作成まで。PRのmerge、公開配備、既存サービス再起動は行わない。検証結果とPC担当への引き継ぎは[作業履歴](docs/development/work-history.md)へ記録する。
 
+## PC・AIのv2修理（2026-10-25）
+
+- 担当branch: RyuuzinnRaika。参照main `6c4dd226cc4ba1912124c1e1affe0ea0b8603625` を通常mergeで取り込み。稼働checkoutの未コミット変更・全Git参照は保全し、独立worktreeで作業。
+- v2 wire契約は変更せず、明示要求・音声所有lease・in-process MCP・open/tap/独立stop・機器フェンス検査・DELETEのtail_controlを実装。PC側模擬検証と実機対応を区別する。
+- 既存音声/PCM/割込みを維持。再起動・実機操作・公開配備はこの依頼では行わない。ESP32/Webへの引き継ぎと検証記録は [pc-ai-mvp-v2](docs/development/pc-ai-mvp-v2.md) を正本とする。状態: PC修理・266件回帰・Node4試験・製品build確認済み。実機・公開配備・通し受け入れ未確認。
+
 ## 今回の共通MVPと修理の入口（2026-10-25）
 
 - 依頼範囲は「スマホで会話＋しっぽトントン＋停止＋利用記録」。今回の範囲・境界・修理順・合格条件は [MVP.md](MVP.md) のみを正本とする。各branchから [最新main版](https://github.com/jphacks/kz_2614/blob/main/MVP.md) と基点SHAを確認する。

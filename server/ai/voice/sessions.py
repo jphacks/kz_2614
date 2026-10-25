@@ -20,6 +20,7 @@ from .pipeline import NoSpeechDetected, VoicePipeline
 from ..stt.whisper import AudioDurationExceeded, CudaUnavailableError
 from ..tts.irodori import SynthesizedSpeech
 from ..runtime import VoiceStageTimeout
+from ..llm.tail_control import TailCoordinator, TailLease, get_tail_coordinator, tail_lease_context
 
 
 MAX_AUDIO_BYTES = 25_000_000
@@ -73,13 +74,15 @@ class VoiceSession:
     active_turn_id: str | None = None
     progress: TurnProgress | None = None
     preview_busy: bool = False
+    tail_lease: TailLease | None = None
 
 
 class VoiceSessions:
     """Keep each conversation in memory and fence results after stop or expiry."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, tail_coordinator: TailCoordinator | None = None) -> None:
         self._lock = threading.RLock()
+        self._tail_control = tail_coordinator or get_tail_coordinator()
         self._sessions: dict[str, VoiceSession] = {}
         # One preview worker globally; timed-out native inference retains this slot.
         self._preview_inflight = 0
@@ -99,6 +102,7 @@ class VoiceSessions:
         asyncio.set_event_loop(loop)
         self._loop = loop
         self._loop_ready.set()
+        self._expiry_tick()
         loop.run_forever()
         pending = asyncio.all_tasks(loop)
         for task in pending:
@@ -106,6 +110,18 @@ class VoiceSessions:
         if pending:
             loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         loop.close()
+
+    def _expiry_tick(self) -> None:
+        with self._lock:
+            self._expire_locked()
+        if self._loop is not None:
+            self._loop.call_later(1.0, self._expiry_tick)
+
+    def stop_tail_for_session(self, session_id: str, generation: int) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is not None and session.active and session.generation == generation:
+                self._invalidate_tail_locked(session)
 
     def _submit(self, coroutine: Any):
         loop = self._loop
@@ -116,7 +132,24 @@ class VoiceSessions:
     async def _create_pipeline(self) -> VoicePipeline:
         return VoicePipeline()
 
+    def _invalidate_tail_locked(self, session: VoiceSession) -> None:
+        ticket = self._tail_control.revoke_session(session.session_id, session.tail_lease)
+        if ticket is not None and self._loop is not None and not self._loop.is_closed():
+            self._loop.call_soon_threadsafe(
+                lambda: self._tail_control.schedule_stop(ticket)
+            )
+
+    def _tail_owns_turn(self, session: VoiceSession, generation: int, turn_id: str) -> bool:
+        with self._lock:
+            return self._owns_turn(session, generation, turn_id)
+
+    def _end_tail_session(self, session: VoiceSession) -> None:
+        with self._lock:
+            if session.active:
+                self._retire_locked(session, cancel_task=False)
+
     def _retire_locked(self, session: VoiceSession, *, cancel_task: bool = True) -> None:
+        self._invalidate_tail_locked(session)
         session.active = False
         session.generation += 1
         session.speeches.clear()
@@ -220,6 +253,12 @@ class VoiceSessions:
                 transcript="",
                 expires_at=session.last_activity + TURN_TIMEOUT_SECONDS,
             )
+            generation = session.generation
+            session.tail_lease = self._tail_control.lease(
+                session.session_id, generation, turn_id,
+                lambda: self._tail_owns_turn(session, generation, turn_id),
+                lambda: self._end_tail_session(session),
+            )
             return session, session.generation
 
     def _owns_turn(self, session: VoiceSession, generation: int, turn_id: str) -> bool:
@@ -238,6 +277,7 @@ class VoiceSessions:
             session = self.get_active_session(session_id, generation)
             if session.active_turn_id != turn_id:
                 return False
+            self._invalidate_tail_locked(session)
             task = session.task
             session.active_turn_id = None
             session.progress = None
@@ -426,16 +466,18 @@ class VoiceSessions:
                 raise VoiceAPIError(409, "session_stopped", "停止後の発話は処理しません。")
             session.task = current_task
             pipeline = session.pipeline
+            tail_lease = session.tail_lease
         if pipeline is None:
             raise VoiceAPIError(503, "voice_unavailable", "音声処理を準備できません。", True)
 
         try:
-            result = await pipeline.process_audio_file(
-                audio_path,
-                on_progress=lambda stage, transcript: self._update_turn_progress(
-                    session, generation, turn_id, stage, transcript
-                ),
-            )
+            with tail_lease_context(tail_lease):
+                result = await pipeline.process_audio_file(
+                    audio_path,
+                    on_progress=lambda stage, transcript: self._update_turn_progress(
+                        session, generation, turn_id, stage, transcript
+                    ),
+                )
             speech_url = f"/api/v1/voice/sessions/{session.session_id}/turns/{turn_id}/audio"
             response = {
                 "session_id": session.session_id,
@@ -483,6 +525,9 @@ class VoiceSessions:
                 True,
             ) from exc
         except BaseException:
+            with self._lock:
+                if self._owns_turn(session, generation, turn_id):
+                    self._invalidate_tail_locked(session)
             self._update_turn_progress(session, generation, turn_id, "failed")
             raise
         finally:
@@ -547,6 +592,7 @@ class VoiceSessions:
         stt_worker_finished.set()  # No native file reader exists before dispatch.
         reply_speeches: list[SynthesizedSpeech] = []
         reply_bytes = 0
+        turn_succeeded = False
         with self._lock:
             if not self._owns_turn(session, generation, turn_id):
                 events.put({
@@ -559,6 +605,7 @@ class VoiceSessions:
                 return
             session.task = current_task
             pipeline = session.pipeline
+            tail_lease = session.tail_lease
 
         def publish(event: dict[str, object]) -> None:
             nonlocal reply_bytes
@@ -599,15 +646,16 @@ class VoiceSessions:
         try:
             if pipeline is None:
                 raise VoiceAPIError(503, "voice_unavailable", "音声処理を準備できません。", True)
-            result = await pipeline.process_audio_file_stream(
-                audio_path,
-                publish,
-                on_progress=lambda stage, transcript: self._update_turn_progress(
-                    session, generation, turn_id, stage, transcript
-                ),
-                on_stt_dispatched=stt_worker_finished.clear,
-                on_stt_worker_finished=stt_worker_finished.set,
-            )
+            with tail_lease_context(tail_lease):
+                result = await pipeline.process_audio_file_stream(
+                    audio_path,
+                    publish,
+                    on_progress=lambda stage, transcript: self._update_turn_progress(
+                        session, generation, turn_id, stage, transcript
+                    ),
+                    on_stt_dispatched=stt_worker_finished.clear,
+                    on_stt_worker_finished=stt_worker_finished.set,
+                )
             combined = self._combine_stream_speech(reply_speeches)
             speech_metadata: dict[str, Any] | None = None
             if combined is not None:
@@ -635,6 +683,7 @@ class VoiceSessions:
                     **({"speech": speech_metadata} if speech_metadata is not None else {}),
                 }
             )
+            turn_succeeded = True
         except asyncio.CancelledError:
             raise
         except VoiceAPIError as exc:
@@ -696,6 +745,10 @@ class VoiceSessions:
                 "retryable": active,
             })
         finally:
+            if not turn_succeeded:
+                with self._lock:
+                    if self._owns_turn(session, generation, turn_id):
+                        self._invalidate_tail_locked(session)
             # Task cancellation and the STT deadline do not stop a native decoder.
             # A bridge may delete its input WAV only after this terminal sentinel.
             while not stt_worker_finished.is_set():
@@ -759,6 +812,7 @@ class VoiceSessions:
         with self._lock:
             session = self._sessions.get(session_id)
             if session is not None and session.active and session.generation == generation:
+                self._invalidate_tail_locked(session)
                 if session.task is not None and self._loop is not None:
                     self._loop.call_soon_threadsafe(self._cancel_task_once, session.task)
 
@@ -805,6 +859,7 @@ class VoiceSessions:
         with self._lock:
             if turn_id is not None and session.active_turn_id != turn_id:
                 return
+            self._invalidate_tail_locked(session)
             if session.progress is not None:
                 self._update_turn_progress(
                     session, session.progress.generation, session.progress.turn_id, "failed"
@@ -834,12 +889,23 @@ class VoiceSessions:
             old_generation = session.generation
             self._retire_locked(session)
             stopped_generation = session.generation
+        # Voice generation is already invalid. Wait only for the independent
+        # device stop, never for native inference or a pending open/tap.
+        tail_result = self._tail_control.stop_snapshot(session_id)
+        if self._loop is not None and threading.current_thread() is not self._loop_thread:
+            future = self._submit(self._tail_control.wait_stopped(session_id))
+            try:
+                tail_result = future.result(timeout=4.7)
+            except FutureTimeoutError:
+                future.cancel()
+                tail_result = self._tail_control.stop_snapshot(session_id)
         return {
             "session_id": session_id,
             "state": "stopped",
             "invalidated_generation": old_generation,
             "generation": stopped_generation,
             "audio_device_stop_confirmed": False,
+            "tail_control": tail_result,
         }
 
     def runtime_session_ids(self) -> set[str]:
