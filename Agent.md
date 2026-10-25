@@ -1,5 +1,11 @@
 # JPHACKS 作業ガイド
 
+## ローカル接続確認と次の作業（2026-10-25 12:09時点）
+
+- main統合版 `2a14c76` のMac製品Webから、別PCの音声status APIへ200 JSONを確認。Webの転送先をMac自身から音声PCへ変更した。PC側の起動変更はユーザーが手動で実施。WebサーバーOKの申告を受けたが、音声3往復・割込み・停止・記録の個別ACは未記録。
+- 対象Followerはv2 stateが404、旧tail/statusが200。到達できるが、統合v2ファームの反映は確認できていない。Happy-EmoriがWi-Fi/個体設定/NVS校正を保全して新版を反映し、v2状態を確認してからPC担当と限定試験へ進む。動作指令は送っていない。
+- [通し試験](docs/demo.md)、[Web接続の切り分け](docs/setup/hossy-web.md)、[機器反映手順](docs/esp32/mvp-v2-repair.md)を参照。音声v1としっぽv2を混同しない。CT経由の公開接続は別途未整備。以下の日付付き節は各作業時点の記録。
+
 ## 今回のMVP修理の統合状況（2026-10-25）
 
 - 利用者の全修理をmainへ統合する指示により、main `6c4dd226cc4ba1912124c1e1affe0ea0b8603625` を基点にPR #26（Web）、#27（PC・AI）、#28（ESP32）を履歴付きで通常mergeした。統合元SHA・検証・公開反映結果は [作業履歴](docs/development/work-history.md) を参照する。

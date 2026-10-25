@@ -1,5 +1,7 @@
 # Web音声会話 HTTP API
 
+音声APIは **`/api/v1/voice/`（v1）** を継続使用します。[しっぽ制御v2](mvp-tail-control-v2.md)はPC↔ESP32の別APIであり、音声URLを`/api/v2/voice/`へ変更しません。製品Webは同一originの音声APIへ接続し、PCが機器制御を仲介します。
+
 2026-10-25更新。現行Webの継続PCM・NDJSON契約と、互換用のファイル送信契約です。Androidネイティブ/ESP32音声は別の [TCP契約](voice-tcp.md) を使います。[処理フロー図](../architecture.md) / [サーバー要件](../requirements/server.md)。
 
 継続PCM入力とサーバーVADによる途中認識を追加し、従来の1発話ファイル送信・NDJSON逐次返答も保持します。PCM経路でも発話確定後にLLMの差分と文節TTSを逐次配信します。音声入力POSTと返答受信GETは独立した接続で並行し、返答生成・再生中も無音を含むPCM送信を継続します。

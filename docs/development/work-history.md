@@ -1,5 +1,17 @@
 # JPHACKS 制作作業・会話履歴
 
+## ローカル製品Webの音声接続とESP32版確認（2026-10-25）
+
+- 基点/製品Webソース: 統合main `2a14c766d5d7f19199da908c895892b56fb433f5`。PR #26/#27/#28はmainへ反映済み。今回の観測では音声PCの稼働SHA・機器ファームSHAは未取得。
+- Macの`apps/hossy-web`で`npm ci`成功（260 packages追加、audit261、脆弱性0）。当初`VOICE_API_UPSTREAM=http://127.0.0.1:8765`で起動したが、Macには音声サーバーがなく、Web経由statusは502 text/plain/空本文。UIのJSONエラーはログイン転送を意味しなかった。
+- 音声PCのlocalhost応答と`127.0.0.1:8765`待受をユーザーが報告。ユーザーがPC側の起動変更を手動で実施。その後、Mac→音声PCのstatusで200 JSONを確認。
+- 12:03 JST、ローカルAstroを停止し、`VOICE_API_UPSTREAM=http://192.168.100.113:8765 npm run dev -- --host 127.0.0.1`で再起動。`curl -i --connect-timeout 3 --max-time 5 http://127.0.0.1:4321/api/v1/voice/status`で200 JSON、`voice_api=available`、`models=checked_on_first_turn`、`Cache-Control: no-store`を確認。ユーザーはWebサーバーOKと回答。モデルの音声往復・各停止・記録の詳細結果は未取得。
+- 12:09 JST、指定Follower `192.168.100.111` の`GET /api/v2/tail/state`は404 text/plain、旧`GET /api/tail/status`は200 JSON/idle。到達できるが統合v2ファームは未反映と判断。動作指令・機器書込み・設定変更は行っていない。
+- README/MVP/起動・試験・API文書に、音声v1としっぽv2の区別、別PCでの待受/転送、502の切り分け、IP確認と新版反映手順を追記。古いReader追従手順を新版Followerに適用しないよう整理。今回の編集は文書のみで、稼働サービスや実機へ変更を加えない。
+- 文書検証: 変更したMarkdown 10点の相対リンク137件（ファイル/見出し）とコードフェンスを確認、欠落なし。`git diff --check`成功。実行コードの変更がないため、自動試験・本番ビルド・サービス再起動は再実施していない。
+- 残り: Happy-Emoriによる個体設定/NVS保全と新版反映、PC側の稼働版確認、限定機器試験、実音声/停止/記録のAC別証跡。CT→PCの経路・公開配備・認証後API・実スマホの通し試験は別途未確認。LAN IPは当時の値であり固定設定として扱わない。
+
+
 ## Web・PC・ESP32のMVP修理を統合（2026-10-25）
 
 - 利用者の「完成した修理をすべてmainへ統合」の指定で、独立checkoutの `integration/mvp-repairs-20261025` に通常mergeした。参照main: `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`。稼働checkout・サービス・非公開設定・モデル・実機は操作しない。

@@ -7,6 +7,8 @@
 Web・PC・ESP32の修理コードを統合済み。公開配備・実スマホ・実機の通し受け入れは未確認で、MVP全体の合格ではない。
 統合元・検証結果は [統合作業履歴](docs/development/work-history.md) を参照する。
 
+2026-10-25 12:09時点: ローカル製品Web→別PCの音声statusは200 JSONを確認。対象ESP32はv2 stateが404、旧statusが200で、新版書込み・通し動作確認待ち。音声 `/api/v1/voice/` としっぽ `/api/v2/tail/` は別契約。実音声・停止・記録のAC別結果は未記録で、API到達を全体合格へ置き換えない。[実施手順](docs/demo.md#ローカル製品webからの通し試験)を参照。
+
 ## 1. 全員が同じ版を読む
 
 - 常設URL: [mainのMVP.md](https://github.com/jphacks/kz_2614/blob/main/MVP.md)

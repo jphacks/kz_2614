@@ -33,6 +33,58 @@ npm run preview -- --host 127.0.0.1
 
 `preview` は静的ビルド確認用でAPIプロキシを提供しません。dev/build/previewの前に `scripts/sync-voice-assets.mjs` が `apps/web` の音声JSと2つのWorkletをpublicへコピーします。生成コピーとdistはGit対象外です。
 
+## 別PCで音声サーバーを動かす場合
+
+`127.0.0.1`はコマンドを実行する機械自身です。WebがMac、音声が別PCなら、Webの転送先には音声PCのLANアドレスを指定します。以下の`192.168.100.113`は2026-10-25の確認値であり、固定値ではありません。ネットワーク変更後は再確認してください。
+
+まず**音声PC側**で、サーバー自身の応答と待受を確認します（Ubuntu）。
+
+```bash
+curl -i --connect-timeout 3 --max-time 5 http://127.0.0.1:8765/api/v1/voice/status
+ss -ltnp 'sport = :8765'
+```
+
+`127.0.0.1:8765`の待受はPC内部専用です。別PCからのアクセスが必要なら、担当者が実行中の会話と起動方法を確認し、既存プロセスを通常の方法で停止してからLANアドレスで起動します。手動起動はそのターミナルのCtrl+C、常駐サービスは既存の管理方法を使い、二重起動しません。既にLANアドレスだけで待受している場合、localhostへのcurlが失敗しても停止中とは限りません。
+
+```bash
+# 音声PCの検証対象リポジトリのルート。実際のLAN IPへ置き換える。
+bash server/start_server_ubuntu.sh 192.168.100.113 8765
+```
+
+**Webを動かすMac側**から到達を確認します。接続できなければ、PCの現在のIP、待受、LAN経路/端末間通信制限、ファイアウォールを切り分けます。PCの音声/設定APIは、信頼する検証端末から到達する限定LANで使います。
+
+```bash
+curl -i --connect-timeout 3 --max-time 5 http://192.168.100.113:8765/api/v1/voice/status
+```
+
+200 JSONを確認後、Mac側の`apps/hossy-web`で起動します。既に起動中なら、転送先変更前にその開発サーバーを停止します。今回使用したAstro CLIはバックグラウンドで起動し、同ディレクトリの`./node_modules/.bin/astro dev status` / `./node_modules/.bin/astro dev stop`で確認/停止できました。前面実行の環境では起動ターミナルのCtrl+Cを使います。
+
+```bash
+VOICE_API_UPSTREAM=http://192.168.100.113:8765 npm run dev -- --host 127.0.0.1
+```
+
+別ターミナルから製品Webと同じoriginで確認します。
+
+```bash
+curl -i --connect-timeout 3 --max-time 5 http://127.0.0.1:4321/api/v1/voice/status
+```
+
+2026-10-25 12:03 JST、この経路で200、`Content-Type: application/json`、`voice_api=available`、`Cache-Control: no-store`を確認しました。`models=checked_on_first_turn`の応答であり、モデル/実音声往復の合格ではありません。ブラウザーで`http://127.0.0.1:4321/`を再読込し、[通し試験](../demo.md#ローカル製品webからの通し試験)へ進みます。音声PCの稼働SHAは未取得です。
+
+### 「音声APIからJSONが返りません」の切り分け
+
+画面の案内だけではログイン問題とは断定できません。上記のcurlでHTTP statusとContent-Typeを確認します。
+
+| 応答 | 確認すること |
+| --- | --- |
+| 502、text/plainや空本文 | 転送先に接続できない等のproxy障害。今回の原因はWebの転送先がMac自身だったこと。音声PCの待受もLAN向けへ変更した |
+| 401/403、ログインHTML、認証へのredirect | 正規ログインと認証後のAPI経路。認証を外して解決しない |
+| 404 | devのupstream未指定、静的preview、パス/配信設定を確認 |
+| 503 JSON | Nginxのupstream未設定等。JSON内のエラーと配信設定を確認 |
+| 200 JSON、voice_api=available | API到達は成功。モデル・マイク・音声往復は別途確認 |
+
+CTは別ネットワークなので、このLAN IPを設定するだけでは接続できません。公開時はCT→音声PCのVPN等の経路と認証/HTTPSを整備します。ブラウザーから音声PCのLAN HTTPへ直接接続する構成にはせず、同一originのAPI転送を維持します。
+
 ## Docker / Nginx
 
 Docker EngineとComposeプラグインを用意し、次を実行します。これは手順であり今回のDocker実行結果ではありません。

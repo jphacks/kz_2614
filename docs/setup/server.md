@@ -170,7 +170,7 @@ Web画面はPCM16LE・16kHzモノラルを256msごとに継続送信します。
 - 設定は `api/data/dashboard_settings.json` に保存します。アップロードした参照音声は `api/data/reference_voice.wav` に保存されるため、使わなくなったら画面から削除してください。
 - Whisperモデルのキャッシュは `server/whisper/` に置かれます。モデルの再取得を行う場合はこのキャッシュを確認してください。
 - サーバーを停止するときは起動したターミナルで `Ctrl+C` を押します。ブラウザーの「すぐに停止」は会話セッションを止める操作で、サーバープロセス自体は終了しません。
-- しっぽMCP制御は初期状態で無効です。Pi 4デバイスサービスとの統合と停止確認が終わるまで、`TAIL_CONTROL_ENABLED=false` を維持してください。
+- しっぽMCP制御は初期状態で無効です。ESP32 Followerのv2対応・個体校正・許可と停止確認の準備が整うまで、`TAIL_CONTROL_ENABLED=false` を維持してください。[限定実機試験](../esp32/mvp-v2-repair.md)と[接続の切り分け](hossy-web.md#別pcで音声サーバーを動かす場合)を参照します。
 
 ## 8. 困ったとき
 
