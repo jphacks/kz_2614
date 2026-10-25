@@ -56,10 +56,10 @@ class MockFollower:
                 return httpx.Response(200, json=deepcopy(s))
             def error(code, message):
                 return httpx.Response(code, json={"error": message})
-            if action not in {"open", "tap", "stop"}:
+            if action not in {"open", "tap", "stop", "prepare", "disarm"}:
                 return error(409, "mode_not_ready")  # Legacy motion paths locked out.
             keys = {"device_epoch", "expected_revision", "command_id"}
-            if action != "stop":
+            if action not in {"stop", "disarm"}:
                 keys.add("session_id")
             if action == "tap":
                 keys.add("duration_ms")
@@ -69,7 +69,17 @@ class MockFollower:
                 return error(409, "stale_epoch")
             if body["expected_revision"] != s["revision"]:
                 return error(409, "stale_revision")
-            if action != "stop":
+            if action == "prepare":
+                if "session_prepare" not in s["capabilities"]:
+                    return error(403, "start_disabled")
+                if not s["calibrated"]:
+                    return error(503, "not_calibrated")
+                if s["phase"] != "closed" or s.get("permission_session_id") is not None:
+                    return error(409, "invalid_phase")
+                s.update(start_enabled=True, permission_session_id=body["session_id"])
+            elif action not in {"stop", "disarm"}:
+                if s.get("permission_session_id") not in (None, body["session_id"]):
+                    return error(409, "session_mismatch")
                 if not s["start_enabled"]:
                     return error(403, "start_disabled")
                 if not s["calibrated"]:
@@ -91,6 +101,8 @@ class MockFollower:
                 s["session_id"] = body["session_id"]
             else:
                 s.update(phase="closed", session_id=None, motion="idle")
+                if action == "disarm":
+                    s.update(start_enabled=False, permission_session_id=None)
             s["revision"] += 1
             self.accepted.append((action, deepcopy(body)))
             return httpx.Response(200, json={**deepcopy(s), "command_id": body["command_id"]})

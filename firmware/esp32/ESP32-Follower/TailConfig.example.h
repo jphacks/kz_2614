@@ -14,3 +14,6 @@ constexpr double TAIL_TESTED_MAX_RATE_HZ = 0.3;
 // 100 preserves the original width. Up to 150 expands around neutral within
 // saved pulse limits. Increase only with the operator observing the mechanism.
 #define TAIL_MOTION_AMPLITUDE_PERCENT 100
+
+// Explicit conversation-start permission over the managed PC/device network.
+#define TAIL_SESSION_PREPARE_ENABLED false

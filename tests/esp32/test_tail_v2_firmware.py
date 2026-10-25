@@ -34,7 +34,7 @@ class FirmwareTests(unittest.TestCase):
     def body(self, action, **overrides):
         b = dict(device_epoch=self.current['device_epoch'], expected_revision=self.current['revision'],
                  command_id=str(uuid.uuid4()))
-        if action != 'stop':
+        if action not in ('stop', 'disarm'):
             b['session_id'] = SESSION
         if action == 'tap':
             b['duration_ms'] = 500
@@ -51,6 +51,46 @@ class FirmwareTests(unittest.TestCase):
 
     def state(self, **event):
         return self.call(action='request', path='/api/v2/tail/state', method='GET', **event)['body']
+
+    def test_conversation_prepare_is_silent_bound_and_disarm_fenced(self):
+        self.call(action='session_boot')
+        prepare = self.body('prepare')
+        first = self.request('prepare', prepare)
+        self.assertEqual(first['status'], 200)
+        self.assertEqual(first['writes'], 0)
+        self.assertEqual(self.current['phase'], 'closed')
+        self.assertTrue(self.current['start_enabled'])
+        self.assertEqual(self.current['permission_session_id'], SESSION)
+        self.assertEqual(self.request('prepare', prepare)['status'], 409)
+        self.assertEqual(self.request('open', self.body('open', session_id=str(uuid.uuid4())))['status'], 409)
+        self.ok('open'); self.ok('tap')
+        self.call(action='tick', now_ms=100)
+        self.assertGreater(self.call(action='tick', now_ms=200)['writes'], 0)
+        self.ok('stop')
+        self.assertTrue(self.current['start_enabled'])
+        self.ok('open')
+        old_tap = self.body('tap')
+        self.ok('disarm')
+        self.assertFalse(self.current['start_enabled'])
+        self.assertIsNone(self.current['permission_session_id'])
+        self.assertEqual(self.request('tap', old_tap)['status'], 409)
+        self.assertEqual(self.request('prepare', prepare)['status'], 409)
+        self.ok('prepare', session_id=str(uuid.uuid4()))
+
+    def test_prepare_reboot_stop_and_local_disarm_reject_old_work(self):
+        self.call(action='session_boot')
+        old = self.body('prepare')
+        self.ok('stop')
+        self.assertEqual(self.request('prepare', old)['status'], 409)
+        self.ok('prepare')
+        self.call(action='local_stop')
+        self.assertFalse(self.current['start_enabled'])
+        self.assertIsNone(self.current['permission_session_id'])
+        self.assertEqual(self.request('open')['status'], 403)
+        old = self.body('prepare')
+        self.call(action='reboot')
+        self.assertEqual(self.request('prepare', old)['status'], 409)
+        self.assertEqual(self.request('prepare')['status'], 403)
 
     def test_shared_pc_fixture_exact_state_and_sequence(self):
         self.assertEqual(self.current, FIXTURE['state'])

@@ -65,6 +65,10 @@ bool pulseStoreReady = false;
 bool servoPinInputReady = false;
 bool neutralMode = false;
 bool relaxMode = true;
+#ifndef TAIL_SESSION_PREPARE_ENABLED
+#define TAIL_SESSION_PREPARE_ENABLED false
+#endif
+
 int currentAngle = 90;
 uint16_t minPulseUs = DEFAULT_MIN_PULSE_US;
 uint16_t maxPulseUs = DEFAULT_MAX_PULSE_US;
@@ -364,7 +368,8 @@ bool writeV2Angle(void*, int32_t milliAngle) {
 
 tail_v2::Configuration localConfiguration(bool enabled, bool ready) {
   return {enabled, v2Calibrated(), ready,
-      TAIL_TAP_START_ANGLE, TAIL_TAP_END_ANGLE, currentAngle * 1000};
+      TAIL_TAP_START_ANGLE, TAIL_TAP_END_ANGLE, currentAngle * 1000,
+      TAIL_SESSION_PREPARE_ENABLED && TAIL_MCP_API_ENABLED && allServosReady()};
 }
 
 void handleSerialCommands() {
@@ -486,8 +491,9 @@ void setup() {
     return;
   }
   tailController = new tail_v2::Controller(makeEpoch, writeV2Angle, nullptr,
-      {false, v2Calibrated(), false, TAIL_TAP_START_ANGLE, TAIL_TAP_END_ANGLE, 90000});
-  // Revision 0, disabled: preparation is strictly a local operator action.
+      {false, v2Calibrated(), false, TAIL_TAP_START_ANGLE, TAIL_TAP_END_ANGLE, 90000,
+       TAIL_SESSION_PREPARE_ENABLED && TAIL_MCP_API_ENABLED && allServosReady()});
+  // Revision 0, disabled: only explicit local or opt-in conversation preparation.
   tailHttp = new tail_v2::HttpServer(*tailController);
   Serial.println("v=status, a=explicit prepare (moves), x=hold/stop, n=neutral, d=relax; t=blocked");
   Serial.println("1..6=tune (disarms), s=save calibration, r=erase calibration");

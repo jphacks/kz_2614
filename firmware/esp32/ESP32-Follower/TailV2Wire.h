@@ -77,7 +77,7 @@ inline bool parseRequest(Operation op, const std::string& body, Request& r) {
       valid = cJSON_IsString(item) && uuid(item->valuestring);
       // Preserve command spelling for exact ACK comparison.
       if (valid) memcpy(r.command, item->valuestring, 37);
-    } else if (!strcmp(item->string, "session_id") && op != Operation::Stop) {
+    } else if (!strcmp(item->string, "session_id") && op != Operation::Stop && op != Operation::Disarm) {
       bit = 8;
       valid = cJSON_IsString(item) && uuid(item->valuestring);
       if (valid) memcpy(r.session, item->valuestring, 37);
@@ -91,26 +91,33 @@ inline bool parseRequest(Operation op, const std::string& body, Request& r) {
     if (seen & bit) valid = false;
     seen |= bit;
   }
-  const unsigned required = op == Operation::Stop ? 7 : op == Operation::Open ? 15 : 31;
+  const unsigned required = (op == Operation::Stop || op == Operation::Disarm) ? 7 : op == Operation::Tap ? 31 : 15;
   cJSON_Delete(root);
   return valid && seen == required;
 }
 inline std::string stateJson(const State& s, const char* command = nullptr) {
   // All strings were validated as hex/UUID; no untrusted free text is formatted.
-  char buffer[768];
+  char buffer[900];
+  char permission[100] = "";
+  if (s.sessionPrepare) {
+    if (s.permissionSession[0]) snprintf(permission, sizeof(permission),
+        ",\"permission_session_id\":\"%s\"", s.permissionSession);
+    else strcpy(permission, ",\"permission_session_id\":null");
+  }
   char session[40] = "null";
   if (s.session[0]) snprintf(session, sizeof(session), "\"%s\"", s.session);
   snprintf(buffer, sizeof(buffer),
-      "{\"protocol_version\":2,\"capabilities\":[\"revision_fence\"],"
+      "{\"protocol_version\":2,\"capabilities\":[\"revision_fence\"%s],"
       "\"control_mode\":\"v2_exclusive\",\"device_epoch\":\"%s\",\"revision\":%llu,"
       "\"session_id\":%s,\"phase\":\"%s\",\"motion\":\"%s\","
       "\"start_enabled\":%s,\"calibrated\":%s,\"feedback\":\"command_only\","
       "\"limits\":{\"min_duration_ms\":500,\"max_duration_ms\":5000,"
-      "\"rate_hz\":0.3,\"window_ms\":60000,\"budget_ms\":10000}%s%s%s}",
+      "\"rate_hz\":0.3,\"window_ms\":60000,\"budget_ms\":10000}%s%s%s%s}",
+      s.sessionPrepare ? ",\"session_prepare\"" : "",
       s.epoch, static_cast<unsigned long long>(s.revision), session,
       s.open ? "open" : "closed", s.tapping ? "tapping" : "idle",
       s.enabled ? "true" : "false", s.calibrated ? "true" : "false",
-      command ? ",\"command_id\":\"" : "", command ? command : "", command ? "\"" : "");
+      permission, command ? ",\"command_id\":\"" : "", command ? command : "", command ? "\"" : "");
   return buffer;
 }
 inline std::string errorJson(const char* error) {
@@ -135,6 +142,8 @@ inline Result dispatch(Controller& controller, const std::string& method,
   if (path == "/api/v2/tail/open") op = Operation::Open;
   else if (path == "/api/v2/tail/tap") op = Operation::Tap;
   else if (path == "/api/v2/tail/stop") op = Operation::Stop;
+  else if (path == "/api/v2/tail/prepare") op = Operation::Prepare;
+  else if (path == "/api/v2/tail/disarm") op = Operation::Disarm;
   else { op = Operation::Stop; v2 = false; }
   if (!v2 || method != "POST") {
     const bool legacy = path == "/api/teleop" || path == "/api/angle" ||

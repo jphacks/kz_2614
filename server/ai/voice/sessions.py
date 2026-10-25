@@ -155,9 +155,9 @@ class VoiceSessions:
     async def _start_playback_tail(self, lease: TailLease) -> None:
         try:
             await lease.call_tap(lambda: self._tail_control.tap(lease, 5.0), 5.0, playback=True)
-        except Exception:
+        except Exception as exc:
             # A blocked or failed first attempt never retries on duplicate notifications.
-            pass
+            logger.warning("tail_playback_start_failed error_type=%s", type(exc).__name__)
 
     def _submit(self, coroutine: Any):
         loop = self._loop
@@ -168,8 +168,10 @@ class VoiceSessions:
     async def _create_pipeline(self) -> VoicePipeline:
         return VoicePipeline()
 
-    def _invalidate_tail_locked(self, session: VoiceSession) -> None:
-        ticket = self._tail_control.revoke_session(session.session_id, session.tail_lease)
+    def _invalidate_tail_locked(self, session: VoiceSession, *, release: bool = False) -> None:
+        if session.tail_lease is None and not release:
+            return
+        ticket = self._tail_control.revoke_session(session.session_id, session.tail_lease, release=release)
         if ticket is not None and self._loop is not None and not self._loop.is_closed():
             self._loop.call_soon_threadsafe(
                 lambda: self._tail_control.schedule_stop(ticket)
@@ -185,7 +187,7 @@ class VoiceSessions:
                 self._retire_locked(session, cancel_task=False)
 
     def _retire_locked(self, session: VoiceSession, *, cancel_task: bool = True) -> None:
-        self._invalidate_tail_locked(session)
+        self._invalidate_tail_locked(session, release=True)
         session.active = False
         session.generation += 1
         session.speeches.clear()
@@ -228,6 +230,15 @@ class VoiceSessions:
 
         try:
             pipeline = self._submit(self._create_pipeline()).result(timeout=10)
+            with self._lock:
+                session.pipeline = pipeline
+            if (self._tail_control.preparation_enabled()
+                    and pipeline.llm.config.tail_mcp_enabled):
+                def owns_session():
+                    with self._lock:
+                        return session.active and session.generation == 0
+                lease = self._tail_control.lease(session_id, 0, "", owns_session)
+                self._submit(self._tail_control.prepare_session(lease)).result(timeout=12)
         except FutureTimeoutError as exc:
             with self._lock:
                 self._retire_locked(session)

@@ -41,9 +41,10 @@ int main() {
     if (cJSON_IsNumber(field(input, "now_ms"))) now = field(input, "now_ms")->valuedouble;
     int status = 200;
     std::string json;
-    if (action == "reboot" || action == "prepared_boot") {
+    if (action == "reboot" || action == "prepared_boot" || action == "session_boot") {
       tail_v2::Configuration cfg;
-      if (action == "prepared_boot") { h.boots = 0; cfg = {true, true, true, 0, 180, 90000}; }
+      if (action == "prepared_boot" || action == "session_boot") { h.boots = 0; cfg = {true, true, true, 0, 180, 90000}; }
+      if (action == "session_boot") cfg = {false, true, false, 0, 180, 90000, true};
       c.reset(new tail_v2::Controller(epoch, writePwm, &h, cfg));
     } else if (action == "configure") {
       int low = cJSON_IsNumber(field(input, "low")) ? field(input, "low")->valueint : 0;
