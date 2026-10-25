@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 
-// Read only this checkout's explicit server-side setting; never expose it to clients.
+// Team LAN default for development only; explicit settings stay server-side.
+const DEFAULT_VOICE_API_UPSTREAM = 'http://192.168.100.113:8765';
 export function voiceUpstream(env = process.env, file = new URL('../.env.local', import.meta.url)) {
   let value;
   if (Object.hasOwn(env, 'VOICE_API_UPSTREAM')) value = env.VOICE_API_UPSTREAM;
@@ -9,6 +10,8 @@ export function voiceUpstream(env = process.env, file = new URL('../.env.local',
     try { value = parseEnv(readFileSync(file, 'utf8')).VOICE_API_UPSTREAM; }
     catch (error) { if (error.code !== 'ENOENT') throw new Error('Cannot read apps/hossy-web/.env.local'); }
   }
+  // Missing configuration uses the requested PC; an explicit empty value disables it.
+  value ??= DEFAULT_VOICE_API_UPSTREAM;
   if (!value) return undefined;
   let url;
   try { url = new URL(value); } catch { /* Report without disclosing the setting. */ }

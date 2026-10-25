@@ -3,8 +3,8 @@
 ## 音声接続先の保存と診断（2026-10-25）
 
 - 他メンバーの起動時にも接続先未設定/到達不能を一律にJSONエラーとしない修理。基点mainは`d0ceb31`（AI再生連動PR #30統合後）、作業は分離branch`fix/voice-api-setup`。
-- APIパスは同一originのまま。devは製品WebのGit対象外`.env.local`に接続先を保存し、起動環境を優先する。未設定/転送障害はno-store JSON、認証/上流APIの応答は保持。previewは静的専用、既知PCのIPを既定値にしない。
-- [起動手順](docs/setup/hossy-web.md)に初回設定、環境変数の優先順位、Composeとの違いを記載。文書/模擬検証と公開配備を区別し、稼働Web・音声PC・実機は変更しない。
+- APIパスは同一originのまま。devは追加指定により`http://192.168.100.113:8765`を既定にする。起動環境 → Git対象外`.env.local` → 既定値の順で、明示的な空文字は接続無効。無効/転送障害はno-store JSON、認証/上流API応答は保持。previewは静的専用。公開CT/ComposeにはLAN既定値を適用しない。
+- [起動手順](docs/setup/hossy-web.md)に既定値の変更方法、環境変数の優先順位、Composeとの違いを記載。文書/模擬検証と公開配備を区別し、稼働Web・音声PC・実機は変更しない。
 
 
 ## AI音声再生に連動するしっぽ（2026-10-25 追加指定）

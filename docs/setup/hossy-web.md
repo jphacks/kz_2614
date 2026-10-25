@@ -12,38 +12,35 @@
 
 音声のAPIパス`/api/v1/voice/`は固定です。一方、音声PCのIP/ホスト名・ポートは環境ごとの設定です。Webが別PCで動く場合、`127.0.0.1`はそのWebのPCを指します。他メンバーの接続先をそのまま使う前に、現在の音声PCへ到達できることを確認してください。
 
-Node.js 22.22.0以上、npmを用意し、リポジトリルートから実行します。
+Node.js 22.22.0以上、npmを用意し、リポジトリルートから実行します。2026-10-25の利用者指定により、開発時は設定なしで **`http://192.168.100.113:8765`** を使います。
 
 ```bash
 cd apps/hossy-web
 npm ci
-# 初回だけ作る。既存の接続設定は上書きしない。
+npm run dev -- --host 127.0.0.1
+```
+
+`http://127.0.0.1:4321/`を開きます。画面の開始前確認は同一originの`/api/v1/voice/status`を経由して指定PCへ届きます。音声PC自体の起動やIPの自動探索は行いません。同じLAN等から到達できる必要があります。
+
+別の接続先を使う場合だけ、次のファイルを作ります。既存設定は上書きしません。
+
+```bash
 if [ ! -f .env.local ]; then cp .env.example .env.local; fi
 ```
 
-Windows PowerShellの場合も同じフォルダーで作成できます。
+Windows PowerShellの場合:
 
 ```powershell
 if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
 ```
 
-`.env.local`の`VOICE_API_UPSTREAM=`に、**Webを動かすPCから到達確認した音声サーバーのorigin**を保存します。同じPCに音声サーバーがある場合だけ、次の設定を使用します。
+`.env.local`の`VOICE_API_UPSTREAM`へ、Webを動かすPCから到達する音声サーバーのoriginを保存します。音声サーバーも同じPCで動く場合だけ、`VOICE_API_UPSTREAM=http://127.0.0.1:8765`に変更します。IPが変わればこの設定も更新してください。
 
-```dotenv
-VOICE_API_UPSTREAM=http://127.0.0.1:8765
-```
+優先順位は **プロセス環境の`VOICE_API_UPSTREAM` → このアプリの`.env.local` → 既定値`http://192.168.100.113:8765`**。ファイルやキーがない場合は既定値を使い、明示的な空文字は接続を無効化します。古い空欄テンプレートの`.env.local`を作成済みなら値を設定してください。意図しない環境変数はmacOS/Linuxの`unset VOICE_API_UPSTREAM`、PowerShellの`Remove-Item Env:VOICE_API_UPSTREAM -ErrorAction SilentlyContinue`で除いてから起動します。
 
-別PCなら実際のLAN IPまたは名前解決できるホスト名を指定します。テンプレートは空欄で、自動探索や特定PCへの既定接続はしません。IPが変わる環境ではファイルを更新するか、管理された固定割当/ホスト名を使います。保存後は毎回次のコマンドで起動でき、接続先を入力し直す必要はありません。
+設定変更後は開発サーバーを再起動してください。Windowsでは必要に応じて`npm.cmd`を使います。別clone/worktreeの私有設定は自動共有しません。devはCompose用`.env`を読みません。この既定値はdev専用で、公開CT/Composeは到達可能な接続先を明示設定します。CTからLAN内のIPへ経路がない問題は、この設定では解消しません。
 
-```bash
-npm run dev -- --host 127.0.0.1
-```
-
-`http://127.0.0.1:4321/`を開きます。Windowsでは必要に応じて`npm.cmd`に読み替えます。接続設定を変更したら、その開発サーバーを再起動してください。別clone/worktreeの設定は自動共有しません。
-
-設定の優先順位は **プロセス環境の`VOICE_API_UPSTREAM` → このアプリの`.env.local`**。環境変数が空文字で設定されている場合もそちらを優先し、接続を無効化します。意図しない上書きはmacOS/Linuxの`unset VOICE_API_UPSTREAM`、PowerShellの`Remove-Item Env:VOICE_API_UPSTREAM -ErrorAction SilentlyContinue`で除いてから起動します。このdev設定ではCompose用`.env`を接続先ファイルとして読みません。
-
-`VOICE_API_UPSTREAM`は`http(s)://host[:port]`のoriginのみ。パス、末尾スラッシュ、資格情報、queryを含む値は起動時に拒否します。`.env.local`はGit/Dockerへのコピー対象外で、接続先をクライアントJSに埋め込みません。ブラウザーは同一originのAPIだけを呼びます。未設定は503 JSON、接続不能/タイムアウトは502/504 JSONで返し、開始失敗のまま理由を表示します。音声サーバーを自動起動する機能ではありません。
+`VOICE_API_UPSTREAM`には`http(s)://host[:port]`のoriginのみを指定します。**`/api/v1/voice/status`などのパスは付けません。** 末尾スラッシュ、資格情報、queryも起動時に拒否します。`.env.local`はGit/Dockerへのコピー対象外で、接続先をクライアントJSに埋め込みません。ブラウザーは同一originのAPIだけを呼びます。明示的な空設定は503 JSON、接続不能/タイムアウトは502/504 JSONで返し、開始失敗のまま理由を表示します。
 
 ```bash
 npm run build
@@ -54,7 +51,7 @@ npm run preview -- --host 127.0.0.1
 
 ## 別PCで音声サーバーを動かす場合
 
-`127.0.0.1`はコマンドを実行する機械自身です。WebがMac、音声が別PCなら、Webの転送先には音声PCのLANアドレスを指定します。以下の`192.168.100.113`は2026-10-25の確認値であり、固定値ではありません。ネットワーク変更後は再確認してください。
+`127.0.0.1`はコマンドを実行する機械自身です。WebがMac、音声が別PCなら、Webの転送先には音声PCのLANアドレスを指定します。`192.168.100.113`は2026-10-25に指定されたdev既定値です。実際のPCのIPが固定される保証はないので、ネットワーク変更後は再確認してください。
 
 まず**音声PC側**で、サーバー自身の応答と待受を確認します（Ubuntu）。
 
@@ -79,8 +76,7 @@ curl -i --connect-timeout 3 --max-time 5 http://192.168.100.113:8765/api/v1/voic
 200 JSONを確認後、Mac側の`apps/hossy-web`で起動します。既に起動中なら、転送先変更前にその開発サーバーを停止します。今回使用したAstro CLIはバックグラウンドで起動し、同ディレクトリの`./node_modules/.bin/astro dev status` / `./node_modules/.bin/astro dev stop`で確認/停止できました。前面実行の環境では起動ターミナルのCtrl+Cを使います。
 
 ```bash
-# .env.localに保存（当日のIP例。現在値へ置き換える）
-# VOICE_API_UPSTREAM=http://192.168.100.113:8765
+# 既定の音声PCなら追加設定不要。変更時のみ.env.localで上書きする。
 npm run dev -- --host 127.0.0.1
 ```
 

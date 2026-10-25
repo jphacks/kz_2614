@@ -24,7 +24,12 @@ try {
   assert.equal(voiceUpstream({}, file), 'http://127.0.0.1:8765');
   assert.equal(voiceUpstream({ VOICE_API_UPSTREAM: '' }, file), undefined);
   assert.equal(voiceUpstream({ VOICE_API_UPSTREAM: 'https://voice.test' }, file), 'https://voice.test');
-  assert.equal(voiceUpstream({}, join(temp, 'absent')), undefined);
+  assert.equal(voiceUpstream({}, join(temp, 'absent')), 'http://192.168.100.113:8765');
+  writeFileSync(file, '# No voice override\nOTHER_PRIVATE=secret\n');
+  assert.equal(voiceUpstream({}, file), 'http://192.168.100.113:8765');
+  writeFileSync(file, 'VOICE_API_UPSTREAM=\n');
+  assert.equal(voiceUpstream({}, file), undefined);
+  assert.equal(voiceUpstream({ VOICE_API_UPSTREAM: 'https://voice.test' }, file), 'https://voice.test');
   for (const invalid of ['http://user:secret@host', 'http://host/path', 'http://host?x', 'http://host#x', 'http://host:99999', ' http://host', 'http://host\n']) assert.throws(() => voiceUpstream({ VOICE_API_UPSTREAM: invalid }, file));
   assert.equal(process.env.OTHER_PRIVATE, undefined);
   const disabled = await dev(undefined);
@@ -108,7 +113,7 @@ try {
     assert.equal(requests.length, beforePreview, 'Static preview must never inherit dev proxy');
   } finally { if (saved === undefined) delete process.env.VOICE_API_UPSTREAM; else process.env.VOICE_API_UPSTREAM = saved; }
   console.log('Actual Astro config: checkout .env.local dev forwarding and static preview no-proxy PASS');
-  console.log('Product dev proxy: persisted setting/override, missing503, dead502, timeout504, broken-stream termination, auth/error passthrough, exact routes, streaming POST and headers PASS');
+  console.log('Product dev proxy: team default/missing key, persisted setting/override, explicit empty503, dead502, timeout504, broken-stream termination, auth/error passthrough, exact routes, streaming POST and headers PASS');
 } finally {
   for (const server of servers.reverse()) await new Promise(resolve => { if (server.httpServer) server.close().then(resolve); else server.close(resolve); });
   rmSync(temp, { recursive: true, force: true });
