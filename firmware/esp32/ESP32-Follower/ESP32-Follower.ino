@@ -10,6 +10,14 @@
 #include <math.h>
 #include "WiFiConfig.h"
 #include "TailConfig.h"
+#include "TailServoMapping.h"
+
+// Existing private configurations retain their original motion width.
+#ifndef TAIL_MOTION_AMPLITUDE_PERCENT
+#define TAIL_MOTION_AMPLITUDE_PERCENT 100
+#endif
+static_assert(TAIL_MOTION_AMPLITUDE_PERCENT >= 100 && TAIL_MOTION_AMPLITUDE_PERCENT <= 150,
+              "Tail motion amplitude must be between 100 and 150 percent");
 
 // ESP32 DevKit / ESP32 Dev Module. Power all SG90s from a separate 4.8-6 V supply.
 // The Reader's 0-180 target is divided equally over three serial joints.
@@ -18,7 +26,6 @@ constexpr uint8_t ADDITIONAL_SERVO_PINS[] = {19, 21};
 constexpr size_t ADDITIONAL_SERVO_COUNT = sizeof(ADDITIONAL_SERVO_PINS) /
     sizeof(ADDITIONAL_SERVO_PINS[0]);
 constexpr uint16_t NEUTRAL_PULSE_US = 1500;
-constexpr int JOINT_COUNT = 3;
 // Many ESP32 boards wire their user LED to GPIO2. Use an external LED if yours does not.
 constexpr uint8_t ROLE_LED_PIN = 2;
 constexpr bool ROLE_LED_ACTIVE_HIGH = true;
@@ -117,16 +124,9 @@ bool writeAllServosPulse(uint16_t pulseUs, int finalAngle) {
 }
 
 bool writeServoAngle(int angle) {
-  // Each joint moves one third of the full servo span around 1500 us.
-  // 0 / 90 / 180 final degrees -> 1200 / 1500 / 1800 us with 600-2400 calibration.
-  const int32_t offsetUs = (static_cast<int32_t>(angle - MAX_ANGLE / 2) *
-      (maxPulseUs - minPulseUs)) / (MAX_ANGLE * JOINT_COUNT);
-  int32_t pulseUs = NEUTRAL_PULSE_US + offsetUs;
-  if (angle < MAX_ANGLE / 2) {
-    pulseUs -= (static_cast<int32_t>(curlExtraUs) *
-        (MAX_ANGLE / 2 - angle)) / (MAX_ANGLE / 2);
-  }
-  return writeAllServosPulse(static_cast<uint16_t>(pulseUs), angle);
+  const uint16_t pulseUs = tail_servo::pulseForAngle(
+      angle, minPulseUs, maxPulseUs, curlExtraUs, TAIL_MOTION_AMPLITUDE_PERCENT);
+  return writeAllServosPulse(pulseUs, angle);
 }
 
 bool centerAllServos() {
@@ -217,6 +217,8 @@ bool validPulseRange(int minimum, int maximum) {
 }
 
 void printPulseRange() {
+  Serial.print("Motion amplitude percent: ");
+  Serial.println(TAIL_MOTION_AMPLITUDE_PERCENT);
   Serial.print("Servo pulse min/max: ");
   Serial.print(minPulseUs);
   Serial.print('/');
@@ -355,10 +357,8 @@ void makeEpoch(void*, char* output) {
 
 bool writeV2Angle(void*, int32_t milliAngle) {
   // Preserve the existing individual pulse calibration, with sub-degree motion.
-  int32_t pulse = NEUTRAL_PULSE_US + static_cast<int64_t>(milliAngle - 90000) *
-      (maxPulseUs - minPulseUs) / (180000 * JOINT_COUNT);
-  if (milliAngle < 90000) pulse -= static_cast<int64_t>(curlExtraUs) *
-      (90000 - milliAngle) / 90000;
+  const uint16_t pulse = tail_servo::pulseForMilliAngle(
+      milliAngle, minPulseUs, maxPulseUs, curlExtraUs, TAIL_MOTION_AMPLITUDE_PERCENT);
   return writeAllServosPulse(pulse, (milliAngle + 500) / 1000);
 }
 

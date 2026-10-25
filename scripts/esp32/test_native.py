@@ -22,12 +22,13 @@ build = Path(tempfile.mkdtemp(prefix='esp32-v2-native-'))
 flags = ['-g', '-O1', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-fno-pie']
 subprocess.run([os.environ.get('CC', 'cc'), *flags, '-c', str(a.cjson_dir / 'cJSON.c'), '-o', str(build / 'cjson.o')], check=True)
 include = REPO / 'firmware/esp32/ESP32-Follower'
-for name in ['tail_v2_runner', 'tail_v2_concurrency', 'tail_v2_http']:
+for name in ['tail_v2_runner', 'tail_v2_concurrency', 'tail_v2_http', 'tail_servo_mapping']:
     subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', *flags, '-no-pie',
                     '-I', str(include), '-I', str(a.cjson_dir), '-I', str(REPO / 'tests/esp32/stubs'), str(REPO / f'tests/esp32/{name}.cpp'),
                     str(build / 'cjson.o'), '-o', str(build / name)], check=True)
 subprocess.run([str(build / 'tail_v2_concurrency')], check=True)
 subprocess.run([str(build / 'tail_v2_http')], check=True)
+subprocess.run([str(build / 'tail_servo_mapping')], check=True)
 env = {**os.environ, 'TAIL_V2_RUNNER': str(build / 'tail_v2_runner')}
 if a.pc_worktree:
     env['TAIL_V2_PC_WORKTREE'] = str(a.pc_worktree.resolve())

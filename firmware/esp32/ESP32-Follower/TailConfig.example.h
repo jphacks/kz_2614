@@ -10,3 +10,7 @@ constexpr int TAIL_TAP_START_ANGLE = 90;
 constexpr int TAIL_TAP_END_ANGLE = 90;
 // Raise only after checking the mechanism at the higher speed.
 constexpr double TAIL_TESTED_MAX_RATE_HZ = 0.3;
+
+// 100 preserves the original width. Up to 150 expands around neutral within
+// saved pulse limits. Increase only with the operator observing the mechanism.
+#define TAIL_MOTION_AMPLITUDE_PERCENT 100

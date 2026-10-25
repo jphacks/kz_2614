@@ -1,5 +1,33 @@
 # JPHACKS 制作作業・会話履歴
 
+## Followerの振れ幅調整（2026-10-25）
+
+- 利用者が従来の試験で物理的なしっぽの動きを確認し、方向を維持した振れ幅拡大を依頼。main `2a14c766d5d7f19199da908c895892b56fb433f5` を基点に、100〜150%の私用設定を追加した。既定100%は従来と同じPWM。
+- 手元準備とv2のミリ度出力を共通変換にし、1500µsを中心に丸まり補正込みの偏差を拡大。保存済みmin/maxで制限し、方向・中立・NVS校正値を保持。v2 wire契約・0.3回/秒・有限時間・予算・停止フェンスは変更なし。個体の設定値はGitに含めない。
+- GCC 15.2 / ASan・UBSan・LSanで、角度変換の全校正組合せと最大幅の全ミリ度、従来100%の一致、単調性・中立・上下限を検証。既存24テスト（skip 0）、500競合＋排他、HTTP 7ケースも成功。制限環境でLSanが実行できなかった初回を合格とせず、ホスト環境で全再実行した。
+- Arduino CLI 1.5.1 / core 3.3.12の私用ビルド成功（Flash 988379 bytes、RAM 47996 bytes）。Followerを識別し、直前アプリを保存済みバイナリと照合してからアプリ領域だけ更新。partition/OTA/NVSは読み戻しでバイト単位一致。起動診断で増幅版を確認し、操作者が許可した準備を行った。
+- 新epochに合わせて音声サービスを再起動。合成テスト音声「コンコンして。」を実STTで認識し、MCPの受付1回、実機tapping→約5秒後idle、LLM返答・TTS生成・DELETEのcommand_stoppedまで成功（合計17.739秒）。拡大後の見え方は操作者確認待ち。
+
+## 既存音声画面とv2 Followerの実接続（2026-10-25）
+
+- 利用者は新しいESP32を維持する構成を選び、サーバー切替・再起動・サーボ動作を承認した。main `2a14c766d5d7f19199da908c895892b56fb433f5` のPCバックエンドを独立起動先へ展開し、以前の音声画面をファイル内容一致で再利用。元checkout・設定・モデルを保全。
+- FollowerのシリアルとHTTPのepoch一致確認後、手元準備を実行してstart_enabled=trueを確認。ファーム・校正は変更していない。
+- 音声試行でGPUメモリ不足が発生。停止済みLM Studioの孤立モデルを識別して終了し、LLMのGPU offloadを減らして解消した。
+- 合成した短いテスト音声を実音声HTTPへ投入し、実STT→音声所有MCP tap_tail受付1回→実Follower tapping→約5秒後idle→LLM返答/TTS音声取得→DELETEのcommand_stoppedを確認。合計14.747秒、返答WAV 368684 bytes。
+- 実マイク・ブラウザー再生・物理サーボの最終観察は操作者確認待ち。合成音声のAPI試験と区別する。秘密設定・個体値・音声はGitへ追加していない。
+
+## Follower main 2a14c76 の実機配備・状態API確認（2026-10-25）
+
+利用者の書込み依頼に基づき、最新origin/main `2a14c766d5d7f19199da908c895892b56fb433f5` のFollowerを対象個体へ書き込んだ。Happy-Emoriはclean状態からfast-forwardし、他checkoutの未コミット・未push作業を保持した。Readerと音声サービスには変更なし。
+
+事前に旧状態APIから設定を確認し、識別済みのFollower全4MiBを非公開領域へ退避。高速読取りは途中失敗したため115200bpsで完全取得し、サイズ・SHA-256を記録。保存済みWi-Fi設定をNVSからローカルに復元し、旧アプリ内の値とも一致を確認。校正値はNVSのまま保持し、Tail設定も旧状態APIで観測した値を引き継いだ。個体設定・認証情報・バックアップはGit管理外。
+
+指定SHAのソースをそのまま使い、Arduino CLI 1.5.1 / Arduino-ESP32 3.3.12の実設定ビルドが成功（Flash 988207 bytes、RAM 47996 bytes）。既存のpartition配置とflash設定の一致を検査し、標準の4領域だけを書き込んだ。全消去・merged全領域イメージの書込みなし。esptoolの書込みhash検証成功後、再起動前にNVS全領域を読み戻し、書込み前とバイト単位で完全一致した。
+
+通常起動後、同じWi-Fiへ接続し、実機の `GET /api/v2/tail/state` はHTTP 200・Content-Type application/json・Cache-Control no-store。`protocol_version=2, control_mode=v2_exclusive, revision=0, session_id=null, phase=closed, motion=idle, start_enabled=false, calibrated=true` を確認した。
+
+実施範囲は書込み・設定保全・状態読取りまで。serial a、open/tapなどの動作指令は送っていない。機構の動作、速度・電流、物理停止時間、再起動をまたぐ遅着要求、PC音声からの通し受け入れは引き続き未実施。動作試験は操作者・対象機器を確認し、手元準備後に既存のMVP v2試験手順で行う。
+
 ## Web・PC・ESP32のMVP修理を統合（2026-10-25）
 
 - 利用者の「完成した修理をすべてmainへ統合」の指定で、独立checkoutの `integration/mvp-repairs-20261025` に通常mergeした。参照main: `6c4dd226cc4ba1912124c1e1affe0ea0b8603625`。稼働checkout・サービス・非公開設定・モデル・実機は操作しない。
