@@ -1,12 +1,14 @@
 # 製品Webアプリの仕様
 
-更新日: 2026-10-25。最新HOSSy UIを保持し、`apps/web/voice_call.js` の共有音声処理を製品画面へ接続した実装です。以下はソース上の契約で、公開サイトや実マイクの受け入れ完了を意味しません。[使い方](../web/usage.md) / [起動・転送設定](../setup/hossy-web.md)。
+> **仕様の対象（2026-10-25）**: [PR #25](https://github.com/jphacks/kz_2614/pull/25) の製品Web MVPと、main `a5ed09d`の仕様整理を統合した版です。以下の音声接続・保存・停止処理は本版の実装を指します。公開サイトへの配備・実機受け入れは別途必要です。
+
+更新日: 2026-10-25。最新HOSSy UIを保持し、`apps/web/voice_call.js` の共有音声処理を製品画面へ接続した実装です。以下はソース上の契約で、公開サイトや実マイクの受け入れ完了を意味しません。[PR #25の使い方](https://github.com/jphacks/kz_2614/blob/e39aebbe1e71281c88d2c42580a088b01c1b46b6/docs/web/usage.md) / [PR #25の起動・転送設定](https://github.com/jphacks/kz_2614/blob/e39aebbe1e71281c88d2c42580a088b01c1b46b6/docs/setup/hossy-web.md)。
 
 ## 公開先と境界
 
-[公開ホーム](https://hiroron-jphacks2026.hiroron.net/) / [#diary](https://hiroron-jphacks2026.hiroron.net/#diary)。未ログインAPI状態要求は401 text/html。Passportログイン後のUI、公開版とソースの一致、API upstream、音声往復は未確認です。8765番の `apps/web` は別の管理画面です。
+[公開ホーム](https://hiroron-jphacks2026.hiroron.net/) / [#diary](https://hiroron-jphacks2026.hiroron.net/#diary)。未ログインAPI状態要求は401 text/html。Passportログイン後のUI、公開版とソースの一致、公開配信側のAPI upstream設定・到達経路、音声往復は未確認です。8765番の `apps/web` は別の管理画面です。
 
-製品Webは同一originの音声APIを使い、Astro devまたはNginx側で明示したupstreamへ転送します。管理者共通のdashboard settingsは個人設定へ接続しません。本人識別・人形所有権・BLE・接触センサー・AI/他者フィードバックモードの実APIは未実装で、利用不可表示/disabledを維持します。ブラウザー会話が人形を動かすとは表示しません。
+製品Webは同一originの音声APIを使い、Astro devまたはNginx側で明示したupstreamへ転送します。API契約と音声PCのHTTP 8765番は定義済みです。未確認なのは公開配信側の実際の転送設定・PCへの疎通であり、API仕様そのものが未確定という意味ではありません。[PC側の接続記録](../setup/local-pc.md)を参照します。管理者共通のdashboard settingsは個人設定へ接続しません。本人識別・人形所有権・BLE・接触センサー・AI/他者フィードバックモードの実APIは未実装で、利用不可表示/disabledを維持します。ブラウザー会話が人形を動かすとは表示しません。
 
 ## 画面
 
@@ -42,11 +44,11 @@ SWは静的許可リストのみを対象にし、API・認証callback・音声�
 
 ## 検証と残作業
 
-NodeのWeb試験18スクリプト（既存12・Worklet2・製品4）と最終ビルドが成功し、共有3資産の一致を確認しました。ブラウザーではAPI未設定時の開始拒否、15分設定の再読込後保持、マイク停止表示、利用不可モードを確認しました。これらは実音声往復の成功ではありません。詳細は [開発履歴](../development/work-history.md) に記録します。実マイク・公開認証後経路・実機PWA・ESP32・Docker実行・公開デプロイは未検証です。過去の画面内タイマー操作結果は下の履歴であり、現在のマイク会話成功へ読み替えません。
+NodeのWeb試験18スクリプト（既存12・Worklet2・製品4）と最終ビルドが成功し、共有3資産の一致を確認しました。ブラウザーではAPI未設定時の開始拒否、15分設定の再読込後保持、マイク停止表示、利用不可モードを確認しました。これらは実音声往復の成功ではありません。詳細は [PR #25の検証履歴](https://github.com/jphacks/kz_2614/blob/e39aebbe1e71281c88d2c42580a088b01c1b46b6/docs/development/work-history.md) に記録済みです。今回の仕様書更新で試験を再実行した結果ではありません。実マイク・公開認証後経路・実機PWA・ESP32・Docker実行・公開デプロイは未検証です。過去の画面内タイマー操作結果は下の履歴であり、現在のマイク会話成功へ読み替えません。
 
 ## OneDev同期前の操作確認記録（2026-10-25）
 
-以下は旧ソース`b300ac8`を含むGitHub版の操作記録です。最新`caf3541`の今回の確認は、ビルド・JS構文・一時HTTP配信・元ファイル一致です。ブラウザーによる操作試験の再実行結果とは区別します。
+以下は旧ソース`b300ac8`を含むGitHub版の操作記録です。OneDev同期時の`caf3541`の確認は、ビルド・JS構文・一時HTTP配信・元ファイル一致です。ブラウザーによる操作試験の再実行結果とは区別します。
 
 `npm ci --ignore-scripts` と `npm run build` の成功後、一時ローカル配信 `http://127.0.0.1:18765/` で次を操作確認しました。
 
@@ -59,6 +61,6 @@ NodeのWeb試験18スクリプト（既存12・Worklet2・製品4）と最終ビ
 
 ## 現行MVPの手動受け入れ
 
-[公開結合テスト表](../demo.md#公開製品webの結合テスト準備)で、認証→API→マイク準備→音声往復/割込み→停止/日記を確認します。保存失敗、他タブ、非表示、期限、認証失効、オフラインは正常系と分け、端末停止とサーバー応答を記録してください。PWA実機も別途確認します。
+[PR #25の公開結合テスト表](https://github.com/jphacks/kz_2614/blob/e39aebbe1e71281c88d2c42580a088b01c1b46b6/docs/demo.md#公開製品webの結合テスト準備)で、認証→API→マイク準備→音声往復/割込み→停止/日記を確認します。保存失敗、他タブ、非表示、期限、認証失効、オフラインは正常系と分け、端末停止とサーバー応答を記録してください。PWA実機も別途確認します。
 
-[起動手順](../setup/hossy-web.md) / [統合仕様](system.md) / [処理フロー](../architecture.md)
+[PR #25の起動手順](https://github.com/jphacks/kz_2614/blob/e39aebbe1e71281c88d2c42580a088b01c1b46b6/docs/setup/hossy-web.md) / [統合仕様](system.md) / [処理フロー](../architecture.md)

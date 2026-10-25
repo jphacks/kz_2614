@@ -6,7 +6,7 @@
 
 [公開ホーム](https://hiroron-jphacks2026.hiroron.net/) / [ダイアリー](https://hiroron-jphacks2026.hiroron.net/#diary)。公開URLは利用者指定です。未ログインの `GET /api/v1/voice/status` は401・text/htmlで、Passport認証後のUI・API転送先・実際の配信版は未確認です。ログイン画面への到達を音声API成功とは扱いません。
 
-ブラウザーは同一originの `/api/v1/voice/` と `/api/v1/dashboard/runtime` にアクセスします。配信サーバー側からPC音声サーバーへ転送する経路を担当者と確認してください。公開HTTPSからブラウザーがPCのHTTPへ直接接続する設定にはしません。upstreamは不明であり、この変更は公開サイトへのデプロイ・認証設定・サーバー再起動を含みません。
+ブラウザーは同一originの `/api/v1/voice/` と `/api/v1/dashboard/runtime` にアクセスします。配信サーバー側からPC音声サーバーへ転送する経路を担当者と確認してください。公開HTTPSからブラウザーがPCのHTTPへ直接接続する設定にはしません。音声サービスはPCのHTTP 8765番と定義済みで、公開配信側の具体的なupstream設定と到達性は未確認です。この変更は公開サイトへのデプロイ・認証設定・サーバー再起動を含みません。
 
 ## ローカル開発
 

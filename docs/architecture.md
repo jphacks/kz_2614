@@ -1,10 +1,12 @@
 # 現在の構成と処理フロー
 
+> **仕様の対象（2026-10-25）**: [PR #25](https://github.com/jphacks/kz_2614/pull/25) の製品Web MVPと、main `a5ed09d`の仕様整理を統合した版です。以下の音声接続・保存・停止処理は本版の実装を指します。公開サイトへの配備・実機受け入れは別途必要です。
+
 [統合仕様書](requirements/system.md) / [ESP32機器仕様](requirements/esp32.md) / [機器HTTP API](api/esp32-http.md)。EMORIの6図は機器仕様・MCP統合・API側に保持しています。
 
 2026-10-25追記: 仕様整理の内容を保ち、公開用のapps/server/firmware/docs配置へリンク・参照先を移行しました。担当と配置は [分担表](development/ownership.md) を参照してください。
 
-更新日: 2026-10-25。PC音声の公開配置9036cce、統合仕様f6b0055、HOSSy製品Web107b762、EMORI記録61bf53dを照合しています。製品Webは最新UIを保持し、共有音声クライアントから同一originのAPIへ接続するMVPを実装しています。実音声・公開経路は未検証です。
+更新日: 2026-10-25。main aae38fbのPC/機器仕様と、最新HOSSy UI 2fc13cf・Web MVP e39aebbを照合しています。製品Webは最新UIを保持し、共有音声クライアントから同一originのAPIへ接続するMVPを実装しています。実音声・公開経路は未検証です。
 
 [仕様書一覧](README.md) / [サーバー要件](requirements/server.md) / [端末要件](requirements/clients.md)
 
@@ -33,7 +35,7 @@ flowchart TB
         Servo[SG90 × 3]
     end
     Product --> BrowserData[端末内の選択・開始終了時刻・理由]
-    Product <-->|同一origin経由のPCM・NDJSON / 転送設定必須| HTTP
+    Product <-->|同一originのPCM・NDJSON / 転送設定必須| HTTP
     Web <-->|PCM入力・NDJSON出力| HTTP
     Android <-->|TCP v1| TCP
     VoiceESP <-->|TCP v1| TCP
@@ -217,4 +219,4 @@ flowchart TD
     Routine --> Voice[共有音声クライアント / 同一origin API]
 ```
 
-製品Webの保存先は配信originごとのlocalStorageです。音声管理Webの設定保存先server/api/dataとは別です。SWは静的許可リストのみを保存し、API・認証・音声を除外します。[画面仕様](requirements/web-product.md) / [起動とPWA](setup/hossy-web.md)。
+製品Webの保存先は配信originごとのlocalStorageです。音声管理Webの設定保存先server/api/dataとは別です。SWは静的許可リストのみを保存し、API・認証・音声を除外します。[画面仕様](requirements/web-product.md) / [PR #25の起動とPWA](https://github.com/jphacks/kz_2614/blob/e39aebbe1e71281c88d2c42580a088b01c1b46b6/docs/setup/hossy-web.md)。
