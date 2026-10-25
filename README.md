@@ -1,5 +1,7 @@
 # ねんぎつね（仮）
 
+今回の共通仕様・修理順・合格条件は **[MVP.md](MVP.md)**。対象は「スマホで会話＋しっぽトントン＋停止＋利用記録」です。各ブランチから [最新mainの正本](https://github.com/jphacks/kz_2614/blob/main/MVP.md) を先に確認してください。
+
 **声で会話し、しっぽのトントンで寄り添う、きつね型の添い寝ロボット。**
 
 JPHACKS 2026 / チーム `kz_2614`
@@ -74,13 +76,13 @@ ESP32 Reader ─Wi-Fi→ ESP32 Follower → SG90 × 3
 
 | 担当 | 主な領域 | 変更する場所 |
 | --- | --- | --- |
-| **kameyama** | AI・音声パイプライン、サーバー側の会話・MCP連携 | `server/ai/`、`server/api/`、`docs/api/` |
-| **HOSSy** | 製品Web・PWA、音声画面・操作UI | `apps/hossy-web/`、`apps/web/`、`tests/web/` |
-| **EMORI** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、機器仕様・API、`docs/esp32/` |
+| **RyuuzinnRaika** | AI・音声パイプライン、サーバー側の会話・MCP連携 | `server/ai/`、`server/api/`、`docs/api/` |
+| **naminamina** | 製品Web・PWA、音声画面・操作UI | `apps/hossy-web/`、`apps/web/`、`tests/web/` |
+| **Happy-Emori** | ESP32 Reader/Follower、しっぽ制御・機器側API | `firmware/esp32/`、機器仕様・API、`docs/esp32/` |
 | 担当者名未指定（`namikawa_3Dprint`由来） | 3Dプリント用の筐体・取付部品 | [3Dprint/](3Dprint/README.md) |
 | 担当者名未指定 | Android音声クライアント | `apps/android/` |
 
-APIや音声形式の変更は双方の担当で確認します。詳細は [担当範囲と連携ルール](docs/development/ownership.md) を参照してください。
+takemi853の担当は未指定です。以前の呼称とGitHub名の本人一致は推測しません。APIや音声形式の変更は双方の担当で確認します。詳細は [担当範囲と連携ルール](docs/development/ownership.md) を参照してください。
 
 ## 起動・開発
 

@@ -1,5 +1,11 @@
 # ブランチ運用
 
+今回の共通仕様・修理順・合格条件は [MVP.md](../../MVP.md)。どのbranchからも [mainの正本](https://github.com/jphacks/kz_2614/blob/main/MVP.md) を参照します。読むだけなら切替/merge不要で、`git fetch origin`・`git rev-parse origin/main`・`git show origin/main:MVP.md` で同じ版を確認できます。
+
+取得済みの2026-10-25時点では、下表4本の公開先端は `aae38fb`、main `3b6a0c1` に対してbehind 8 / ahead 0です。各PCの未push作業は不明です。`HOSSY＿WEB` `2fc13cf` と `feature/web-product-mvp` `d1ab2b6` もmainの祖先です。これは取得時の記録であり、常に最新版をfetchして確認します。
+
+今回はmainの文書のみ更新し、他branchを書き換えません。修理前に未コミット作業を保全し、cleanな自branchで `git merge origin/main`。force/resetは禁止し、競合は双方を保持、判断不能なら `git merge --abort`。無関係なbranchの一括mergeは行いません。
+
 共有の統合先は `main` です。2026-10-25の利用者指定により、統合後のmainからcontributors名の4人分の作業ブランチを用意します。
 
 - 各メンバーは下表の作業ブランチを使う。個別の作業をさらに分ける場合は最新mainから `feature/<内容>` または `fix/<内容>` を作成する。
@@ -45,7 +51,7 @@ git switch --track origin/RyuuzinnRaika
 
 `feature/server-voice`（旧`kameyama`）、旧作業ブランチ、旧先端のarchiveタグは過去のPC側の記録です。今回取得した公開5ブランチと区別し、この専用cloneやリモートにすべて存在するとは扱いません。共同作業者のブランチは削除せず、force-push・履歴書換えを行いません。
 
-製品Webの音声API接続と会話MCPからESP32実機への接続は未完了です。ブランチの包含確認は機能の実機受け入れを意味しません。
+この統合作業当時は製品Webの音声API接続と会話MCPからESP32実機への接続が未完了でした。現在は製品Web音声接続コードをmainに収録し、公開配備・実スマホと会話MCP実機接続は未確認/未完了です。ブランチの包含確認は機能の実機受け入れを意味しません。
 
 ## 他のPCでの移行
 

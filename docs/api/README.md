@@ -2,6 +2,8 @@
 
 HTTP音声、TCP音声、PCの保存設定、ESP32機器のAPIは別契約です。同じ「しっぽ」の設定でも接続先と成功の意味を区別してください。
 
+今回の合格条件は [MVP.md](../../MVP.md)。PC/ESP32の修理目標は **[MVPしっぽ制御v2](mvp-tail-control-v2.md)（未実装）** に統一します。版確認、停止フェンス、遅着拒否とWebへの停止結果を定義し、現行v1とは区別します。担当はPC=RyuuzinnRaika、Web=naminamina、ESP32=Happy-Emoriです。下表の旧呼称は元資料の担当表記です。
+
 | 仕様 | 接続する相手 | 成功が示す範囲 | 関係担当 |
 | --- | --- | --- | --- |
 | [HTTP音声・連続PCM](voice-http.md) | Web ↔ PC HTTPサーバー | 入力受理・イベント配信・出力通知 | kameyama / HOSSy |

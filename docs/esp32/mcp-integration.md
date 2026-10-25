@@ -1,5 +1,7 @@
 # MCPの現状とESP32統合仕様
 
+**今回の対象・修理順・合格条件は [MVP.md](../../MVP.md) を優先します。** 現状の頻度2操作と、これから実装する有限tap・独立停止・機器側停止フェンスを区別します。PC/MCPの世代検査とstop再送だけでは遅着tapを防げません。PC/ESP32双方で [未実装v2契約](../api/mvp-tail-control-v2.md) に揃え、version/capability・epoch/世代・冪等command・停止後/再起動/次sessionの旧開始拒否を確認してから、mock→実機→Webの順に検証します。契約変更はmainの仕様PRを先に出します。旧APIに未対応キーを送らず、未対応機器の実機開始は無効です。以下の提案単体はこの新契約の実装済み説明ではありません。
+
 更新日：2026-10-25。実装基準：`9036cce`。 [入口](README.md) / [機器仕様](../requirements/esp32.md) / [Follower HTTP API](../api/esp32-http.md)
 
 ## 1. 現在のサーバーと提案を区別する

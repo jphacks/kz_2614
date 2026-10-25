@@ -1,10 +1,12 @@
 # 仕様書・開発資料
 
-PC音声・HOSSyの製品Web・EMORIの機器仕様と、`namikawa_3Dprint`由来の3Dプリント部品を整理しています。公開mainへの反映状況は [ブランチ一覧](development/branches.md) を参照してください。まず [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
+今回の範囲・境界・修理順・合格条件は **[MVP.md](../MVP.md)** を最初に確認します。全体計画は保持し、今回の合格ゲートにはMVP.mdを優先します。各branchから [最新main版](https://github.com/jphacks/kz_2614/blob/main/MVP.md) を参照してください。
+
+PC音声・HOSSyの製品Web・EMORIの機器仕様と、`namikawa_3Dprint`由来の3Dプリント部品を整理しています。公開mainへの反映状況は [ブランチ一覧](development/branches.md) を参照してください。次に [統合仕様書](requirements/system.md) を読むと、製品全体の動作・接続・担当・未完了事項を確認できます。
 
 ## 読む順序
 
-1. [統合仕様書](requirements/system.md)：何をするシステムか、どこまで接続できているか。
+1. [今回のMVP](../MVP.md)：対象・担当・境界・修理順・合格条件。続いて [統合仕様書](requirements/system.md)：何をするシステムか、どこまで接続できているか。
 2. [構成と処理フロー](architecture.md)：音声・割込み・通信復旧・MCP・保存をMermaidで確認。
 3. [要件一覧](requirements/README.md) / [API一覧](api/README.md)：担当する機能の詳細な契約と受け入れ条件。
 4. [環境構築](setup/server.md) / [ESP32導入](../firmware/esp32/README.md)：実行環境を準備。

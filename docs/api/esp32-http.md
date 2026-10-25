@@ -1,5 +1,7 @@
 # ESP32 Follower HTTP API仕様
 
+このページは現行v1の契約です。今回のMVP修理では [未実装のしっぽ制御v2](mvp-tail-control-v2.md) を正本としてPC/ESP32双方を揃えます。v2のキーをこのv1へ追加送信して代用しないでください。
+
 更新日：2026-10-25。実装基準：`9036cce`。 [入口](../esp32/README.md) / [システム仕様](../requirements/esp32.md) / [MCP](../esp32/mcp-integration.md)
 
 対象は[Followerスケッチ](../../firmware/esp32/ESP32-Follower/ESP32-Follower.ino)がHTTPポート80で提供する8つのAPI。PC内の`/api/v1/tail/frequency`は[別の設定API](tail-frequency.md)であり、ここへは送らない。
